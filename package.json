@@ -1,0 +1,28 @@
+{
+  "name": "yoruchan-ai",
+  "version": "2.0.0",
+  "description": "Is my dear Yoruchan online ? (.jpg",
+  "main": "index.js",
+  "scripts": {
+    "dev": "ts-node index.ts",
+    "build": "tsc"
+  },
+  "keywords": [
+    "robot",
+    "QQ",
+    "yoruchan",
+    "bot"
+  ],
+  "author": "Takamichika",
+  "license": "GPL-3.0",
+  "dependencies": {
+    "cq-websocket": "^2.1.1"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^4.7.0",
+    "@typescript-eslint/parser": "^4.7.0",
+    "eslint": "^7.13.0",
+    "ts-node": "^9.0.0",
+    "typescript": "^4.0.5"
+  }
+}
