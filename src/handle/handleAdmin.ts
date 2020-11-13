@@ -1,10 +1,11 @@
 import YBot from '../core/yBot';
-import {interceptorsType , doInterceptor} from '../core/interceptor';
+import { interceptorsType, doInterceptor } from '../core/interceptor';
 
-export default function handleAdminCommand(context) {
+export default function handleAdminCommand(context: Record<string, any>) {
   const message = context.message;
   const interceptors = [
     {
+      name : 'ApproveGroupInvite',
       doRule: () => Boolean(getGroupId(message)),
       doAction: () => setApproveGroup(getGroupId(message))
     },
@@ -14,8 +15,9 @@ export default function handleAdminCommand(context) {
 }
 
 
-function getGroupId(message) {
-  return /--approve-group=([0-9]+)/.exec(message)[1]
+function getGroupId(message: string) {
+  const exec = /--approve-group=([0-9]+)/.exec(message);
+  return exec ? exec[1] : '';
 }
 function setApproveGroup(groupId: string) {
   const ybot = YBot.getInstance();

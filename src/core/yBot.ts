@@ -8,9 +8,13 @@ export default class YBot {
 
   static instance: YBot;
   private cqs: CQWebSocket;
+  public on;
+  public once;
 
   constructor() {
     this.cqs = new CQWebSocket(wsConfig);
+    this.on = this.cqs.on;
+    this.once = this.cqs.once;
   }
 
   static getInstance() {
@@ -18,13 +22,6 @@ export default class YBot {
       YBot.instance = new YBot();
     }
     return YBot.instance;
-  }
-
-  on = (ev, fc) => {
-    this.cqs.on(ev, fc);
-  }
-  once = (ev, fc) => {
-    this.cqs.once(ev, fc);
   }
 
   //注册连接监听,并进行首次ws连接
@@ -56,7 +53,7 @@ export default class YBot {
   }
 
   //向某人发私信
-  sendPrivateMsg = (user, msg) => {
+  sendPrivateMsg = (user: string, msg: string) => {
     this.cqs('send_private_msg', {
       user_id: user,
       message: msg
@@ -64,7 +61,7 @@ export default class YBot {
   }
 
   //回复消息
-  replyMsg = (context, msg: string, at: boolean = false) => {
+  replyMsg = (context: Record<string, any>, msg: string, at: boolean = false) => {
     if (typeof (msg) != "string" || msg.length === 0) {
       return;
     }
