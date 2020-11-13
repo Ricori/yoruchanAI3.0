@@ -1,5 +1,6 @@
 import YBot from '../core/yBot';
 import config from '../../config';
+
 const yoruConfig = config.yoruConfig;
 
 export function registerOnRequest() {

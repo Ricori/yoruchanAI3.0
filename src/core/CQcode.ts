@@ -1,5 +1,5 @@
 import config from '../../config';
-const textMode = config.yuruConfig.textMode;
+const textMode = config.yoruConfig.textMode;
 
 
 /**
@@ -9,7 +9,7 @@ const textMode = config.yuruConfig.textMode;
  * @param {boolean} [insideCQ=false] 是否在CQ码内
  * @returns 转义后的字符串
  */
-function escape(str, insideCQ = false) {
+function escape(str:string, insideCQ = false) {
 	let temp = str.replace(/&/g, '&amp;');
 	temp = temp.replace(/\[/g, '&#91;');
 	temp = temp.replace(/\]/g, '&#93;');
@@ -26,7 +26,7 @@ function escape(str, insideCQ = false) {
  * @param {string} file 本地文件路径或URL
  * @returns CQ码 图片
  */
-function img(file) {
+function img(file:string) {
 	return "[CQ:image,file=" + escape(file, true) + "]";
 }
 
@@ -40,7 +40,7 @@ function img(file) {
  * @param {string} image 图片URL
  * @returns CQ码 分享链接
  */
-function share(url, title, content, image) {
+function share(url:string, title:string, content:string, image:string) {
 	if (textMode) return `${title}\n${img(image)}\n${url}`;
 	return `[CQ:share,url=${escape(url, true)},title=${escape(title, true)},content=${escape(content, true)},image=${escape(image, true)}]`;
 }
@@ -52,7 +52,7 @@ function share(url, title, content, image) {
  * @param {number} qq
  * @returns CQ码 @
  */
-function at(qq) {
+function at(qq:number) {
 	return "[CQ:at,qq=" + qq + "] ";
 }
 

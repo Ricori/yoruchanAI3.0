@@ -1,31 +1,45 @@
 import YBot from '../core/yBot';
-import { interceptorsType, doInterceptor } from '../core/interceptor';
+import {
+  interceptorsType,
+  doInterceptor,
+  testInterceptor,
+  actionParamType
+} from '../core/interceptor';
+import { IPrivateMessage } from '../core/MessageType';
 
-export default function handleAdminCommand(context: Record<string, any>) {
-  const message = context.message;
-  const interceptors = [
+export default function handleAdminCommand(messageInfo: IPrivateMessage) {
+
+  const interceptors: interceptorsType = [
     {
-      name : 'ApproveGroupInvite',
-      doRule: () => Boolean(getGroupId(message)),
-      doAction: () => setApproveGroup(getGroupId(message))
+      name: 'ApproveGroupInvite',
+      doRule: approveGroupRule,
+      doAction: approveGroupAction
     },
-  ] as interceptorsType;
+  ];
 
-  return doInterceptor(interceptors);
+  return testInterceptor(interceptors, messageInfo);
+  //return doInterceptor(interceptors, message);
 }
 
 
-function getGroupId(message: string) {
+function approveGroupRule(message: string) {
   const exec = /--approve-group=([0-9]+)/.exec(message);
-  return exec ? exec[1] : '';
+  return {
+    hit: exec !== null,
+    param: {
+      approveId: exec ? exec[1] : null
+    }
+  }
 }
-function setApproveGroup(groupId: string) {
+async function approveGroupAction(param: actionParamType) {
+  const { senderId, resultParam } = param;
+  const approveId = resultParam?.approveId;
   const ybot = YBot.getInstance();
-  ybot.once('request.group.invite', (cxt) => {
-    if (cxt.group_id === groupId) {
-      ybot.setGroupAddRequest(cxt.flag, true);
+  ybot.once('request.group.invite' as any, (inviteMsg: any) => {
+    if (inviteMsg.group_id && inviteMsg.group_id == approveId) {
+      ybot.setGroupAddRequest(inviteMsg.flag, true);
       //发送处理结果消息
-      ybot.replyMsg(cxt, `已成功进入群${cxt.group_id}`);
+      ybot.sendPrivateMsg(senderId, `已成功进入群${inviteMsg.group_id}`);
       return true;
     }
     return false;
