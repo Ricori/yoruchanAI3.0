@@ -41,14 +41,16 @@ function hPicAction(param: actionParamType) {
         limitLevel = lv as 0 | 1 | 2;
       }
     }
-    getHPic(limitLevel, needBig).then(resultMsg => {
+    getHPic(limitLevel, needBig, false, false).then(resultMsg => {
       ybot.sendGroupMsg(groupId, resultMsg);
     })
   } else {
-    //私聊无限制
-    getHPic(1, needBig).then(resultMsg => {
+    ybot.sendPrivateMsg(senderId, '因腾讯限制，私聊上传图片失败概率高，请在群中使用此功能')
+    /*
+    getHPic(1, needBig, true, true).then(resultMsg => {
       ybot.sendPrivateMsg(senderId, resultMsg)
     })
+    */
   }
 }
 

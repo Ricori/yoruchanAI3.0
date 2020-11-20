@@ -79,6 +79,13 @@ export default class YBot {
     });
   }
 
+  //发送合并转发消息
+  sendForwardMsg = (groupId: number, forwardNode: any[]) => {
+    this.cqs('send_group_forward_msg', {
+      group_id: groupId,
+      message: forwardNode
+    })
+  }
 
 
 }

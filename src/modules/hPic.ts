@@ -6,7 +6,7 @@ import MessageCode from '../core/MessageCode';
 
 const API_URI = 'https://api.lolicon.app/setu/zhuzhu.php?apikey=170792005f99b428151719';
 
-export const getHPic = async (limitLevel: 0 | 1 | 2, needBig = false) => {
+export const getHPic = async (limitLevel: 0 | 1 | 2, needBig = false, useBase64 = true, useSmallPic = false) => {
   let resultMsg = '';
   try {
     const res1 = await Axios.get(`${API_URI}&r18=${limitLevel}`);
@@ -15,7 +15,15 @@ export const getHPic = async (limitLevel: 0 | 1 | 2, needBig = false) => {
       return resultMsg;
     }
     const imgurl = res1.data.file.replace('https://i.pximg.net', 'http://pximg.cdn.kvv.me');
-    const base64 = await getAntiShieldingBase64(imgurl).catch(err => {
+    if (!useBase64) {
+      if (needBig) {
+        resultMsg = MessageCode.bigImg(useSmallPic ? getMaster1200(imgurl) : imgurl);
+      } else {
+        resultMsg = MessageCode.img(useSmallPic ? getMaster1200(imgurl) : imgurl);
+      }
+      return resultMsg;
+    }
+    const base64 = await getAntiShieldingBase64(imgurl, useSmallPic).catch(err => {
       console.error(`${new Date().toLocaleString()} [Hpic Anti Error]}\n${err}`);
       return hPicReplyText.error;
     });
@@ -32,17 +40,15 @@ export const getHPic = async (limitLevel: 0 | 1 | 2, needBig = false) => {
 }
 
 
-async function getAntiShieldingBase64(url: string) {
-  const origBase64 = await loadImgAndAntiShielding(url);
-  if (checkBase64RealSize(origBase64)) {
-    return origBase64;
+async function getAntiShieldingBase64(url: string, useSmallPic: boolean) {
+  if (!useSmallPic) {
+    const origBase64 = await loadImgAndAntiShielding(url);
+    if (checkBase64RealSize(origBase64)) return origBase64;
+  } else {
+    const m1200Base64 = await loadImgAndAntiShielding(getMaster1200(url));
+    if (checkBase64RealSize(m1200Base64)) return m1200Base64;
   }
   return false;
-  /*发送小图,加快发送速度
-  const m1200Base64 = await loadImgAndAntiShielding(getMaster1200(url));
-  if (checkBase64RealSize(m1200Base64)) return m1200Base64;
-  return false;
-  */
 }
 function loadImgAndAntiShielding(url: string) {
   return loadImage(url)

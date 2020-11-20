@@ -60,11 +60,8 @@ function bigImg(file: string, isBase64 = false) {
 }
 
 
-
 /**
  * CQ码 语音
- *
- * @param {string} text 内容
  */
 function tts(text: string) {
   return `[CQ:tts,text=${escape(text)}]`;
@@ -100,6 +97,7 @@ export default {
   escape,
   img,
   bigImg,
+  tts,
   share,
   at
 };
