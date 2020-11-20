@@ -17,19 +17,13 @@ const config = {
 
     repeater: {
       enable: true,          //打开复读机
-      times: 3               //几次重复后复读
+      times: 3,              //几次重复后复读
     },
-
-
-    searchLimit: 30,
-    textMode: false,
-
     hPic: {                         //瑟图功能
       enable: true,                 //是否开启
       whiteOnly: false,             //只允许白名单群
       whiteGroup: [829349264],      //白名单群
       whiteGroupLimit: 2,           //白名单群拥有的权限,0=全年龄,1=混合,2=r18Only
-
     }
   },
 
