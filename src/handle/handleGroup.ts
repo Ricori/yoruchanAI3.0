@@ -56,9 +56,9 @@ function hasImage(msg: string) {
 }
 function replyMessage(param: actionParamType, msg: string, at = false) {
   const ybot = YBot.getInstance();
-  const { senderId, senderGroupId } = param;
-  if (senderGroupId) {
-    ybot.sendGroupMsg(senderGroupId, msg, at ? senderId : undefined);
+  const { senderId, groupId } = param;
+  if (groupId) {
+    ybot.sendGroupMsg(groupId, msg, at ? senderId : undefined);
   } else {
     ybot.sendPrivateMsg(senderId, msg)
   }

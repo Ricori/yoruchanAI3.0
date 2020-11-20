@@ -16,7 +16,9 @@
   "author": "Takamichika",
   "license": "GPL-3.0",
   "dependencies": {
-    "cq-websocket": "^2.1.1"
+    "cq-websocket": "^2.1.1",
+    "axios": "^0.21.0",
+    "lodash": "^4.17.20"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^4.7.0",

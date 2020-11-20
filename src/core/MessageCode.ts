@@ -1,7 +1,3 @@
-import config from '../../config';
-const textMode = config.yoruConfig.textMode;
-
-
 /**
  * 转义
  *
@@ -18,18 +14,60 @@ function escape(str: string, insideCQ = false) {
   }
   return temp;
 }
+/**
+ * 反转义
+ *
+ * @param {string} str 欲反转义的字符串
+ * @returns 反转义后的字符串
+ */
+function unescape(str: string) {
+  return str.replace(/&#44;/g, ',').replace(/&#91;/g, '[').replace(/&#93;/g, ']').replace(/&amp;/g, '&');
+}
 
 
 /**
- * CQ码 图片
- *
- * @param {string} file 本地文件路径或URL
- * @returns CQ码 图片
+ * CQ码 普通图片
  */
-function img(file: string) {
-  return "[CQ:image,file=" + escape(file, true) + "]";
+function img(url: string) {
+  return `[CQ:image,url=${escape(url, true)}]`;
+}
+/**
+ * CQ码 闪照图片
+ */
+function flashImg(url: string) {
+  return `[CQ:image,url=${escape(url, true)},type=flash]`;
+}
+/**
+ * CQ码 秀图图片
+ * @param {string} id 40000=普通,40001=幻影,40002=抖动,40003=生日,40004=爱你,40005=征友
+ */
+function showImg(url: string, id: string) {
+  return `[CQ:image,url=${escape(url, true)},type=show,id=${id}]`;
+}
+/**
+ * CQ码 Base64 图片
+ * @param {string} base64 图片 Base64
+ */
+function base64Img(base64: string) {
+  return `[CQ:image,file=base64://${base64}]`;
+}
+/**
+ * CQ码 大图片
+ */
+function bigImg(url: string) {
+  return `[CQ:cardimage,maxwidth=800,maxheight=1600,source=夜夜酱,file=${url}]`;
 }
 
+
+
+/**
+ * CQ码 语音
+ *
+ * @param {string} text 内容
+ */
+function tts(text: string) {
+  return `[CQ:tts,text=${escape(text)}]`;
+}
 
 /**
  * CQ码 分享链接
@@ -41,7 +79,7 @@ function img(file: string) {
  * @returns CQ码 分享链接
  */
 function share(url: string, title: string, content: string, image: string) {
-  if (textMode) return `${title}\n${img(image)}\n${url}`;
+  return `${title}\n${img(image)}\n${url}`;
   return `[CQ:share,url=${escape(url, true)},title=${escape(title, true)},content=${escape(content, true)},image=${escape(image, true)}]`;
 }
 
@@ -59,7 +97,8 @@ function at(qq: number) {
 
 export default {
   escape,
-  share,
   img,
+  bigImg,
+  share,
   at
 };

@@ -24,16 +24,12 @@ const config = {
     searchLimit: 30,
     textMode: false,
 
-    setu: {
-      enable: true,
-      allowPM: true,
-      cd: 5,
-      deleteTime: 0,
-      limit: 30,
-      whiteGroup: [],
-      whiteOnly: false,
-      whiteCd: 5,
-      whiteDeleteTime: 60
+    hPic: {                         //瑟图功能
+      enable: true,                 //是否开启
+      whiteOnly: false,             //只允许白名单群
+      whiteGroup: [829349264],      //白名单群
+      whiteGroupLimit: 2,           //白名单群拥有的权限,0=全年龄,1=混合,2=r18Only
+
     }
   },
 

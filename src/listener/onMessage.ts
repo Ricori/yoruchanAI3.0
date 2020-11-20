@@ -1,8 +1,8 @@
 import YBot from '../core/YBot';
-import config from '../../config';
 import handleAdminCommand from '../handle/handleAdmin';
 import handleCommon from '../handle/handleCommon';
 import handleGroup from '../handle/handleGroup';
+import config from '../../config';
 const yoruConfig = config.yoruConfig;
 import { IPrivateMessage, IGroupMessage, IAllMessage } from '../core/MessageType';
 import REPLYTEXT from '../customize/replyTextConfig';

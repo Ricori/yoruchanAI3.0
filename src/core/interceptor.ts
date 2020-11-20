@@ -1,14 +1,14 @@
 import { IPrivateMessage, IGroupMessage, IAllMessage } from './MessageType';
 
-export type interceptorsType = [{
+export type interceptorsType = {
   name: string,
   doRule: ruleFuncType,
   doAction: (param: actionParamType) => void;
-}]
+}[]
 
 export type actionParamType = {
   senderId: number,                 //发送者qq
-  senderGroupId?: number,           //发送者所在群号
+  groupId?: number,                 //发送者所在群号
   resultParam?: Record<string, any>
 }
 
