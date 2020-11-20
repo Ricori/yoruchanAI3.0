@@ -97,7 +97,6 @@ export default {
   escape,
   img,
   bigImg,
-  tts,
   share,
   at
 };

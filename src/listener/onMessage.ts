@@ -6,8 +6,6 @@ import config from '../../config';
 const yoruConfig = config.yoruConfig;
 import { IPrivateMessage, IGroupMessage, IAllMessage } from '../core/MessageType';
 import REPLYTEXT from '../customize/replyTextConfig';
-import MessageCode from '../core/MessageCode';
-
 
 export function registerOnMessage() {
 
@@ -27,7 +25,7 @@ export function registerOnMessage() {
       return;
     }
     //last.默认返回
-    ybot.sendPrivateMsg(messageInfo.user_id, MessageCode.tts(REPLYTEXT.defaultReply()))
+    ybot.sendPrivateMsg(messageInfo.user_id, REPLYTEXT.defaultReply())
     return;
   });
 
@@ -37,10 +35,9 @@ export function registerOnMessage() {
     if (handleCommon(messageInfo)) {
       return;
     }
-    ybot.sendGroupMsg(messageInfo.group_id, MessageCode.tts(REPLYTEXT.defaultReply()), messageInfo.user_id)
+    ybot.sendGroupMsg(messageInfo.group_id, REPLYTEXT.defaultReply(), messageInfo.user_id)
     return;
   })
-
 
   //监听群消息
   ybot.on('message.group', (e, cxt) => {

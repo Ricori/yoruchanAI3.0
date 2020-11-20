@@ -17,5 +17,4 @@ export default function init() {
   //开始连接
   ybot.connect();
 
-
 }
