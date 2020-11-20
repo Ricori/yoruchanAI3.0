@@ -1,5 +1,5 @@
 # Myself
-/config.ts
+#/config.ts
 /data/*.json
 /restart.bat
 
