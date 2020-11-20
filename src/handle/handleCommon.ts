@@ -61,7 +61,7 @@ function hPicRule(message: string) {
   if (!yoruConfig.hPic.enable) {
     return { hit: false }
   }
-  const exec = /((要|发|份|点)(色|h|瑟|涩)图)/.exec(message);
+  const exec = /((要|发|份|点)大?(色|h|瑟|涩)图)/.exec(message);
   let needBig = false;
   if (exec !== null) {
     needBig = hasText(message, '大');

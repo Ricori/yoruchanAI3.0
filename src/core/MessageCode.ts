@@ -28,8 +28,12 @@ function unescape(str: string) {
 /**
  * CQ码 普通图片
  */
-function img(url: string) {
-  return `[CQ:image,url=${escape(url, true)}]`;
+function img(file: string, isBase64 = false) {
+  if (isBase64) {
+    return `[CQ:image,file=base64://${file}]`;
+  } else {
+    return `[CQ:image,file=${escape(file, true)}]`;
+  }
 }
 /**
  * CQ码 闪照图片
@@ -45,17 +49,14 @@ function showImg(url: string, id: string) {
   return `[CQ:image,url=${escape(url, true)},type=show,id=${id}]`;
 }
 /**
- * CQ码 Base64 图片
- * @param {string} base64 图片 Base64
- */
-function base64Img(base64: string) {
-  return `[CQ:image,file=base64://${base64}]`;
-}
-/**
  * CQ码 大图片
  */
-function bigImg(url: string) {
-  return `[CQ:cardimage,maxwidth=800,maxheight=1600,source=夜夜酱,file=${url}]`;
+function bigImg(file: string, isBase64 = false) {
+  if (isBase64) {
+    return `[CQ:cardimage,maxwidth=800,maxheight=1600,source=夜夜酱,file=base64://${file}]`;
+  } else {
+    return `[CQ:cardimage,maxwidth=800,maxheight=1600,source=夜夜酱,file=${file}]`;
+  }
 }
 
 
