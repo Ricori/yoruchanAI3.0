@@ -15,13 +15,15 @@ const config = {
     admin: [515302066],       //管理员qq数组
     autoAddFriend: false,     //自动添加好友
 
+    repeater: {
+      enable: true,          //打开复读机
+      times: 3               //几次重复后复读
+    },
+
 
     searchLimit: 30,
     textMode: false,
-    repeater: {
-      enable: true,
-      times: 3
-    },
+
     setu: {
       enable: true,
       allowPM: true,

@@ -1,7 +1,7 @@
 import { CQWebSocket } from 'cq-websocket';
 import YData from './YData';
 
-import CQcode from './CQcode';
+import MessageCode from './MessageCode';
 
 import config from '../../config';
 const { wsConfig, yoruConfig } = config;
@@ -71,7 +71,7 @@ export default class YBot {
     if (msg.length === 0) return;
     let prefix = '';
     if (atUserId) {
-      prefix = CQcode.at(atUserId);
+      prefix = MessageCode.at(atUserId);
     }
     this.cqs('send_group_msg', {
       group_id: groupId,

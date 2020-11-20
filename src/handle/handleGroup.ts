@@ -1,4 +1,5 @@
 import YBot from '../core/YBot';
+import YData from '../core/YData';
 import {
   interceptorsType,
   actionParamType,
@@ -6,21 +7,44 @@ import {
   testInterceptor
 } from '../core/Interceptor';
 import { IPrivateMessage, IGroupMessage, IAllMessage } from '../core/MessageType';
+import config from '../../config';
 import REPLYTEXT from '../customize/replyTextConfig';
+const yoruConfig = config.yoruConfig;
 
-export default function handleCommon(messageInfo: IPrivateMessage | IGroupMessage) {
+export default function handleGroup(messageInfo: IGroupMessage) {
 
+  const ybot = YBot.getInstance();
+  const ydata = YData.getInstance();
+
+
+  /*
   const interceptors: interceptorsType = [
     {
-      name: 'helpText',
-      doRule: helpTextRule,
-      doAction: helpTextAction
-    },
 
+    },
 
   ];
 
-  return doInterceptor(interceptors, messageInfo);
+
+
+  testInterceptor(interceptors, messageInfo);
+  */
+  //doInterceptor(interceptors, message);
+
+
+  //last.群聊的复读机功能
+  if (yoruConfig.repeater.enable) {
+    const res = ydata.saveRptLog(messageInfo.group_id, messageInfo.user_id, messageInfo.message)
+    if (res >= yoruConfig.repeater.times) {
+      ydata.setRptDone(messageInfo.group_id);
+      setTimeout(() => {
+        ybot.sendGroupMsg(messageInfo.group_id, messageInfo.message)
+      }, 1000);
+    }
+  }
+
+  return;
+
 }
 
 
@@ -39,12 +63,3 @@ function replyMessage(param: actionParamType, msg: string, at = false) {
     ybot.sendPrivateMsg(senderId, msg)
   }
 };
-
-function helpTextRule(message: string) {
-  return {
-    hit: hasText(message, 'help') || hasText(message, '帮助')
-  }
-}
-function helpTextAction(param: actionParamType) {
-  replyMessage(param, REPLYTEXT.helptext, true)
-}

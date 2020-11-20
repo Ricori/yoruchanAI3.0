@@ -3,9 +3,8 @@ import YData from '../core/YData';
 import {
   interceptorsType,
   doInterceptor,
-  testInterceptor,
   actionParamType
-} from '../core/interceptor';
+} from '../core/Interceptor';
 import { IPrivateMessage } from '../core/MessageType';
 
 export default function handleAdminCommand(messageInfo: IPrivateMessage) {
@@ -25,10 +24,8 @@ export default function handleAdminCommand(messageInfo: IPrivateMessage) {
     ****/
   ];
 
-  //return testInterceptor(interceptors, messageInfo);
   return doInterceptor(interceptors, messageInfo);
 }
-
 
 
 function approveFriendRule(message: string) {

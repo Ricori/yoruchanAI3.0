@@ -1,9 +1,11 @@
 import YBot from '../core/YBot';
 import config from '../../config';
 import handleAdminCommand from '../handle/handleAdmin';
-import handleCommonCommand from '../handle/handleCommon';
+import handleCommon from '../handle/handleCommon';
+import handleGroup from '../handle/handleGroup';
 const yoruConfig = config.yoruConfig;
 import { IPrivateMessage, IGroupMessage, IAllMessage } from '../core/MessageType';
+import REPLYTEXT from '../customize/replyTextConfig';
 
 export function registerOnMessage() {
 
@@ -20,28 +22,34 @@ export function registerOnMessage() {
     }
 
     //2.通用命令处理
-    if (handleCommonCommand(messageInfo)) {
+    if (handleCommon(messageInfo)) {
       return;
     }
 
     //last.默认返回
-    ybot.sendPrivateMsg(messageInfo.user_id, '2323223')
+    ybot.sendPrivateMsg(messageInfo.user_id, REPLYTEXT.defaultReply())
     return;
   });
 
-  /*
+
   //监听群聊@bot的消息
   ybot.on('message.group.@.me', (e, cxt) => {
+    const messageInfo = cxt as IGroupMessage;
+    if (handleCommon(messageInfo)) {
+      return;
+    }
 
+    ybot.sendGroupMsg(messageInfo.group_id, REPLYTEXT.defaultReply(), messageInfo.user_id)
+    return;
   })
 
 
   //监听群消息
   ybot.on('message.group', (e, cxt) => {
-
-
+    const messageInfo = cxt as IGroupMessage;
+    handleGroup(messageInfo);
+    return;
   })
-  */
 
 
 }
