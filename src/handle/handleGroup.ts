@@ -2,13 +2,12 @@ import YBot from '../core/YBot';
 import YData from '../core/YData';
 import {
   interceptorsType,
-  actionParamType,
   doInterceptor,
   testInterceptor
 } from '../core/Interceptor';
-import { IPrivateMessage, IGroupMessage, IAllMessage } from '../core/MessageType';
+import { IGroupMessage } from '../core/MessageType';
+import hPicInterceptor from './interceptors/hPic';
 import config from '../../config';
-import REPLYTEXT from '../customize/replyTextConfig';
 const yoruConfig = config.yoruConfig;
 
 export default function handleGroup(messageInfo: IGroupMessage) {
@@ -16,20 +15,13 @@ export default function handleGroup(messageInfo: IGroupMessage) {
   const ybot = YBot.getInstance();
   const ydata = YData.getInstance();
 
-
-  /*
   const interceptors: interceptorsType = [
-    {
-
-    },
+    hPicInterceptor
 
   ];
 
 
-
-  testInterceptor(interceptors, messageInfo);
-  */
-  //doInterceptor(interceptors, message);
+  doInterceptor(interceptors, messageInfo);
 
 
   //last.群聊的复读机功能
@@ -46,20 +38,3 @@ export default function handleGroup(messageInfo: IGroupMessage) {
   return;
 
 }
-
-
-function hasText(text: string, findText: string) {
-  return text.search(findText) !== -1;
-}
-function hasImage(msg: string) {
-  return msg.indexOf("[CQ:image") !== -1;
-}
-function replyMessage(param: actionParamType, msg: string, at = false) {
-  const ybot = YBot.getInstance();
-  const { senderId, groupId } = param;
-  if (groupId) {
-    ybot.sendGroupMsg(groupId, msg, at ? senderId : undefined);
-  } else {
-    ybot.sendPrivateMsg(senderId, msg)
-  }
-};

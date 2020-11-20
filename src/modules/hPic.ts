@@ -24,7 +24,6 @@ export const getHPic = async (limitLevel: 0 | 1 | 2, needBig = false) => {
     } else {
       resultMsg = base64 ? MessageCode.img(base64, true) : MessageCode.img(imgurl);
     }
-    console.log(resultMsg);
     return resultMsg;
   } catch (err) {
     console.error(`${new Date().toLocaleString()} [Hpic Error]}\n${err}`);
