@@ -46,7 +46,7 @@ async function approveFriendAction(param: actionParamType) {
   const ybot = YBot.getInstance();
   const ydata = YData.getInstance();
   ybot.sendPrivateMsg(senderId, `已记录${approveId}至好友白名单`);
-  ydata.addApproveFriendIds(approveId);
+  ydata.addApproveFriendIds(parseInt(approveId));
 }
 
 

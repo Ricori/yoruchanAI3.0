@@ -1,7 +1,6 @@
 import YBot from '../core/YBot';
 import YData from '../core/YData';
 import config from '../../config';
-
 const yoruConfig = config.yoruConfig;
 
 export function registerOnRequest() {
@@ -13,8 +12,9 @@ export function registerOnRequest() {
     //好友白名单处理
     const userId = cxt.user_id;
     if (ydata.checkApproveFriend(userId)) {
-      console.log('ok');
-      //ybot.setGroupAddRequest(cxt.flag, true);
+      ybot.setFriendAddRequest(cxt.flag, true);
+      //在白名单中去除,节省内存
+      ydata.deleteApproveFriend(userId);
       //向所有管理员推送新好友消息
       const adminIds = yoruConfig.admin || [];
       adminIds.forEach(adminId => {

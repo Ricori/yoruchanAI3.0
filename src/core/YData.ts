@@ -32,6 +32,9 @@ export default class YData {
       const nowDate = new Date().getDate();
       if (this.initDate != nowDate) {
         this.initDate = nowDate;
+
+        this.approveFriendIds = [];
+
         this.searchCount = [];
       }
     }, 60 * 1000);
@@ -45,6 +48,10 @@ export default class YData {
   //检查用户是否在好友白名单中
   checkApproveFriend = (userid: number) => {
     return this.approveFriendIds.indexOf(userid) > -1;
+  }
+  //在好友白名单中删除某用户
+  deleteApproveFriend = (userid: number) => {
+    this.approveFriendIds = this.approveFriendIds.filter(id => id != userid)
   }
 
 
