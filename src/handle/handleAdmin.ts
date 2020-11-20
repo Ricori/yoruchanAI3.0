@@ -1,4 +1,5 @@
-import YBot from '../core/yBot';
+import YBot from '../core/YBot';
+import YData from '../core/YData';
 import {
   interceptorsType,
   doInterceptor,
@@ -11,17 +12,46 @@ export default function handleAdminCommand(messageInfo: IPrivateMessage) {
 
   const interceptors: interceptorsType = [
     {
+      name: 'ApproveFriendInvite',
+      doRule: approveFriendRule,
+      doAction: approveFriendAction
+    },
+    /****
+    {
       name: 'ApproveGroupInvite',
       doRule: approveGroupRule,
       doAction: approveGroupAction
     },
+    ****/
   ];
 
-  return testInterceptor(interceptors, messageInfo);
-  //return doInterceptor(interceptors, message);
+  //return testInterceptor(interceptors, messageInfo);
+  return doInterceptor(interceptors, messageInfo);
 }
 
 
+
+function approveFriendRule(message: string) {
+  const exec = /--approve=([0-9]+)/.exec(message);
+  return {
+    hit: exec !== null,
+    param: {
+      approveId: exec ? exec[1] : null
+    }
+  }
+}
+async function approveFriendAction(param: actionParamType) {
+  const { senderId, resultParam } = param;
+  const approveId = resultParam?.approveId;
+  const ybot = YBot.getInstance();
+  const ydata = YData.getInstance();
+  ybot.sendPrivateMsg(senderId, `已记录${approveId}至好友白名单`);
+  ydata.addApproveFriendIds(approveId);
+}
+
+
+//同意加群操作已经不再需要，因为新版QQ被拉会自动同意进群
+/***********************
 function approveGroupRule(message: string) {
   const exec = /--approve-group=([0-9]+)/.exec(message);
   return {
@@ -45,3 +75,4 @@ async function approveGroupAction(param: actionParamType) {
     return false;
   });
 }
+***********************/

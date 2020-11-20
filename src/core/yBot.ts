@@ -1,9 +1,12 @@
 import { CQWebSocket } from 'cq-websocket';
-import config from '../../config';
+import YData from './YData';
+
 import CQcode from './CQcode';
-const wsConfig = config.wsConfig
-const yoruConfig = config.yoruConfig;
+
+import config from '../../config';
+const { wsConfig, yoruConfig } = config;
 //import { PrivateMessage, GroupMessage } from './MessageType';
+
 
 export default class YBot {
 

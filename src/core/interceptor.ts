@@ -51,7 +51,7 @@ export function testInterceptor(
         groupId: messageInfo.group_id,
         ...result.param
       };
-      console.log(`[interceptor:${interceptor.name}]${param.toString()}`)
+      console.log(`[interceptor:${interceptor.name}]`, param)
       return true;
     }
   }

@@ -1,21 +1,41 @@
-import YBot from '../core/yBot';
+import YBot from '../core/YBot';
+import YData from '../core/YData';
 import config from '../../config';
 
 const yoruConfig = config.yoruConfig;
 
 export function registerOnRequest() {
   const ybot = YBot.getInstance();
+  const ydata = YData.getInstance();
 
   //注册好友请求监听
-  ybot.on('request.friend', (cxt) => {
-    //自动处理
-    ybot.setFriendAddRequest(cxt.flag, yoruConfig.autoAddFriend)
+  ybot.on('request.friend', async cxt => {
+    //好友白名单处理
+    const userId = cxt.user_id;
+    if (ydata.checkApproveFriend(userId)) {
+      console.log('ok');
+      //ybot.setGroupAddRequest(cxt.flag, true);
+      //向所有管理员推送新好友消息
+      const adminIds = yoruConfig.admin || [];
+      adminIds.forEach(adminId => {
+        if (!isNaN(adminId)) {
+          ybot.sendPrivateMsg(adminId, `YoruBot新增好友${userId}`);
+        }
+      })
+    } else {
+      //自动全局处理
+      ybot.setFriendAddRequest(cxt.flag, yoruConfig.autoAddFriend)
+    }
+
   })
 
-  //注册拉群请求监听
+
+  //拉群请求监听
+  //因为傻逼QQ只要是好友拉群会自动同意，所以已经不需要拉群后操作 
+  /*
   ybot.on('request.group.invite', (cxt) => {
-    //自动处理
-    ybot.setGroupAddRequest(cxt.flag, yoruConfig.autoAddGroup)
+    ybot.setGroupAddRequest(cxt.flag, false)
   })
+  */
 
 }

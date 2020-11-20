@@ -1,6 +1,6 @@
 import { CQWebSocket } from 'cq-websocket';
 import config from '../config';
-import YBot from './core/yBot';
+import YBot from './core/YBot';
 import { registerOnRequest } from './listener/onRequest';
 import { registerOnMessage } from './listener/onMessage';
 

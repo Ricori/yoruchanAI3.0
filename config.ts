@@ -14,7 +14,7 @@ const config = {
   yoruConfig: {
     admin: [515302066],       //管理员qq数组
     autoAddFriend: false,     //自动添加好友
-    autoAddGroup: false,      //自动进群
+
 
     searchLimit: 30,
     textMode: false,

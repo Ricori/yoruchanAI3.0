@@ -1,4 +1,4 @@
-import YBot from '../core/yBot';
+import YBot from '../core/YBot';
 import {
   interceptorsType,
   actionParamType,
