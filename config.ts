@@ -24,6 +24,7 @@ const config = {
       whiteOnly: false,             //只允许白名单群
       whiteGroup: [829349264],      //白名单群
       whiteGroupLimit: 2,           //白名单群拥有的权限,0=全年龄,1=混合,2=r18Only
+      useSmallPic: true,            //开启图片压缩，可以降低上传错误率
     }
   },
 

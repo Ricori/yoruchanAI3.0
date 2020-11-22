@@ -50,12 +50,13 @@ function hPicAction(param: actionParamType) {
         limitLevel = lv as 0 | 1 | 2;
       }
     }
-    getHPic(limitLevel, needBig, count, false, false).then(resultMsgs => {
+    const useSmallPic = yoruConfig.hPic.useSmallPic;
+    getHPic(limitLevel, needBig, count, false, useSmallPic).then(resultMsgs => {
       let i = 0;
       for (const msg of resultMsgs) {
         setTimeout(() => {
           ybot.sendGroupMsg(groupId, msg);
-        }, i * 2000)
+        }, i * 6000)
         i++;
       }
     })
