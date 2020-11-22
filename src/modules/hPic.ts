@@ -42,7 +42,7 @@ export const getHPic = async (limitLevel: 0 | 1 | 2, needBig = false, count = 1,
     return resultMsgs;
   } catch (err) {
     console.error(`${new Date().toLocaleString()} [Hpic Error]}\n${err}`);
-    return hPicReplyText.error;
+    return [hPicReplyText.error];
   }
 }
 

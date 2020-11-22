@@ -51,8 +51,12 @@ function hPicAction(param: actionParamType) {
       }
     }
     getHPic(limitLevel, needBig, count, false, false).then(resultMsgs => {
+      let i = 0;
       for (const msg of resultMsgs) {
-        ybot.sendGroupMsg(groupId, msg);
+        setTimeout(() => {
+          ybot.sendGroupMsg(groupId, msg);
+        }, i * 2000)
+        i++;
       }
     })
   } else {
