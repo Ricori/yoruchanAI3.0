@@ -59,7 +59,7 @@ export default class YBot {
   }
 
   //发私信消息
-  sendPrivateMsg = (toUserId: number, msg: string) => {
+  sendPrivateMsg = async (toUserId: number, msg: string) => {
     if (msg.length === 0) return;
     this.cqs('send_private_msg', {
       user_id: toUserId,
@@ -67,7 +67,7 @@ export default class YBot {
     });
   }
   //发群消息
-  sendGroupMsg = (groupId: number, msg: string, atUserId?: number) => {
+  sendGroupMsg = async (groupId: number, msg: string, atUserId?: number) => {
     if (msg.length === 0) return;
     let prefix = '';
     if (atUserId) {

@@ -14,15 +14,24 @@ function hPicRule(message: string) {
   if (exec !== null) {
     needBig = message.search('大') !== -1;
   }
+  let count = 1;
+  const countExec = /([0-9]+)份/.exec(message);
+  if (countExec && countExec[1]) {
+    count = Number(countExec[1])
+    if (count > 9) {
+      count = 9;
+    }
+  }
   return {
     hit: exec !== null,
-    param: { needBig }
+    param: { needBig, count }
   }
 }
 function hPicAction(param: actionParamType) {
   const ybot = YBot.getInstance();
   const { senderId, groupId, resultParam } = param;
   const needBig = resultParam?.needBig;
+  const count = resultParam?.count;
   if (groupId) {
     //0=全年龄,1=混合,2=r18Only
     let limitLevel = 0 as 0 | 1 | 2;
@@ -41,13 +50,15 @@ function hPicAction(param: actionParamType) {
         limitLevel = lv as 0 | 1 | 2;
       }
     }
-    getHPic(limitLevel, needBig, false, false).then(resultMsg => {
-      ybot.sendGroupMsg(groupId, resultMsg);
+    getHPic(limitLevel, needBig, count, false, false).then(resultMsgs => {
+      for (const msg of resultMsgs) {
+        ybot.sendGroupMsg(groupId, msg);
+      }
     })
   } else {
     ybot.sendPrivateMsg(senderId, '因腾讯限制，私聊上传图片失败概率高，请在群中使用此功能')
     /*
-    getHPic(1, needBig, true, true).then(resultMsg => {
+    getHPic(1, needBig, count, true, true).then(resultMsgs => {
       ybot.sendPrivateMsg(senderId, resultMsg)
     })
     */

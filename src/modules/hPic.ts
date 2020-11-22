@@ -4,35 +4,42 @@ import { random } from 'lodash';
 import { hPicReplyText } from '../customize/replyTextConfig';
 import MessageCode from '../core/MessageCode';
 
-const API_URI = 'https://api.lolicon.app/setu/zhuzhu.php?apikey=170792005f99b428151719';
+const API_URI = 'https://api.lolicon.app/setu/?apikey=170792005f99b428151719';
+const MY_PROXY = 'https://i.pixiv.cat';  //http://pximg.cdn.kvv.me
 
-export const getHPic = async (limitLevel: 0 | 1 | 2, needBig = false, useBase64 = true, useSmallPic = false) => {
-  let resultMsg = '';
+export const getHPic = async (limitLevel: 0 | 1 | 2, needBig = false, count = 1, useBase64 = true, useSmallPic = false) => {
+  const resultMsgs = [];
   try {
-    const res1 = await Axios.get(`${API_URI}&r18=${limitLevel}`);
-    if (!res1.data.file) {
-      resultMsg = hPicReplyText.serverError;
-      return resultMsg;
+    const res1 = await Axios.get(`${API_URI}&r18=${limitLevel}&num=${count}`);
+    if (res1.data.code !== 0 || res1.data.data?.length < 1) {
+      resultMsgs.push(hPicReplyText.serverError);
+      return resultMsgs;
     }
-    const imgurl = res1.data.file.replace('https://i.pximg.net', 'http://pximg.cdn.kvv.me');
-    if (!useBase64) {
-      if (needBig) {
-        resultMsg = MessageCode.bigImg(useSmallPic ? getMaster1200(imgurl) : imgurl);
+    const data = res1.data.data;
+    for (const item of data) {
+      const imgurl = item.url.replace('https://i.pximg.net', MY_PROXY);
+      let resultMsg;
+      if (!useBase64) {
+        if (needBig) {
+          resultMsg = MessageCode.bigImg(useSmallPic ? getMaster1200(imgurl) : imgurl);
+        } else {
+          resultMsg = MessageCode.img(useSmallPic ? getMaster1200(imgurl) : imgurl);
+        }
       } else {
-        resultMsg = MessageCode.img(useSmallPic ? getMaster1200(imgurl) : imgurl);
+        const base64 = await getAntiShieldingBase64(imgurl, useSmallPic).catch(err => {
+          console.error(`${new Date().toLocaleString()} [Hpic Anti Error]}\n${err}`);
+          resultMsg = hPicReplyText.error;
+        });
+        if (needBig) {
+          resultMsg = base64 ? MessageCode.bigImg(base64, true) : MessageCode.bigImg(imgurl);
+        } else {
+          resultMsg = base64 ? MessageCode.img(base64, true) : MessageCode.img(imgurl);
+        }
       }
-      return resultMsg;
+      resultMsgs.push(resultMsg);
     }
-    const base64 = await getAntiShieldingBase64(imgurl, useSmallPic).catch(err => {
-      console.error(`${new Date().toLocaleString()} [Hpic Anti Error]}\n${err}`);
-      return hPicReplyText.error;
-    });
-    if (needBig) {
-      resultMsg = base64 ? MessageCode.bigImg(base64, true) : MessageCode.bigImg(imgurl);
-    } else {
-      resultMsg = base64 ? MessageCode.img(base64, true) : MessageCode.img(imgurl);
-    }
-    return resultMsg;
+
+    return resultMsgs;
   } catch (err) {
     console.error(`${new Date().toLocaleString()} [Hpic Error]}\n${err}`);
     return hPicReplyText.error;
