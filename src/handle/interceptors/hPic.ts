@@ -29,9 +29,6 @@ function hPicAction(param: actionParamType) {
   const { senderId, groupId, resultParam } = param;
   const needBig = resultParam?.needBig;
   let count = resultParam?.count;
-  if (count > 9) {
-    count = 9;
-  }
   if (groupId) {
     //0=全年龄,1=混合,2=r18Only
     let limitLevel = 0 as 0 | 1 | 2;
@@ -49,9 +46,12 @@ function hPicAction(param: actionParamType) {
       if ([0, 1, 2].includes(lv)) {
         limitLevel = lv as 0 | 1 | 2;
       }
-      count = 20;  //放宽白名单群限制
     }
     const useSmallPic = yoruConfig.hPic.useSmallPic;
+    const limitCount = limitLevel === 2 ? 20 : 9
+    if (count > limitCount) {
+      count = limitCount;
+    }
     getHPic(limitLevel, needBig, count, false, useSmallPic).then(resultMsgs => {
       const delay = limitLevel === 2 ? 1200 : 4000;
       let i = 0;
