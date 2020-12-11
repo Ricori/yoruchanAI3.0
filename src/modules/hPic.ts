@@ -6,39 +6,48 @@ import MessageCode from '../core/MessageCode';
 
 const API_URI = 'https://api.lolicon.app/setu/?apikey=170792005f99b428151719';
 const MY_PROXY = 'https://i.pixiv.cat';  //http://pximg.cdn.kvv.me
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.66 Safari/537.36';
 
 export const getHPic = async (limitLevel: 0 | 1 | 2, needBig = false, count = 1, useBase64 = true, useSmallPic = false) => {
   const resultMsgs = [];
   try {
-    const res1 = await Axios.get(`${API_URI}&r18=${limitLevel}&num=${count}`);
-    if (res1.data.code !== 0 || res1.data.data?.length < 1) {
-      resultMsgs.push(hPicReplyText.serverError);
-      return resultMsgs;
-    }
-    const data = res1.data.data;
-    for (const item of data) {
-      const imgurl = item.url.replace('https://i.pximg.net', MY_PROXY);
-      let resultMsg;
-      if (!useBase64) {
-        if (needBig) {
-          resultMsg = MessageCode.bigImg(useSmallPic ? getMaster1200(imgurl) : imgurl);
-        } else {
-          resultMsg = MessageCode.img(useSmallPic ? getMaster1200(imgurl) : imgurl);
-        }
-      } else {
-        const base64 = await getAntiShieldingBase64(imgurl, useSmallPic).catch(err => {
-          console.error(`${new Date().toLocaleString()} [Hpic Anti Error]}\n${err}`);
-          resultMsg = hPicReplyText.error;
-        });
-        if (needBig) {
-          resultMsg = base64 ? MessageCode.bigImg(base64, true) : MessageCode.bigImg(imgurl);
-        } else {
-          resultMsg = base64 ? MessageCode.img(base64, true) : MessageCode.img(imgurl);
-        }
+    if (limitLevel === 0 || limitLevel === 1) {
+      const res1 = await Axios.get(`${API_URI}&r18=${limitLevel}&num=${count}`);
+      if (res1.data.code !== 0 || res1.data.data?.length < 1) {
+        resultMsgs.push(hPicReplyText.serverError);
+        return resultMsgs;
       }
-      resultMsgs.push(resultMsg);
+      const data = res1.data.data;
+      for (const item of data) {
+        const imgurl = item.url.replace('https://i.pximg.net', MY_PROXY);
+        let resultMsg;
+        if (!useBase64) {
+          if (needBig) {
+            resultMsg = MessageCode.bigImg(useSmallPic ? getMaster1200(imgurl) : imgurl);
+          } else {
+            resultMsg = MessageCode.img(useSmallPic ? getMaster1200(imgurl) : imgurl);
+          }
+        } else {
+          const base64 = await getAntiShieldingBase64(imgurl, useSmallPic).catch(err => {
+            console.error(`${new Date().toLocaleString()} [Hpic Anti Error]}\n${err}`);
+            resultMsg = hPicReplyText.error;
+          });
+          if (needBig) {
+            resultMsg = base64 ? MessageCode.bigImg(base64, true) : MessageCode.bigImg(imgurl);
+          } else {
+            resultMsg = base64 ? MessageCode.img(base64, true) : MessageCode.img(imgurl);
+          }
+        }
+        resultMsgs.push(resultMsg);
+      }
+    } else if (limitLevel === 2) {
+      //色图新逻辑
+      for (let i = 0; i < count; i++) {
+        const t = new Date().getTime() + i;
+        resultMsgs.push(MessageCode.img(`http://localhost:60233/?type=setu&t=${t}`))
+      }
+      console.log(resultMsgs);
     }
-
     return resultMsgs;
   } catch (err) {
     console.error(`${new Date().toLocaleString()} [Hpic Error]}\n${err}`);

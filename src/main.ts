@@ -1,6 +1,5 @@
-import { CQWebSocket } from 'cq-websocket';
-import config from '../config';
 import YBot from './core/YBot';
+import InitProxy from './proxy';
 import { registerOnRequest } from './listener/onRequest';
 import { registerOnMessage } from './listener/onMessage';
 
@@ -13,6 +12,9 @@ export default function init() {
 
   //注册消息监听
   registerOnMessage();
+
+  //启动本地代理
+  InitProxy();
 
   //开始连接
   ybot.connect();

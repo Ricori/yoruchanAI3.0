@@ -9,7 +9,7 @@ function hPicRule(message: string) {
   if (!yoruConfig.hPic.enable) {
     return { hit: false }
   }
-  const exec = /((要|发|份|点)大?(色|h|瑟|涩)图)/.exec(message);
+  const exec = /((要|发|份|点|张)大?(色|h|瑟|涩)图)/.exec(message);
   let needBig = false;
   if (exec !== null) {
     needBig = message.search('大') !== -1;
@@ -56,7 +56,7 @@ function hPicAction(param: actionParamType) {
       for (const msg of resultMsgs) {
         setTimeout(() => {
           ybot.sendGroupMsg(groupId, msg);
-        }, i * 6000)
+        }, i * 3000)
         i++;
       }
     })
