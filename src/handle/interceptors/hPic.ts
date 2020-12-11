@@ -15,7 +15,7 @@ function hPicRule(message: string) {
     needBig = message.search('大') !== -1;
   }
   let count = 1;
-  const countExec = /([0-9]+)份/.exec(message);
+  const countExec = /([0-9]+)[张份]/.exec(message);
   if (countExec && countExec[1]) {
     count = Number(countExec[1])
     if (count > 9) {

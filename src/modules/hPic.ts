@@ -46,7 +46,6 @@ export const getHPic = async (limitLevel: 0 | 1 | 2, needBig = false, count = 1,
         const t = new Date().getTime() + i;
         resultMsgs.push(MessageCode.img(`http://localhost:60233/?type=setu&t=${t}`))
       }
-      console.log(resultMsgs);
     }
     return resultMsgs;
   } catch (err) {
