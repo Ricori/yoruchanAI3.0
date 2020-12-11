@@ -53,11 +53,12 @@ function hPicAction(param: actionParamType) {
     }
     const useSmallPic = yoruConfig.hPic.useSmallPic;
     getHPic(limitLevel, needBig, count, false, useSmallPic).then(resultMsgs => {
+      const delay = limitLevel === 2 ? 1200 : 4000;
       let i = 0;
       for (const msg of resultMsgs) {
         setTimeout(() => {
           ybot.sendGroupMsg(groupId, msg);
-        }, i * 3000)
+        }, i * delay)
         i++;
       }
     })
