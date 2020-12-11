@@ -18,9 +18,6 @@ function hPicRule(message: string) {
   const countExec = /([0-9]+)[张份]/.exec(message);
   if (countExec && countExec[1]) {
     count = Number(countExec[1])
-    if (count > 9) {
-      count = 9;
-    }
   }
   return {
     hit: exec !== null,
@@ -31,7 +28,10 @@ function hPicAction(param: actionParamType) {
   const ybot = YBot.getInstance();
   const { senderId, groupId, resultParam } = param;
   const needBig = resultParam?.needBig;
-  const count = resultParam?.count;
+  let count = resultParam?.count;
+  if (count > 9) {
+    count = 9;
+  }
   if (groupId) {
     //0=全年龄,1=混合,2=r18Only
     let limitLevel = 0 as 0 | 1 | 2;
@@ -49,6 +49,7 @@ function hPicAction(param: actionParamType) {
       if ([0, 1, 2].includes(lv)) {
         limitLevel = lv as 0 | 1 | 2;
       }
+      count = 20;  //放宽白名单群限制
     }
     const useSmallPic = yoruConfig.hPic.useSmallPic;
     getHPic(limitLevel, needBig, count, false, useSmallPic).then(resultMsgs => {
