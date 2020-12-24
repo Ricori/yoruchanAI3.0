@@ -2,9 +2,9 @@
 
 A QQ robot AI
 
-Developing.. 20%
+Developing.. 40%
 
 ## Todo List
-- Completed frame construction  40%
-- Historical core function migration 10%
-- Historical plugin migration
+- Completed frame construction  70%
+- Historical core function migration 30%
+- Historical plugin migration 30%

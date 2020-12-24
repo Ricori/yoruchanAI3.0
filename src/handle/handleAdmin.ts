@@ -7,6 +7,7 @@ import {
 } from '../core/Interceptor';
 import { IPrivateMessage } from '../core/MessageType';
 
+//私信-管理员命令处理
 export default function handleAdminCommand(messageInfo: IPrivateMessage) {
 
   const interceptors: interceptorsType = [

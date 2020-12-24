@@ -10,6 +10,7 @@ import hPicInterceptor from './interceptors/hPic';
 import config from '../../config';
 const yoruConfig = config.yoruConfig;
 
+//群聊消息处理
 export default function handleGroup(messageInfo: IGroupMessage) {
 
   const ybot = YBot.getInstance();
