@@ -14,7 +14,6 @@ export const searchImage = async (imgsData: IImgData[]) => {
     for (const imgData of imgsData) {
       const result = await saucenaoSearch(imgData.url);
       if (result.success) {
-        resultMsgs.push(result.msg)
         if (result.isAnime) {
           const whatAnimeRes = await whatAnimeSearch(imgData.url);
           if (whatAnimeRes.success) {
@@ -25,13 +24,15 @@ export const searchImage = async (imgsData: IImgData[]) => {
           if (nhentaiRes.success) {
             resultMsgs.push(nhentaiRes.msg)
           }
+        } else {
+          resultMsgs.push(result.msg)
         }
       }
     }
     console.log(resultMsgs);
     return resultMsgs;
   } catch (err) {
-    console.error(`${new Date().toLocaleString()} [searchImage Error]}\n${err}`);
+    console.error(`${new Date().toLocaleString()} [searchImage Error]\n${err}`);
     return [searchImageText.error];
   }
 }

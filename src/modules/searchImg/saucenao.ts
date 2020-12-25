@@ -17,20 +17,23 @@ interface ISnDB {
  */
 export default async function saucenaoSearch(imgURL: string) {
   const ret = await getSearchResult(hosts[0], imgURL, 999);
-  if (ret.data && ret.data.results && ret.data.results.length > 0) {
-    const result = ret.data.results[0]?.data;
-    const header = result.header;
+  if (ret.results && ret.results.length > 0) {
+    const { data, header } = ret.results[0];
+    //console.log(ret.results[0]);
     const {
-      //short_remaining, //短时剩余
-      //long_remaining, //长时剩余
       similarity, //相似度
       thumbnail //缩略图
     } = header;
+    let {
+      title, //标题
+      member_name, //作者
+      jp_name //本子名
+    } = data;
 
     let isAnime = false;
     let isBook = false;
 
-    const extUrls = result.ext_urls || [];
+    const extUrls = data.ext_urls || [];
     let url = extUrls[0];
     //如果结果有多个，优先取danbooru
     extUrls.forEach((u: string) => {
@@ -45,11 +48,6 @@ export default async function saucenaoSearch(imgURL: string) {
       url = 'https://pixiv.net/i/' + pidSearch[1];
     }
     const origURL = url.replace('https://', '');
-    let {
-      title, //标题
-      member_name, //作者
-      jp_name //本子名
-    } = result;
     isAnime = origURL.indexOf("anidb.net") !== -1;
     if (jp_name && jp_name.length > 0) {
       isBook = true;
@@ -70,7 +68,7 @@ export default async function saucenaoSearch(imgURL: string) {
     */
 
     //生成消息文本
-    const msg = MessageCode.share(url, `${title}相似度达到了${similarity}%`, origURL, thumbnail);
+    const msg = MessageCode.share(url, `${title}\n相似度达到了${similarity}%`, origURL, thumbnail);
 
     return {
       success: true,
@@ -101,13 +99,18 @@ export default async function saucenaoSearch(imgURL: string) {
  * @param {number} [db=999] 搜索库
  * @returns Axios对象
  */
-function getSearchResult(host: string, imgURL: string, db = 999) {
-  return Axios.get('https://' + host + '/search.php', {
+async function getSearchResult(host: string, imgURL: string, db = 999) {
+  const res = await Axios.get('https://' + host + '/search.php', {
     params: {
       db: db,
       output_type: 2,
       numres: 3,
       url: imgURL
     }
-  })
+  });
+  if (res.data) {
+    return res.data
+  } else {
+    return {}
+  }
 }

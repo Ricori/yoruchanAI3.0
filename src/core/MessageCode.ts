@@ -78,7 +78,7 @@ function tts(text: string) {
  */
 function share(url: string, title: string, content: string, image: string) {
   return `${title}\n${img(image)}\n${url}`;
-  return `[CQ:share,url=${escape(url, true)},title=${escape(title, true)},content=${escape(content, true)},image=${escape(image, true)}]`;
+  //return `[CQ:share,url=${escape(url, true)},title=${escape(title, true)},content=${escape(content, true)},image=${escape(image, true)}]`;
 }
 
 

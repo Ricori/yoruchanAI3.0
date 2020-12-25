@@ -1,9 +1,7 @@
 import Axios from 'axios';
-import Qs from 'querystring';
 import { searchImageText } from '../../customize/replyTextConfig';
 import MessageCode from '../../core/MessageCode';
 
-const cookies = "__cfduid=d25d7bd2b59809f974477d68548d4e3221531298009";
 const waURL = "https://trace.moe";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.99 Safari/537.36";
 
@@ -11,15 +9,20 @@ const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
  * whatanime搜索
  */
 export default async function whatAnimeSearch(imgURL: string) {
-  const ret = await getSearchResult(imgURL, cookies);
-  if (ret.code !== 0) {
+  const ret = await getSearchResult(imgURL);
+  if (ret.code === 413) {
     return {
       success: false,
       msg: searchImageText.whatAnimeToLarge
     }
+  } else if (ret.code !== 200) {
+    return {
+      success: false,
+      msg: ''
+    }
   }
   const retData = ret.data as any;
-  if (retData.docs.length == 0) {
+  if (retData.docs.length === 0) {
     return {
       success: false,
       msg: searchImageText.whatAnimeLimit
@@ -34,18 +37,25 @@ export default async function whatAnimeSearch(imgURL: string) {
 
   //提取信息
   const doc = retData.docs[0]; //相似度最高的结果
-  const diff = (100.0 - doc.diff).toFixed(2); //相似度
+  const similarity = (doc.similarity * 100).toFixed(2); // 相似度
   const jpName = doc.title_native || ""; //日文名
   const romaName = doc.title_romaji || ""; //罗马音
   const cnName = doc.title_chinese || ""; //中文名
-  const posSec = Math.floor(doc.t) % 60; //位置：秒
-  const posMin = Math.floor(posSec / 60); //位置：分
+  let posSec = Math.floor(doc.at); // 位置：秒
+  const posMin = Math.floor(posSec / 60); // 位置：分
+  posSec %= 60;
   const isR18 = doc.is_adult; //是否R18
   const anilistID = doc.anilist_id; //动漫ID
   const episode = doc.episode || "-"; //集数
 
   let type: any, start: any, end: any, img: any, synonyms: any;
   const info = await getAnimeInfo(anilistID);
+  if (!info) {
+    return {
+      success: false,
+      msg: ''
+    }
+  }
   type = info.type + " - " + info.format; //类型
   let sd = info.startDate;
   start = sd.year + "-" + sd.month + "-" + sd.day; //开始日期
@@ -55,7 +65,7 @@ export default async function whatAnimeSearch(imgURL: string) {
   synonyms = info.synonyms_chinese || []; //别名
 
   //构造返回信息
-  let msg = MessageCode.escape(`相似度达到了${diff}% \n出自第${episode}集的${posMin < 10 ? "0" : ""}${posMin}:${posSec < 10 ? "0" : ""}${posSec}`);
+  let msg = MessageCode.escape(`相似度达到了${similarity}% \n出自第${episode}集的${posMin < 10 ? "0" : ""}${posMin}:${posSec < 10 ? "0" : ""}${posSec}`);
   const appendMsg = (str: string, needEsc = true) => {
     if (typeof (str) == "string" && str.length > 0) {
       msg += "\n" + (needEsc ? MessageCode.escape(str) : str);
@@ -90,38 +100,29 @@ export default async function whatAnimeSearch(imgURL: string) {
  * @param {string} imgURL 图片地址
  * @param {string} cookie Cookie
  */
-async function getSearchResult(imgURL: string, cookie: string) {
-  const ret = await Axios.get(imgURL, {
-    responseType: 'arraybuffer' //为了转成base64
-  })
-  const ret2 = await Axios.post(waURL + "/search", {
-    headers: {
-      "accept": 'application/json, text/javascript, */*; q=0.01',
-      "accept-language": "zh-CN,zh;q=0.9,zh-TW;q=0.8,en;q=0.7",
-      "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
-      "cookie": cookie,
-      "origin": waURL,
-      "referer": waURL,
-      "user-agent": UA,
-      "x-requested-with": "XMLHttpRequest"
-    },
-    data: Qs.stringify({
-      data: Buffer.from(ret.data.data, 'binary').toString('base64'),
-      filter: "",
-      trial: 2
-    })
-  })
+async function getSearchResult(imgURL: string) {
   const res = {
     code: 0,
     data: null
   };
-  try {
-    res.data = JSON.parse(ret2.data);
-  } catch (err) {
-    if (ret2.data.indexOf('413') !== -1) {
-      res.code = 413;
-    }
+  const ret = await Axios.get(imgURL, {
+    responseType: 'arraybuffer' //为了转成base64
+  })
+  if (!ret.data) {
+    res.code = 111;
+    return res;
   }
+  await Axios.post(waURL + "/api/search", {
+    image: Buffer.from(ret.data, 'binary').toString('base64')
+  }).then(ret => {
+    res.data = ret.data;
+    res.code = ret.status;
+  }).catch(e => {
+    if (e.response) {
+      res.code = e.response.status;
+      res.data = e.response.data;
+    }
+  });
   return res;
 }
 
@@ -136,6 +137,5 @@ async function getAnimeInfo(anilistID: number) {
       "user-agent": UA,
     }
   })
-  return ret.data;
+  return ret.data?.[0];
 }
-

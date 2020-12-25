@@ -19,23 +19,18 @@ function searchImgAction(param: actionParamType) {
   const ybot = YBot.getInstance();
   const { senderId, groupId, resultParam } = param;
   const imgsData = resultParam?.imgsData;
-  console.log(imgsData);
   if (groupId) {
     //群聊
     searchImage(imgsData).then(resultMsgs => {
       for (const msg of resultMsgs) {
-        setTimeout(() => {
-          ybot.sendGroupMsg(groupId, msg);
-        }, 500)
+        ybot.sendGroupMsg(groupId, msg);
       }
     })
   } else {
     //私聊
     searchImage(imgsData).then(resultMsgs => {
       for (const msg of resultMsgs) {
-        setTimeout(() => {
-          ybot.sendPrivateMsg(senderId, msg);
-        }, 500)
+        ybot.sendPrivateMsg(senderId, msg);
       }
     })
   }
