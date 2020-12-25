@@ -29,7 +29,7 @@ export const searchImage = async (imgsData: IImgData[]) => {
         }
       }
     }
-    console.log(resultMsgs);
+    //console.log(resultMsgs);
     return resultMsgs;
   } catch (err) {
     console.error(`${new Date().toLocaleString()} [searchImage Error]\n${err}`);
