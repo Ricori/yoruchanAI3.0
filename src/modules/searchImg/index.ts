@@ -23,12 +23,14 @@ const searchImage = async (imgUrls: string[]) => {
             resultMsgs.push(result.msg)
           }
         }
+        /***
         if (result.isBook) {
           const nhentaiRes = await nhentaiSearch(result.details);
           if (nhentaiRes.msg && nhentaiRes.msg.length > 0) {
             resultMsgs.push(nhentaiRes.msg)
           }
         }
+        ***/
       }
     }
     if (resultMsgs.length > 0) {

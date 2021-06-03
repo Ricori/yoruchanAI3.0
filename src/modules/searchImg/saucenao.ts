@@ -48,7 +48,7 @@ export default async function saucenaoSearch(imgURL: string) {
   } = res;
 
   let isAnime = false, isBook = false;
-  let url = extUrls[0] || '', origURL = '';
+  let url = extUrls[0] || '';
 
   // url处理
   if (pixivId) {
@@ -68,9 +68,9 @@ export default async function saucenaoSearch(imgURL: string) {
       url = 'https://pixiv.net/i/' + pidRegExpRes[1];
     }
     url = url.replace('http://', 'https://');
-    origURL = url.replace('https://', '');
   }
 
+  const origURL = url.replace('https://', '');
   // 结果类型判断
   isAnime = origURL.indexOf("anidb.net") !== -1;
   if (jp_name && jp_name.length > 0) {
