@@ -42,6 +42,7 @@ export default async function saucenaoSearch(imgURL: string) {
       title,
       pixiv_id: pixivId,
       member_name,
+      member_id,
       author_name,
       jp_name
     } = {}
@@ -87,7 +88,16 @@ export default async function saucenaoSearch(imgURL: string) {
   }
 
   //生成消息文本
-  const msg = MessageCode.share(url, `${displayTitle}\n相似度达到了${similarity}%`, origURL, thumbnail || '');
+  const msgArr = [`${displayTitle}\n相似度达到了${similarity}%`];
+  if (thumbnail) {
+    msgArr.push(MessageCode.img(thumbnail))
+  }
+  msgArr.push(url);
+  if (member_id) {
+    msgArr.push(`作者PIXIV ID: ${member_id}`);
+  }
+  const msg = msgArr.join('\n');
+
   return {
     success: true,
     msg,
@@ -124,6 +134,7 @@ interface ISaucenaoResult {
       title: string,
       pixiv_id: number,
       member_name: string,
+      member_id?: string,
       author_name: string,
       jp_name: string
     }
