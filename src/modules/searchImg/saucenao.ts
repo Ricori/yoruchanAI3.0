@@ -16,7 +16,7 @@ export default async function saucenaoSearch(imgURL: string) {
     if (ret.results && ret.results.length > 0) {
       res = ret.results[0] || {};
     } else {
-      console.error(`${new Date().toLocaleString()} [Saucenao Error]Saucenao API Error`);
+      console.error(`${new Date().toLocaleString()} [Saucenao Error]API Error`);
       console.log(ret);
       return {
         success: false,
@@ -24,8 +24,7 @@ export default async function saucenaoSearch(imgURL: string) {
       }
     }
   } catch (error) {
-    console.error(`${new Date().toLocaleString()} [Saucenao Error]SaucenaoFetch Error`);
-    console.log(error);
+    console.error(`${new Date().toLocaleString()} [Saucenao Error]Fetch Error`);
     return {
       success: false,
       msg: ''

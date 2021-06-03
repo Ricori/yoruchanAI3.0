@@ -1,123 +1,96 @@
+import _ from 'lodash';
 import Axios from 'axios';
 import { searchImageText } from '../../customize/replyTextConfig';
 import MessageCode from '../../core/MessageCode';
-
-const waURL = "https://trace.moe";
-const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.99 Safari/537.36";
 
 /**
  * whatanime搜索
  */
 export default async function whatAnimeSearch(imgURL: string) {
   const ret = await getSearchResult(imgURL);
-  if (ret.code === 413) {
-    return {
-      success: false,
-      msg: searchImageText.whatAnimeToLarge
-    }
-  } else if (ret.code !== 200) {
+  if (ret.code !== 200 || !ret.data.result) {
     return {
       success: false,
       msg: ''
     }
   }
-  const retData = ret.data as any;
-  if (retData.docs.length === 0) {
+  if (ret.data.result.length === 0) {
     return {
       success: false,
       msg: searchImageText.whatAnimeLimit
     }
   }
 
-  /*
-   let quota = retData.quota; //剩余搜索次数
-   let expire = retData.expire; //次数重置时间  
-   if (quota <= 5) {}
-  */
-
   //提取信息
-  const doc = retData.docs[0]; //相似度最高的结果
-  const similarity = (doc.similarity * 100).toFixed(2); // 相似度
-  const jpName = doc.title_native || ""; //日文名
-  const romaName = doc.title_romaji || ""; //罗马音
-  const cnName = doc.title_chinese || ""; //中文名
-  let posSec = Math.floor(doc.at); // 位置：秒
-  const posMin = Math.floor(posSec / 60); // 位置：分
-  posSec %= 60;
-  const isR18 = doc.is_adult; //是否R18
-  const anilistID = doc.anilist_id; //动漫ID
-  const episode = doc.episode || "-"; //集数
+  const res = ret.data.result[0]; //相似度最高的结果
+  const similarity = (res.similarity * 100).toFixed(2); // 相似度
+  const {
+    anilist,    // 番剧 ID
+    episode = '-',  // 集数
+    from,     // 时间点
+    video,    // 预览视频
+    image,    // 预览图片
+  } = res;
+  const time = (() => {
+    const s = Math.floor(from);
+    const m = Math.floor(s / 60);
+    const ms = [m, s % 60];
+    return ms.map(num => String(num).padStart(2, '0')).join(':');
+  })();
 
-  let type: any, start: any, end: any, img: any, synonyms: any;
-  const info = await getAnimeInfo(anilistID);
+  const info = await getAnimeInfo(anilist);
   if (!info) {
     return {
       success: false,
       msg: ''
     }
   }
-  type = info.type + " - " + info.format; //类型
-  let sd = info.startDate;
-  start = sd.year + "-" + sd.month + "-" + sd.day; //开始日期
-  let ed = info.endDate;
-  end = (ed.year > 0) ? (ed.year + "-" + ed.month + "-" + ed.day) : "";
-  img = MessageCode.img(info.coverImage.large); //番剧封面图
-  synonyms = info.synonyms_chinese || []; //别名
-
   //构造返回信息
-  let msg = MessageCode.escape(`相似度达到了${similarity}% \n出自第${episode}集的${posMin < 10 ? "0" : ""}${posMin}:${posSec < 10 ? "0" : ""}${posSec}`);
+  let msg = MessageCode.escape(`相似度达到了${similarity}% \n出自第${episode}集的${time}`);
+  let extraMsg;
   const appendMsg = (str: string, needEsc = true) => {
     if (typeof (str) == "string" && str.length > 0) {
       msg += "\n" + (needEsc ? MessageCode.escape(str) : str);
     }
   }
-
-  appendMsg(img, false);
-  appendMsg(romaName);
-  if (jpName != romaName) appendMsg(jpName);
-  if (cnName != romaName && cnName != jpName) appendMsg(cnName);
-  if (synonyms.length > 0 && !(synonyms.length >= 2 && synonyms[0] == '[' && synonyms[1] == ']')) {
-    let syn = `别名：“${synonyms[0]}”`;
-    for (let i = 1; i < synonyms.length; i++)
-      syn += `、“${synonyms[i]}”`;
-    appendMsg(syn);
+  const dateObjToString = ({ year, month, day }: { year: string, month: string, day: string }) => [year, month, day].join('-');
+  appendMsg(MessageCode.img(info.coverImage.large), false);
+  const titles = _.uniq(['romaji', 'native', 'chinese'].map(k => info.title[k]).filter(v => v));
+  appendMsg(titles.join('\n'));
+  appendMsg(`类型：${info.type}-${info.format}`);
+  appendMsg(`开播：${dateObjToString(info.startDate)}`);
+  if (info.endDate.year > 0) appendMsg(`完结：${dateObjToString(info.endDate)}`);
+  if (info.isAdult){
+    appendMsg(searchImageText.r18warn);
+  }else{
+    extraMsg = MessageCode.video(`${video}&size=l`, `${image}&size=l`);
   }
-  appendMsg(`类型：${type}`);
-  appendMsg(`开播：${start}`);
-  if (end.length > 0) appendMsg(`完结：${end}`);
-  if (isR18) appendMsg(searchImageText.r18warn);
 
   return {
     success: true,
-    msg
+    msg,
+    extraMsg
   };
 }
 
 
 /**
  * 取得搜番结果
- *
- * @param {string} imgURL 图片地址
- * @param {string} cookie Cookie
  */
 async function getSearchResult(imgURL: string) {
   const res = {
     code: 0,
-    data: null
+    data: null as any,
   };
-  const ret = await Axios.get(imgURL, {
-    responseType: 'arraybuffer' //为了转成base64
-  })
-  if (!ret.data) {
-    res.code = 111;
-    return res;
-  }
-  await Axios.post(waURL + "/api/search", {
-    image: Buffer.from(ret.data, 'binary').toString('base64')
+  await Axios.get("https://api.trace.moe/search", {
+    params: {
+      url: imgURL
+    }
   }).then(ret => {
     res.data = ret.data;
     res.code = ret.status;
   }).catch(e => {
+    console.error(`${new Date().toLocaleString()} [WhatAnime Error]API Error`);
     if (e.response) {
       res.code = e.response.status;
       res.data = e.response.data;
@@ -126,16 +99,49 @@ async function getSearchResult(imgURL: string) {
   return res;
 }
 
+
+const animeInfoQuery = `
+query ($id: Int) {
+  Media (id: $id, type: ANIME) {
+    id
+    type
+    format
+    isAdult
+    title {
+      native
+      romaji
+    }
+    startDate {
+      year
+      month
+      day
+    }
+    endDate {
+      year
+      month
+      day
+    }
+    coverImage {
+      large
+    }
+  }
+}`;
+
 /**
  * 取得番剧信息
  * 
  * @param {number} anilistID
  */
 async function getAnimeInfo(anilistID: number) {
-  const ret = await Axios.get(waURL + "/info?anilist_id=" + anilistID, {
-    headers: {
-      "user-agent": UA,
-    }
-  })
-  return ret.data?.[0];
+  let data = null;
+  const ret = await Axios.post('https://trace.moe/anilist/' + anilistID, {
+    query: animeInfoQuery,
+    variables: { id: anilistID },
+  }).catch(e => {
+    console.error(`${new Date().toLocaleString()} [WhatAnime Error]API2 Error: ${e.response.statusText}`);
+  });
+  if (ret) {
+    data = ret.data?.data?.Media;
+  }
+  return data;
 }
