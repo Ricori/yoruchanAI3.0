@@ -71,7 +71,7 @@ export default class YBot {
     if (msg.length === 0) return;
     let prefix = '';
     if (atUserId) {
-      prefix = MessageCode.at(atUserId);
+      prefix = MessageCode.at(`${atUserId}`);
     }
     this.cqs('send_group_msg', {
       group_id: groupId,

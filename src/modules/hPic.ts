@@ -35,7 +35,7 @@ export const getHPic = async (limitLevel: 0 | 1 | 2, needBig = false, count = 1,
           if (needBig) {
             resultMsg = base64 ? MessageCode.bigImg(base64, true) : MessageCode.bigImg(imgurl);
           } else {
-            resultMsg = base64 ? MessageCode.img(base64, true) : MessageCode.img(imgurl);
+            resultMsg = base64 ? MessageCode.img(base64) : MessageCode.img(imgurl);
           }
         }
         resultMsgs.push(resultMsg);
