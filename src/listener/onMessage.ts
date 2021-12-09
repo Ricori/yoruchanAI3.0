@@ -2,10 +2,13 @@ import YBot from '../core/YBot';
 import handleAdminCommand from '../handle/handleAdmin';
 import handleCommon from '../handle/handleCommon';
 import handleGroup from '../handle/handleGroup';
-import config from '../../config';
-const yoruConfig = config.yoruConfig;
+import { yoruConfig } from '../../config';
 import { IPrivateMessage, IGroupMessage, IAllMessage } from '../core/MessageType';
 import REPLYTEXT from '../customize/replyTextConfig';
+
+// https://docs.go-cqhttp.org/event/
+// https://12.onebot.dev/interface/event/notice/
+// https://github.com/momocow/node-cq-websocket/blob/master/docs/api/EventListener.md#eventlistener
 
 export function registerOnMessage() {
 

@@ -1,9 +1,8 @@
 import YBot from '../../core/YBot';
 import { actionParamType } from '../../core/Interceptor';
 import { getHPic } from '../../modules/hPic';
-import config from '../../../config';
+import { yoruConfig } from '../../../config';
 import { hPicReplyText } from '../../customize/replyTextConfig';
-const yoruConfig = config.yoruConfig;
 
 function hPicRule(message: string) {
   if (!yoruConfig.hPic.enable) {

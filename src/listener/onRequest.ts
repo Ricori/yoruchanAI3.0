@@ -1,7 +1,6 @@
 import YBot from '../core/YBot';
 import YData from '../core/YData';
-import config from '../../config';
-const yoruConfig = config.yoruConfig;
+import { yoruConfig } from '../../config';
 
 export function registerOnRequest() {
   const ybot = YBot.getInstance();

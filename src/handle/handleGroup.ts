@@ -7,8 +7,8 @@ import {
 } from '../core/Interceptor';
 import { IGroupMessage } from '../core/MessageType';
 import hPicInterceptor from './interceptors/hPic';
-import config from '../../config';
-const yoruConfig = config.yoruConfig;
+import { yoruConfig } from '../../config';
+
 
 //群聊消息处理
 export default function handleGroup(messageInfo: IGroupMessage) {
