@@ -1,5 +1,6 @@
 const wsConfig = {
-  host: "123.207.7.202",  // 127.0.0.1
+  //host: "123.207.7.202",  // 127.0.0.1
+  host: "127.0.0.1",
   port: 6700,             // ws端口
   enableAPI: true,        // 启用 /api 连线
   enableEvent: true,      // 启用 /event 连线

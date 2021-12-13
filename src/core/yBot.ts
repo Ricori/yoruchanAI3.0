@@ -2,6 +2,7 @@ import { CQWebSocket } from 'cq-websocket';
 import YData from './YData';
 import { printLog } from '../utils/print';
 import MessageCode from './MessageCode';
+import { getAtCode } from '../utils/code';
 
 import { wsConfig } from '../../config';
 //import { PrivateMessage, GroupMessage } from './MessageType';
@@ -13,6 +14,11 @@ export default class YBot {
   private cqs: CQWebSocket;
   public on: CQWebSocket["on"];
   public once: CQWebSocket["once"];
+
+  private connectState = {
+    '/event': false,
+    '/api': false
+  }
 
   constructor() {
     this.cqs = new CQWebSocket(wsConfig);
@@ -28,11 +34,17 @@ export default class YBot {
     return YBot.instance;
   }
 
-  // 注册连接监听事件
+  // 注册连接相关监听事件
   registerConnectingEvent = () => {
-    this.cqs.on('socket.connecting', () => { printLog('start ws connenct..') });
-    this.cqs.on('socket.error', (_, err) => printLog(`ws connect fail,Error: ${err}`));
-    this.cqs.on('socket.connect', () => printLog('connect successfully'));
+    this.cqs.on('socket.connecting', (type) => { printLog(`[${type}]start ws connenct..`) });
+    this.cqs.on('socket.error', (type, err) => {
+      printLog(`[${type}]ws connect fail,Error: ${err}`)
+      this.connectState[type] = false;
+    });
+    this.cqs.on('socket.connect', (type) => {
+      printLog(`[${type}]connect successfully`);
+      this.connectState[type] = true;
+    });
   }
 
   // 启动连接
@@ -40,43 +52,105 @@ export default class YBot {
     this.cqs.connect();
   }
 
-  // 处理好友请求事件
-  setFriendAddRequest = (flag: string, approve: boolean) => {
-    this.cqs('set_friend_add_request', {
-      flag,
-      approve
-    });
+  // bot是否连接中
+  getBotIsConnect = () => {
+    if (this.connectState['/api'] && this.connectState['/event']) {
+      return true
+    }
+    return false
   }
 
-  // 处理邀请加群事件
+  /* BOT API LIST */
+  /* https://docs.go-cqhttp.org/api/ */
+
+  /** 处理好友请求 */
+  setFriendAddRequest = (flag: string, approve: boolean) => {
+    this.cqs('set_friend_add_request', { flag, approve });
+  }
+
+  /** 处理邀请加群 */
   setGroupAddRequest = (flag: string, approve: boolean) => {
     this.cqs('set_group_add_request', {
       flag,
       type: "invite",
       approve,
-      reason: '无授权,请联系yoru管理员'
+      reason: '该群无授权，请联系Yoru管理员'
     });
   }
 
-  //发私信消息
-  sendPrivateMsg = async (toUserId: number, msg: string) => {
+  /** 发送私聊消息
+   * @param {number} userId 对方QQ号
+   * @param {string} msg 要发送的内容
+   * @param {string} plainText 消息内容是否作为纯文本发送
+   */
+  sendPrivateMsg = async (userId: number, msg: string, plainText?: boolean) => {
     if (msg.length === 0) return;
     this.cqs('send_private_msg', {
-      user_id: toUserId,
-      message: msg
+      user_id: userId,
+      message: msg,
+      auto_escape: plainText ? true : false
     });
   }
-  //发群消息
-  sendGroupMsg = async (groupId: number, msg: string, atUserId?: number) => {
+
+  /** 发送群消息
+   * @param {number} groupId 对方QQ号
+   * @param {string} msg 要发送的内容
+   * @param {string} atUser 可选，要at的qq
+   * @param {string} plainText 消息内容是否作为纯文本发送
+   */
+  sendGroupMsg = async (groupId: number, msg: string, atUser?: number | string, plainText?: boolean) => {
     if (msg.length === 0) return;
     let prefix = '';
-    if (atUserId) {
-      prefix = MessageCode.at(`${atUserId}`);
+    if (atUser) {
+      prefix = getAtCode(`${atUser}`)
     }
     this.cqs('send_group_msg', {
       group_id: groupId,
-      message: prefix + msg
+      message: prefix + msg,
+      auto_escape: plainText ? true : false
     });
   }
+
+  /** 发送合并转发
+   * @param {number} groupId 对方QQ号
+   * @param {object} msg 内容，参照 https://docs.go-cqhttp.org/cqcode
+   */
+  sendGroupForwardMsg = async (groupId: number, msg: any[]) => {
+    if (msg.length === 0) return;
+    this.cqs('send_group_forward_msg', {
+      group_id: groupId,
+      messages: msg,
+    });
+  }
+
+  /** 撤回消息
+   * @param {number} messageId 消息 ID
+   */
+  deleteMsg = async (messageId: number) => {
+    this.cqs('delete_msg', {
+      message_id: messageId
+    });
+  }
+
+  /** 获取图片信息
+   * @param {string} file 图片缓存文件名
+   */
+  getImageInfo = async (file: string) => {
+    const data = await this.cqs('get_image', {
+      file
+    }) as unknown as null | { size: number; filename: string; url: string };
+    return data;
+  }
+
+  /** 获取中文分词[不稳定]
+   * @param {string} content 内容
+   */
+  getWordSlices = async (content: string) => {
+    const data = await this.cqs('get_word_slices', {
+      content
+    }) as unknown as null | { slices: string[] };
+    return data;
+  }
+
 
 }
