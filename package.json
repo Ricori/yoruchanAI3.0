@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "ts-node index.ts",
-    "build": "rm -rf ./build && tsc",
+    "build": "tsc",
     "prod": "node ./build/index.js",
     "test": "ts-node ./test/index.ts",
     "lint": "eslint --ext .ts src/ --quiet",

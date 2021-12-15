@@ -20,10 +20,10 @@ const yoruConfig = {
   },
   hPic: {                         //瑟图功能
     enable: true,                 //是否开启
-    whiteOnly: false,             //只允许白名单群
+    whiteOnly: false,             //只允许白名单群使用
     whiteGroup: [829349264],      //白名单群
-    whiteGroupLimit: 2,           //白名单群拥有的权限,0=全年龄,1=混合,2=r18Only
-    useSmallPic: true,            //开启图片压缩，可以降低上传错误率
+    whiteGroupLimit: 2,           //白名单群拥有的最高瑟图等级, 0=全年龄,1=混合,2=r18Only
+    useSmallPic: true,            //开启图片压缩，可以降低上传错误率， todo: 取消！
   }
 }
 

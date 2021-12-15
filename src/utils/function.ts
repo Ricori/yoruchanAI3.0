@@ -1,9 +1,10 @@
-import YBot from '../../core/YBot';
-import { actionParamType } from '../../core/Interceptor';
+/** 返回文本数组中随机文本 */
+export function randomText(textArr: string[]) {
+  const i = Math.floor(Math.random() * textArr.length);
+  return textArr[i];
+}
 
-/**
- * 判断消息是否有指定文本
- *
+/** 判断消息是否有指定文本
  * @param {string} text 消息
  * @param {string} findText 需要寻找的消息
  * @returns 有则返回true
@@ -11,18 +12,16 @@ import { actionParamType } from '../../core/Interceptor';
 export function hasText(text: string, findText: string) {
   return text.search(findText) !== -1;
 }
-/**
- * 判断消息是否有图片
- *
+
+/** 判断消息是否有图片
  * @param {string} msg 消息
  * @returns 有则返回true
  */
 export function hasImage(msg: string) {
   return msg.indexOf('[CQ:image') !== -1;
 }
-/**
- * 从消息中提取图片
- *
+
+/** 从消息中提取图片
  * @param {string} msg
  * @returns 图片URL数组
  */
@@ -38,17 +37,4 @@ export function getImgs(msg: string) {
     search = reg.exec(msg);
   }
   return result;
-}
-
-/**
- * 回复消息
- */
-export function replyMessage(param: actionParamType, msg: string, at = false) {
-  const ybot = YBot.getInstance();
-  const { senderId, groupId } = param;
-  if (groupId) {
-    ybot.sendGroupMsg(groupId, msg, at ? senderId : undefined);
-  } else {
-    ybot.sendPrivateMsg(senderId, msg);
-  }
 }

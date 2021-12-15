@@ -1,7 +1,7 @@
-import YBot from '../core/YBot';
-import YData from '../core/YData';
-import { RequestFirendEventData } from '../types/event';
-import { yoruConfig } from '../../config';
+import YBot from '../../core/YBot';
+import YData from '../../core/YData';
+import { RequestFirendEventData } from '../../types/event';
+import { yoruConfig } from '../../../config';
 
 export async function requestFirendListener(data: RequestFirendEventData) {
   const ybot = YBot.getInstance();

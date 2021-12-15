@@ -1,7 +1,7 @@
 import _ from 'lodash';
 import Axios from 'axios';
 import { searchImageText } from '../../customize/replyTextConfig';
-import MessageCode from '../../core/MessageCode';
+import { escape, getImgCode, getVideoCode } from '../../utils/msgCode';
 
 /**
  * whatanime搜索
@@ -46,15 +46,15 @@ export default async function whatAnimeSearch(imgURL: string) {
     };
   }
   // 构造返回信息
-  let msg = MessageCode.escape(`相似度达到了${similarity}% \n出自第${episode}集的${time}`);
+  let msg = escape(`相似度达到了${similarity}% \n出自第${episode}集的${time}`);
   let extraMsg;
   const appendMsg = (str: string, needEsc = true) => {
     if (typeof (str) === 'string' && str.length > 0) {
-      msg += `\n${needEsc ? MessageCode.escape(str) : str}`;
+      msg += `\n${needEsc ? escape(str) : str}`;
     }
   };
   const dateObjToString = ({ year, month, day }: { year: string, month: string, day: string }) => [year, month, day].join('-');
-  appendMsg(MessageCode.img(info.coverImage.large), false);
+  appendMsg(getImgCode(info.coverImage.large), false);
   const titles = _.uniq(['romaji', 'native', 'chinese'].map((k) => info.title[k]).filter((v) => v));
   appendMsg(titles.join('\n'));
   appendMsg(`类型：${info.type}-${info.format}`);
@@ -63,7 +63,7 @@ export default async function whatAnimeSearch(imgURL: string) {
   if (info.isAdult) {
     appendMsg(searchImageText.r18warn);
   } else {
-    extraMsg = MessageCode.video(`${video}&size=l`, `${image}&size=l`);
+    extraMsg = getVideoCode(`${video}&size=l`, `${image}&size=l`);
   }
 
   return {

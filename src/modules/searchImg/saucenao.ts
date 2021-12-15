@@ -1,5 +1,5 @@
 import Axios from 'axios';
-import MessageCode from '../../core/MessageCode';
+import { getImgCode } from '../../utils/msgCode';
 
 /**
  * saucenao搜索
@@ -89,7 +89,7 @@ export default async function saucenaoSearch(imgURL: string) {
   // 生成消息文本
   const msgArr = [`${displayTitle}\n相似度达到了${similarity}%`];
   if (thumbnail) {
-    msgArr.push(MessageCode.img(thumbnail));
+    msgArr.push(getImgCode(thumbnail));
   }
   msgArr.push(url);
   if (member_id) {

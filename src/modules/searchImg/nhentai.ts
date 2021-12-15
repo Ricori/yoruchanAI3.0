@@ -1,6 +1,3 @@
-import Axios from 'axios';
-import MessageCode from '../../core/MessageCode';
-
 const NanaAPI = require('nana-api');
 
 const nana = new NanaAPI();

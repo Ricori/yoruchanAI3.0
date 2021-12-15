@@ -1,15 +1,12 @@
 import { CQWebSocket } from 'cq-websocket';
-import YData from './YData';
 import { printLog } from '../utils/print';
-import MessageCode from './MessageCode';
-import { getAtCode } from '../utils/code';
-
+import { getAtCode } from '../utils/msgCode';
 import { wsConfig } from '../../config';
-// import { PrivateMessage, GroupMessage } from './MessageType';
 
 import {
   RequestFirendListenerFc,
   PrivateMessageListenerFc,
+  GroupMessageListenerFc,
 } from '../types/listener';
 
 export default class YBot {
@@ -161,6 +158,19 @@ export default class YBot {
   /* BOT EVENT LIST */
   /* https://12.onebot.dev/interface/event/meta/ */
 
+  doFc = async (fcs: PrivateMessageListenerFc[] | GroupMessageListenerFc[], data: any) => {
+    for (let index = 0; index < fcs.length; index += 1) {
+      const fc = fcs[index];
+      let res;
+      try {
+        res = await fc(data);
+        if (res) break;
+      } catch (error) {
+        printLog(`[Listner Error] ${error}`);
+      }
+    }
+  };
+
   bindRequestFirendListener = (listenerFc: RequestFirendListenerFc) => {
     this.cqs.on('request.friend', async (data: any) => {
       listenerFc(data);
@@ -169,14 +179,19 @@ export default class YBot {
 
   bindPrivateMessageListeners = (listenerFcs: PrivateMessageListenerFc[]) => {
     this.cqs.on('message.private', async (data: any) => {
-      for (let index = 0; index < listenerFcs.length; index++) {
-        const fc = listenerFcs[index];
-        const res = await fc(data);
-        if (res) break;
-      }
+      this.doFc(listenerFcs, data);
     });
   };
 
-  
+  bindGroupAtBotMessageListeners = (listenerFcs: GroupMessageListenerFc[]) => {
+    this.cqs.on('message.group.@.me', async (data: any) => {
+      this.doFc(listenerFcs, data);
+    });
+  };
 
+  bindGroupCommonMessageListeners = (listenerFcs: GroupMessageListenerFc[]) => {
+    this.cqs.on('message.group', async (data: any) => {
+      this.doFc(listenerFcs, data);
+    });
+  };
 }

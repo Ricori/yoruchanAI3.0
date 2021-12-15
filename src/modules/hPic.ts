@@ -2,13 +2,13 @@ import Axios from 'axios';
 import { createCanvas, loadImage } from 'canvas';
 import { random } from 'lodash';
 import { hPicReplyText } from '../customize/replyTextConfig';
-import MessageCode from '../core/MessageCode';
+import { getImgCode, getBigImgCode } from '../utils/msgCode';
 
 const API_URI = 'https://api.lolicon.app/setu/?apikey=170792005f99b428151719';
 const MY_PROXY = 'https://i.pixiv.cat'; // http://pximg.cdn.kvv.me
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.66 Safari/537.36';
 
-export const getHPic = async (limitLevel: 0 | 1 | 2, needBig = false, count = 1, useBase64 = true, useSmallPic = false) => {
+export default async function getHPic(limitLevel: 0 | 1 | 2, needBig = false, count = 1, useBase64 = true, useSmallPic = false) {
   const resultMsgs = [];
   try {
     if (limitLevel === 0 || limitLevel === 1) {
@@ -23,9 +23,9 @@ export const getHPic = async (limitLevel: 0 | 1 | 2, needBig = false, count = 1,
         let resultMsg;
         if (!useBase64) {
           if (needBig) {
-            resultMsg = MessageCode.bigImg(useSmallPic ? getMaster1200(imgurl) : imgurl);
+            resultMsg = getBigImgCode(useSmallPic ? getMaster1200(imgurl) : imgurl);
           } else {
-            resultMsg = MessageCode.img(useSmallPic ? getMaster1200(imgurl) : imgurl);
+            resultMsg = getImgCode(useSmallPic ? getMaster1200(imgurl) : imgurl);
           }
         } else {
           const base64 = await getAntiShieldingBase64(imgurl, useSmallPic).catch((err) => {
@@ -33,9 +33,9 @@ export const getHPic = async (limitLevel: 0 | 1 | 2, needBig = false, count = 1,
             resultMsg = hPicReplyText.error;
           });
           if (needBig) {
-            resultMsg = base64 ? MessageCode.bigImg(base64, true) : MessageCode.bigImg(imgurl);
+            resultMsg = base64 ? getBigImgCode(base64, true) : getBigImgCode(imgurl);
           } else {
-            resultMsg = base64 ? MessageCode.img(base64) : MessageCode.img(imgurl);
+            resultMsg = base64 ? getImgCode(base64) : getImgCode(imgurl);
           }
         }
         resultMsgs.push(resultMsg);
@@ -44,7 +44,7 @@ export const getHPic = async (limitLevel: 0 | 1 | 2, needBig = false, count = 1,
       // 色图新逻辑
       for (let i = 0; i < count; i += 1) {
         const t = new Date().getTime() + i;
-        resultMsgs.push(MessageCode.img(`http://localhost:60233/?type=setu&t=${t}`));
+        resultMsgs.push(getImgCode(`http://localhost:60233/?type=setu&t=${t}`));
       }
     }
     return resultMsgs;
@@ -52,7 +52,7 @@ export const getHPic = async (limitLevel: 0 | 1 | 2, needBig = false, count = 1,
     console.error(`${new Date().toLocaleString()} [Hpic Error]}\n${err}`);
     return [hPicReplyText.error];
   }
-};
+}
 
 async function getAntiShieldingBase64(url: string, useSmallPic: boolean) {
   if (!useSmallPic) {

@@ -5,7 +5,7 @@ import _ from 'lodash';
  * @param {string} str 欲转义的字符串
  * @param {boolean} [insideCQ=false] 字符串是否放在CQ码内
  */
-const escape = (str: string, insideCQ = false) => {
+export const escape = (str: string, insideCQ = false) => {
   const result = str.replace(/&/g, '&amp;').replace(/\[/g, '&#91;').replace(/\]/g, '&#93;');
   if (!insideCQ) return result;
   return result
@@ -66,6 +66,29 @@ export default function getMessageCode(type: CQType, params: Record<string, any>
 
 export function getAtCode(qq: string) {
   return getMessageCode('at', { qq });
+}
+
+export function getImgCode(file: string, type?: 'flash' | 'show') {
+  if (type) {
+    return getMessageCode('image', { file, type });
+  }
+  return getMessageCode('image', { file });
+}
+
+export function getBigImgCode(file: string, isBase64 = false) {
+  return getMessageCode('cardimage', {
+    file: isBase64 ? `base64://${file}` : file,
+    maxwidth: 800,
+    maxheight: 1600,
+    source: '夜夜酱',
+  });
+}
+
+export function getVideoCode(file: string, cover: string) {
+  return getMessageCode('video', {
+    file,
+    cover,
+  });
 }
 
 export function getForwardMessageId(message: string) {

@@ -1,20 +1,18 @@
+interface RepeaterLog {
+  userId: number | string,
+  msg: string,
+  times: number,
+  done: boolean,
+}
+
 export default class YData {
   static instance: YData;
 
   /** 自动同意好友请求的名单  */
   private approveFriendIds: number[] = [];
 
-  private searchMode = []; // 搜图模式记录
-
-  private searchCount = []; // 搜索次数记录
-
-  private initDate = new Date().getDate();
-
-  private hPicData = { g: {}, u: {} }; // setu记录
-
-  private animeSearchLog = {};
-
-  private repeaterData = [] as any; // 复读记录
+  /** 复读记录  */
+  private repeaterData: Record<number | string, RepeaterLog> = {};
 
   static getInstance() {
     if (!YData.instance) {
@@ -36,39 +34,36 @@ export default class YData {
     this.approveFriendIds = this.approveFriendIds.filter((id) => id !== userId);
   };
 
-  /**
-   * 记录某群复读情况
-   *
-   * @param {number} g 群号
-   * @param {number} u QQ号
+  /** 记录某群复读情况
+   * @param {number} groupId 群号
+   * @param {number} userId QQ号
    * @param {string} msg 消息
    * @returns 如果已经复读则返回0，否则返回当前复读次数
    */
-  saveRptLog(groupId: number, userId: number, msg: string) {
-    let lg = this.repeaterData[groupId];
+  saveRepeaterLog(groupId: number, userId: number, msg: string) {
+    const logObj = this.repeaterData[groupId];
     // 没有记录或另起复读则新建记录
-    if (!lg || lg.msg !== msg) {
-      lg = {
-        user: userId,
+    if (!logObj || logObj.msg !== msg) {
+      this.repeaterData[groupId] = {
+        userId,
         msg,
         times: 1,
         done: false,
       };
-      this.repeaterData[groupId] = lg;
-    } else if (lg.user !== userId) {
+    } else if (logObj.userId !== userId) {
       // 不同人复读则次数加1
-      lg.user = userId;
-      lg.times += 1;
+      logObj.userId = userId;
+      logObj.times += 1;
     }
-    return lg.done ? 0 : lg.times;
+    return logObj.done ? 0 : logObj.times;
   }
 
-  /**
-   * 标记某群已复读
-   *
-   * @param {number} g 群号
+  /** 标记某群已复读
+   *  @param {number} groupId 群号
   */
-  setRptDone(groupId: number) {
-    this.repeaterData[groupId].done = true;
+  setRepeaterDone(groupId: number) {
+    if (this.repeaterData[groupId]) {
+      this.repeaterData[groupId].done = true;
+    }
   }
 }
