@@ -20,7 +20,7 @@ export default function handleSearchImg({
     if (!groupId) return;
     searchImage(urls).then((resultMsgs) => {
       resultMsgs.forEach((msg) => {
-        ybot.sendGroupMsg(groupId, msg, userId);
+        ybot.sendGroupMsg(groupId, msg);
       });
     });
   } else {

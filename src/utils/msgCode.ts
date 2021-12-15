@@ -30,7 +30,9 @@ class CQCode {
   }
 
   set(key: string, value: any) {
-    this.data.set(key, value);
+    if (value) {
+      this.data.set(key, value);
+    }
     return this;
   }
 
@@ -88,6 +90,15 @@ export function getVideoCode(file: string, cover: string) {
   return getMessageCode('video', {
     file,
     cover,
+  });
+}
+
+export function getShareCode(url: string, title: string, content?: string, image?: string) {
+  return getMessageCode('share', {
+    url,
+    title,
+    content,
+    image,
   });
 }
 

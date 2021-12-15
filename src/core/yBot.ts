@@ -114,6 +114,17 @@ export default class YBot {
     });
   };
 
+  /** 获取合并转发
+   * @param {string} forwardId 合并转发id
+   */
+  getGroupForwardMsg = async (forwardId: string) => {
+    if (forwardId.length === 0) return;
+    const res = await this.cqs('get_forward_msg', {
+      message_id: forwardId,
+    });
+    return res;
+  };
+
   /** 发送合并转发
    * @param {number} groupId 对方QQ号
    * @param {object} msg 内容，参照 https://docs.go-cqhttp.org/cqcode

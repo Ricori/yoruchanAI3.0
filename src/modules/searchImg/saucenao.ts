@@ -1,5 +1,5 @@
 import Axios from 'axios';
-import { getImgCode } from '../../utils/msgCode';
+import { getImgCode, getShareCode } from '../../utils/msgCode';
 
 /**
  * saucenao搜索
@@ -80,27 +80,29 @@ export default async function saucenaoSearch(imgURL: string) {
 
   // 标题处理
   let displayTitle = '';
-  if (!title) {
-    if (jp_name) {
-      displayTitle = jp_name;
+  if (title) {
+    if (member_name || author_name) {
+      displayTitle = `「${title}」/「${member_name || author_name}」`;
     } else {
-      displayTitle = isAnime ? '[AniDB]' : '[YoruDB]';
+      displayTitle = `「${title}」`;
     }
-  }
-  if (member_name || author_name) {
-    displayTitle = `「${title}」/「${member_name || author_name}」`;
+  } else if (jp_name) {
+    displayTitle = jp_name;
+  } else {
+    displayTitle = isAnime ? '[AniDB]' : '[YoruDB]';
   }
 
   // 生成消息文本
-  const msgArr = [`${displayTitle}\n相似度达到了${similarity}%`];
-  if (thumbnail) {
-    msgArr.push(getImgCode(thumbnail));
-  }
-  msgArr.push(url);
+  let contentText = `相似度达到了${similarity}%`;
   if (member_id) {
-    msgArr.push(`作者PIXIV ID: ${member_id}`);
+    contentText += `\n作者PIXIV ID: ${member_id}`;
   }
-  const msg = msgArr.join('\n');
+  let msg;
+  if (thumbnail) {
+    msg = getShareCode(url, displayTitle, contentText, thumbnail);
+  } else {
+    msg = getShareCode(url, displayTitle, contentText);
+  }
 
   return {
     success: true,
@@ -157,6 +159,6 @@ async function saucenaoFetch(imgURL: string) {
       url: imgURL,
     },
     responseType: 'json',
-    timeout: 6000,
+    timeout: 8000,
   })).data ?? {};
 }

@@ -46,5 +46,4 @@ export const helpText = '以下是一些夜夜酱的使用提示：\n'
   + '6.夜夜酱支持私聊，限制会有所放开；\n'
   + '7.如有问题请联系开发者takamichikan，本帮助最后更新于2019年4月8日。';
 
-
 export default replyText;
