@@ -12,8 +12,6 @@ import {
   PrivateMessageListenerFc,
 } from '../types/listener';
 
-type listenerType = 'requestFriend';
-
 export default class YBot {
   static instance: YBot;
 
@@ -164,12 +162,21 @@ export default class YBot {
   /* https://12.onebot.dev/interface/event/meta/ */
 
   bindRequestFirendListener = (listenerFc: RequestFirendListenerFc) => {
-    this.cqs.on('request.friend', async (cxt: any) => {
-      listenerFc(cxt);
+    this.cqs.on('request.friend', async (data: any) => {
+      listenerFc(data);
     });
   };
 
-  bindPrivateMessageListener = (listenerFc: PrivateMessageListenerFc) => {
-
+  bindPrivateMessageListeners = (listenerFcs: PrivateMessageListenerFc[]) => {
+    this.cqs.on('message.private', async (data: any) => {
+      for (let index = 0; index < listenerFcs.length; index++) {
+        const fc = listenerFcs[index];
+        const res = await fc(data);
+        if (res) break;
+      }
+    });
   };
+
+  
+
 }

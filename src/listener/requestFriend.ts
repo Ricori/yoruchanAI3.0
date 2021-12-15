@@ -3,7 +3,7 @@ import YData from '../core/YData';
 import { RequestFirendEventData } from '../types/event';
 import { yoruConfig } from '../../config';
 
-export function requestFirendListener(data: RequestFirendEventData) {
+export async function requestFirendListener(data: RequestFirendEventData) {
   const ybot = YBot.getInstance();
   const ydata = YData.getInstance();
   const userId = data.user_id;
