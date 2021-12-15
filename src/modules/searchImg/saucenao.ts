@@ -1,5 +1,5 @@
 import Axios from 'axios';
-import { getImgCode, getShareCode } from '../../utils/msgCode';
+import { getImgCode } from '../../utils/msgCode';
 
 /**
  * saucenao搜索
@@ -93,16 +93,16 @@ export default async function saucenaoSearch(imgURL: string) {
   }
 
   // 生成消息文本
-  let contentText = `相似度达到了${similarity}%`;
-  if (member_id) {
-    contentText += `\n作者PIXIV ID: ${member_id}`;
-  }
-  let msg;
+  const msgArr = [`${displayTitle}\n相似度达到了${similarity}%`];
   if (thumbnail) {
-    msg = getShareCode(url, displayTitle, contentText, thumbnail);
-  } else {
-    msg = getShareCode(url, displayTitle, contentText);
+    msgArr.push(getImgCode(thumbnail));
   }
+  msgArr.push(url);
+  if (member_id) {
+    msgArr.push(`作者PIXIV ID: ${member_id}`);
+  }
+  // msg = getShareCode(url, displayTitle, contentText, thumbnail);
+  const msg = msgArr.join('\n');
 
   return {
     success: true,

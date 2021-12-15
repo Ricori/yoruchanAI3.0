@@ -93,7 +93,7 @@ export function getVideoCode(file: string, cover: string) {
   });
 }
 
-export function getShareCode(url: string, title: string, content?: string, image?: string) {
+export function getShareCode_UNSAFE(url: string, title: string, content?: string, image?: string) {
   return getMessageCode('share', {
     url,
     title,
