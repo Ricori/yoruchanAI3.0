@@ -1,21 +1,20 @@
-
-
-
 export default class YData {
-
   static instance: YData;
 
-  private searchMode = []; //搜图模式记录
+  /** 自动同意好友请求的名单  */
+  private approveFriendIds: number[] = [];
 
-  private searchCount = []; //搜索次数记录
+  private searchMode = []; // 搜图模式记录
+
+  private searchCount = []; // 搜索次数记录
+
   private initDate = new Date().getDate();
-  private hPicData = { g: {}, u: {} };  //setu记录
+
+  private hPicData = { g: {}, u: {} }; // setu记录
+
   private animeSearchLog = {};
 
-
-  private approveFriendIds = [] as number[];  //好友请求白名单
-  private repeaterData = [] as any;   //复读记录
-
+  private repeaterData = [] as any; // 复读记录
 
   static getInstance() {
     if (!YData.instance) {
@@ -24,37 +23,18 @@ export default class YData {
     return YData.instance;
   }
 
+  /** 新增好友白名单 */
+  addApproveFriendIds = (userId: number) => {
+    this.approveFriendIds = [...this.approveFriendIds, userId];
+  };
 
-  constructor() {
-    /*
-    //每分钟进行定时任务检测
-    setInterval(() => {
-      //清理每日搜索记录
-      const nowDate = new Date().getDate();
-      if (this.initDate != nowDate) {
-        this.initDate = nowDate;
+  /** 检查用户是否在好友白名单中 */
+  checkApproveFriend = (userId: number) => this.approveFriendIds.indexOf(userId) > -1;
 
-        this.approveFriendIds = [];
-
-        this.searchCount = [];
-      }
-    }, 60 * 1000);
-    */
-  }
-
-  //新增好友请求白名单
-  addApproveFriendIds = (userid: number) => {
-    this.approveFriendIds = [...this.approveFriendIds, userid]
-  }
-  //检查用户是否在好友白名单中
-  checkApproveFriend = (userid: number) => {
-    return this.approveFriendIds.indexOf(userid) > -1;
-  }
-  //在好友白名单中删除某用户
-  deleteApproveFriend = (userid: number) => {
-    this.approveFriendIds = this.approveFriendIds.filter(id => id != userid)
-  }
-
+  /** 在好友白名单中删除某用户 */
+  deleteApproveFriend = (userId: number) => {
+    this.approveFriendIds = this.approveFriendIds.filter((id) => id !== userId);
+  };
 
   /**
    * 记录某群复读情况
@@ -66,19 +46,19 @@ export default class YData {
    */
   saveRptLog(groupId: number, userId: number, msg: string) {
     let lg = this.repeaterData[groupId];
-    //没有记录或另起复读则新建记录
+    // 没有记录或另起复读则新建记录
     if (!lg || lg.msg !== msg) {
       lg = {
         user: userId,
         msg,
         times: 1,
-        done: false
-      }
+        done: false,
+      };
       this.repeaterData[groupId] = lg;
     } else if (lg.user !== userId) {
-      //不同人复读则次数加1
+      // 不同人复读则次数加1
       lg.user = userId;
-      lg.times++;
+      lg.times += 1;
     }
     return lg.done ? 0 : lg.times;
   }
@@ -91,8 +71,4 @@ export default class YData {
   setRptDone(groupId: number) {
     this.repeaterData[groupId].done = true;
   }
-
-
-
-
 }

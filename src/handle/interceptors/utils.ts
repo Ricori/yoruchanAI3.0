@@ -18,7 +18,7 @@ export function hasText(text: string, findText: string) {
  * @returns 有则返回true
  */
 export function hasImage(msg: string) {
-  return msg.indexOf("[CQ:image") !== -1;
+  return msg.indexOf('[CQ:image') !== -1;
 }
 /**
  * 从消息中提取图片
@@ -27,13 +27,13 @@ export function hasImage(msg: string) {
  * @returns 图片URL数组
  */
 export function getImgs(msg: string) {
-  let reg = /\[CQ:image,file=([^,]+),url=([^\]]+)\]/g;
-  let result = [];
+  const reg = /\[CQ:image,file=([^,]+),url=([^\]]+)\]/g;
+  const result = [];
   let search = reg.exec(msg);
   while (search) {
     result.push({
       file: search[1],
-      url: search[2]
+      url: search[2],
     });
     search = reg.exec(msg);
   }
@@ -49,6 +49,6 @@ export function replyMessage(param: actionParamType, msg: string, at = false) {
   if (groupId) {
     ybot.sendGroupMsg(groupId, msg, at ? senderId : undefined);
   } else {
-    ybot.sendPrivateMsg(senderId, msg)
+    ybot.sendPrivateMsg(senderId, msg);
   }
-};
+}

@@ -3,40 +3,38 @@ import YData from '../core/YData';
 import {
   interceptorsType,
   doInterceptor,
-  actionParamType
+  actionParamType,
 } from '../core/Interceptor';
 import { IPrivateMessage } from '../core/MessageType';
 
-//私信-管理员命令处理
+// 私信-管理员命令处理
 export default function handleAdminCommand(messageInfo: IPrivateMessage) {
-
   const interceptors: interceptorsType = [
     {
       name: 'ApproveFriendInvite',
       doRule: approveFriendRule,
-      doAction: approveFriendAction
+      doAction: approveFriendAction,
     },
-    /****
+    /** **
     {
       name: 'ApproveGroupInvite',
       doRule: approveGroupRule,
       doAction: approveGroupAction
     },
-    ****/
+    *** */
   ];
 
   return doInterceptor(interceptors, messageInfo);
 }
-
 
 function approveFriendRule(message: string) {
   const exec = /--approve=([0-9]+)/.exec(message);
   return {
     hit: exec !== null,
     param: {
-      approveId: exec ? exec[1] : null
-    }
-  }
+      approveId: exec ? exec[1] : null,
+    },
+  };
 }
 async function approveFriendAction(param: actionParamType) {
   const { senderId, resultParam } = param;
@@ -47,9 +45,8 @@ async function approveFriendAction(param: actionParamType) {
   ydata.addApproveFriendIds(parseInt(approveId));
 }
 
-
-//同意加群操作已经不再需要，因为新版QQ被拉会自动同意进群
-/***********************
+// 同意加群操作已经不再需要，因为新版QQ被拉会自动同意进群
+/** *********************
 function approveGroupRule(message: string) {
   const exec = /--approve-group=([0-9]+)/.exec(message);
   return {
@@ -73,4 +70,4 @@ async function approveGroupAction(param: actionParamType) {
     return false;
   });
 }
-***********************/
+********************** */

@@ -1,22 +1,34 @@
 module.exports = {
-  "env": {
-    "node": true,
-    "es2021": true
+  env: {
+    browser: true,
+    es2021: true,
   },
-  "extends": [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/recommended"
+  extends: [
+    'airbnb-base',
+    'airbnb-typescript/base',
   ],
-  "parser": "@typescript-eslint/parser",
-  "parserOptions": {
-    "ecmaVersion": 12,
-    "sourceType": "module"
+  parser: '@typescript-eslint/parser',
+  parserOptions: {
+    ecmaVersion: 12,
+    sourceType: 'module',
+    project: './tsconfig.json',
   },
-  "plugins": [
-    "@typescript-eslint"
+  plugins: [
+    '@typescript-eslint',
   ],
-  "rules": {
-    "prefer-const": 0,
-    "indent": ['error', 2],
-  }
+  rules: {
+    '@typescript-eslint/no-unused-vars': 'off',
+    '@typescript-eslint/no-use-before-define': 'off',
+    '@typescript-eslint/naming-convention': 'off',
+    'import/prefer-default-export': 'off',
+    'no-use-before-define': 'off',
+    'camelcase': 'off',
+    'max-len': 'off',
+    'class-methods-use-this': 'off',
+    'radix': 'off',
+    'prefer-spread': 'off',
+    'consistent-return': 'off',
+    'no-restricted-syntax': 'off',
+    'no-await-in-loop': 'off',
+  },
 };

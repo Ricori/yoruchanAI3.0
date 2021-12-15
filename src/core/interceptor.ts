@@ -4,23 +4,23 @@ export type interceptorsType = {
   name: string,
   doRule: ruleFuncType,
   doAction: (param: actionParamType) => void;
-}[]
+}[];
 
 export type actionParamType = {
-  senderId: number,                 //发送者qq
-  groupId?: number,                 //发送者所在群号
+  senderId: number, // 发送者qq
+  groupId?: number, // 发送者所在群号
   resultParam?: Record<string, any>
-}
+};
 
 export type ruleFuncType = (message: string) => {
-  hit: boolean,         //命中规则
-  param?: any           //传参
-}
+  hit: boolean, // 命中规则
+  param?: any // 传参
+};
 
-//处理拦截器
+// 处理拦截器
 export function doInterceptor(
   interceptors: interceptorsType,
-  messageInfo: IAllMessage
+  messageInfo: IAllMessage,
 ) {
   for (const interceptor of interceptors) {
     const result = interceptor.doRule(messageInfo.message);
@@ -28,20 +28,20 @@ export function doInterceptor(
       const param = {
         senderId: messageInfo.user_id,
         groupId: messageInfo.group_id,
-        resultParam: result.param
+        resultParam: result.param,
       };
       interceptor.doAction(param);
-      //拦截到了返回true
+      // 拦截到了返回true
       return true;
     }
   }
   return false;
 }
 
-//测试拦截器
+// 测试拦截器
 export function testInterceptor(
   interceptors: interceptorsType,
-  messageInfo: IAllMessage
+  messageInfo: IAllMessage,
 ) {
   for (const interceptor of interceptors) {
     const result = interceptor.doRule(messageInfo.message);
@@ -49,9 +49,9 @@ export function testInterceptor(
       const param = {
         senderId: messageInfo.user_id,
         groupId: messageInfo.group_id,
-        ...result.param
+        ...result.param,
       };
-      console.log(`[interceptor:${interceptor.name}]`, param)
+      console.log(`[interceptor:${interceptor.name}]`, param);
       return true;
     }
   }

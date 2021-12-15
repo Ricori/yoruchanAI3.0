@@ -20,6 +20,7 @@ const unescape = (str: string) => str.replace(/&#44;/g, ',').replace(/&#91;/g, '
 
 class CQCode {
   type: string;
+
   data: Map<string, any>;
 
   constructor(type: string, obj: any) {
@@ -34,14 +35,14 @@ class CQCode {
   }
 
   mset(obj: any) {
-    Object.entries(obj).forEach(kv => this.set(...kv));
+    Object.entries(obj).forEach((kv) => this.set(...kv));
     return this;
   }
 
   toString() {
     const list = Array.from(this.data.entries())
       .filter(([, v]) => !_.isNil(v))
-      .map(kv => kv.map((str: string) => escape(String(str), true)).join('='));
+      .map((kv) => kv.map((str: string) => escape(String(str), true)).join('='));
     list.unshift(`CQ:${this.type}`);
     return `[${list.join(',')}]`;
   }
@@ -69,7 +70,7 @@ export function getAtCode(qq: string) {
 
 export function getForwardMessageId(message: string) {
   if (message.indexOf('[CQ:forward,id') > -1) {
-    return message.substring(message.indexOf('id') + 3, message.indexOf("]"));
+    return message.substring(message.indexOf('id') + 3, message.indexOf(']'));
   }
   return 0;
 }

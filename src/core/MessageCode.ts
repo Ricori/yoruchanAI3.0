@@ -23,6 +23,7 @@ const escapeInsideCQ = (str: string) => escape(String(str), true);
 
 class CQCode {
   type: string;
+
   data: Map<string, any>;
 
   constructor(type: string, obj: any) {
@@ -37,14 +38,14 @@ class CQCode {
   }
 
   mset(obj: any) {
-    Object.entries(obj).forEach(kv => this.set(...kv));
+    Object.entries(obj).forEach((kv) => this.set(...kv));
     return this;
   }
 
   toString() {
     const list = Array.from(this.data.entries())
       .filter(([, v]) => !_.isNil(v))
-      .map(kv => kv.map(escapeInsideCQ).join('='));
+      .map((kv) => kv.map(escapeInsideCQ).join('='));
     list.unshift(`CQ:${this.type}`);
     return `[${list.join(',')}]`;
   }
@@ -77,7 +78,9 @@ const video = (file: string, cover: string) => new CQCode('video', { file, cover
  * @param {string} content 内容
  * @param {string} image 图片URL
  */
-const share = (url: string, title: string, content: string, image: string) => new CQCode('share', { url, title, content, image }).toString();
+const share = (url: string, title: string, content: string, image: string) => new CQCode('share', {
+  url, title, content, image,
+}).toString();
 
 /**
  * CQ码 @
@@ -89,9 +92,9 @@ const at = (qq: string) => new CQCode('at', { qq }).toString();
 * CQ码 大图片
 * @param {string} base64 图片 Base64
  */
-const bigImg = (file: string, isBase64 = false) => {
-  return new CQCode('cardimage', { maxwidth: 800, maxheight: 1600, source: '夜夜酱', file: isBase64 ? `base64://${file}` : file }).toString();
-}
+const bigImg = (file: string, isBase64 = false) => new CQCode('cardimage', {
+  maxwidth: 800, maxheight: 1600, source: '夜夜酱', file: isBase64 ? `base64://${file}` : file,
+}).toString();
 
 export default {
   escape,
@@ -99,5 +102,5 @@ export default {
   bigImg,
   video,
   share,
-  at
+  at,
 };
