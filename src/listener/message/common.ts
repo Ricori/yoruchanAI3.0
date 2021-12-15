@@ -1,17 +1,11 @@
 import YBot from '../../core/YBot';
 import { PrivateMessageEventData, GroupMessageEventData } from '../../types/event';
 import { yoruConfig } from '../../../config';
-import {
-  randomText, hasText, hasImage,
-} from '../../utils/function';
-import { helpText } from '../../customize/replyTextConfig';
+import { hasText, hasImage } from '../../utils/function';
+import { getDefaultReply, helpText } from '../../customize/replyTextConfig';
 import handleHpic from './handle/hpic';
 import handleSearchImg from './handle/searchImg';
 
-const defaultReply = () => randomText([
-  '渣滓主人请不要提过分的要求',
-  '你说你🐎呢',
-]);
 
 export async function commonMessageListener(data: PrivateMessageEventData | GroupMessageEventData) {
   const ybot = YBot.getInstance();
@@ -61,9 +55,9 @@ export async function defalutMessageListener(data: PrivateMessageEventData | Gro
   const userId = data.user_id;
   if (isGroupMessage) {
     const groupId = (data as GroupMessageEventData).group_id;
-    ybot.sendGroupMsg(groupId, defaultReply(), userId);
+    ybot.sendGroupMsg(groupId, getDefaultReply(), userId);
   } else {
-    ybot.sendPrivateMsg(userId, defaultReply());
+    ybot.sendPrivateMsg(userId, getDefaultReply());
   }
   return true;
 }

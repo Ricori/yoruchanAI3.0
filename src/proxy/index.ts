@@ -16,7 +16,8 @@ export default function initProxy() {
       ctx.status = 403;
       return;
     }
-
+ 
+    /*
     if (type === 'setu') {
       return Axios.get(`https://setu.awsl.ee/api/setu!?w=${new Date().getTime()}`, {
         headers: {
@@ -32,7 +33,9 @@ export default function initProxy() {
         ctx.body = buffer;
       });
     }
+  */
     ctx.status = 403;
+    return;
   });
 
   app.use(router.routes());

@@ -34,7 +34,7 @@ export default function init() {
   ]);
 
   // 启动本地代理
-  initProxy();
+  // initProxy();
 
   // 启动连接
   ybot.connect();

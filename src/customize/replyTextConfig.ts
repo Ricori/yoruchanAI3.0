@@ -1,12 +1,14 @@
-const replyText = {
+import { randomText } from '../utils/function';
 
-  // 不在功能范围时默认回复
-  defaultReply() {
-    return randomText([
-      '渣滓主人请不要提过分的要求',
-      '你说你🐎呢',
-    ]);
-  },
+// 不在功能范围时默认回复
+export function getDefaultReply() {
+  return randomText([
+    '渣滓主人请不要提过分的要求',
+    '你说你🐎呢',
+  ]);
+}
+
+const replyText = {
   // 番剧日程
   serchScheduleOk(date: string) { return `这是${date}的番剧日程，才不是特意为你找的哦\n`; },
   setuLimit: '真是恶心！你难道是性欲的集合体吗？', // 索要色图限制
@@ -44,9 +46,5 @@ export const helpText = '以下是一些夜夜酱的使用提示：\n'
   + '6.夜夜酱支持私聊，限制会有所放开；\n'
   + '7.如有问题请联系开发者takamichikan，本帮助最后更新于2019年4月8日。';
 
-function randomText(textArr: string[]) {
-  const i = Math.floor(Math.random() * textArr.length);
-  return textArr[i];
-}
 
 export default replyText;

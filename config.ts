@@ -1,5 +1,5 @@
 const wsConfig = {
-  //host: "123.207.7.202",  // 127.0.0.1
+  // host: "123.207.7.202",
   host: "127.0.0.1",
   port: 6700,             // ws端口
   enableAPI: true,        // 启用 /api 连线
@@ -23,7 +23,6 @@ const yoruConfig = {
     whiteOnly: false,             //只允许白名单群使用
     whiteGroup: [829349264],      //白名单群
     whiteGroupLimit: 2,           //白名单群拥有的最高瑟图等级, 0=全年龄,1=混合,2=r18Only
-    useSmallPic: true,            //开启图片压缩，可以降低上传错误率， todo: 取消！
   }
 }
 

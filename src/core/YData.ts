@@ -12,7 +12,7 @@ export default class YData {
   private approveFriendIds: number[] = [];
 
   /** 复读记录  */
-  private repeaterData: Record<number | string, RepeaterLog> = {};
+  private repeaterData: Record<number | string, RepeaterLog | undefined> = {};
 
   static getInstance() {
     if (!YData.instance) {
@@ -55,15 +55,16 @@ export default class YData {
       logObj.userId = userId;
       logObj.times += 1;
     }
-    return logObj.done ? 0 : logObj.times;
+    return logObj ? (logObj.done ? 0 : logObj?.times) : 0;
   }
 
   /** 标记某群已复读
    *  @param {number} groupId 群号
   */
   setRepeaterDone(groupId: number) {
-    if (this.repeaterData[groupId]) {
-      this.repeaterData[groupId].done = true;
+    const logObj = this.repeaterData[groupId];
+    if (logObj) {
+      logObj.done = true;
     }
   }
 }

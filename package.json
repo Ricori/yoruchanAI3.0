@@ -20,13 +20,13 @@
   "author": "Takamichika",
   "license": "GPL-3.0",
   "dependencies": {
-    "axios": "^0.21.1",
-    "canvas": "^2.8.0",
-    "cq-websocket": "^2.1.1",
-    "koa": "^2.13.1",
-    "koa-router": "^10.0.0",
+    "axios": "0.24.0",
+    "canvas": "2.8.0",
+    "cq-websocket": "2.1.1",
+    "koa": "2.13.1",
+    "koa-router": "10.0.0",
     "lodash": "^4.17.21",
-    "nana-api": "^1.1.4"
+    "nana-api": "1.1.4"
   },
   "devDependencies": {
     "@types/koa": "^2.13.3",

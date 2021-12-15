@@ -14,9 +14,9 @@ export default class YBot {
 
   private cqs: CQWebSocket;
 
-  public on: CQWebSocket['on'];
+  private on: CQWebSocket['on'];
 
-  public once: CQWebSocket['once'];
+  private once: CQWebSocket['once'];
 
   private connectState = {
     '/event': false,
@@ -172,25 +172,25 @@ export default class YBot {
   };
 
   bindRequestFirendListener = (listenerFc: RequestFirendListenerFc) => {
-    this.cqs.on('request.friend', async (data: any) => {
+    this.on('request.friend', async (data: any) => {
       listenerFc(data);
     });
   };
 
   bindPrivateMessageListeners = (listenerFcs: PrivateMessageListenerFc[]) => {
-    this.cqs.on('message.private', async (data: any) => {
+    this.on('message.private', async (_, data: any) => {
       this.doFc(listenerFcs, data);
     });
   };
 
   bindGroupAtBotMessageListeners = (listenerFcs: GroupMessageListenerFc[]) => {
-    this.cqs.on('message.group.@.me', async (data: any) => {
+    this.on('message.group.@.me', async (_, data: any) => {
       this.doFc(listenerFcs, data);
     });
   };
 
   bindGroupCommonMessageListeners = (listenerFcs: GroupMessageListenerFc[]) => {
-    this.cqs.on('message.group', async (data: any) => {
+    this.on('message.group', async (_, data: any) => {
       this.doFc(listenerFcs, data);
     });
   };

@@ -11,7 +11,7 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 export default async function getHPic(limitLevel: 0 | 1 | 2, needBig = false, count = 1, useBase64 = true, useSmallPic = false) {
   const resultMsgs = [];
   try {
-    if (limitLevel === 0 || limitLevel === 1) {
+    if (limitLevel) {
       const res1 = await Axios.get(`${API_URI}&r18=${limitLevel}&num=${count}`);
       if (res1.data.code !== 0 || res1.data.data?.length < 1) {
         resultMsgs.push(hPicReplyText.serverError);
@@ -40,12 +40,13 @@ export default async function getHPic(limitLevel: 0 | 1 | 2, needBig = false, co
         }
         resultMsgs.push(resultMsg);
       }
-    } else if (limitLevel === 2) {
-      // 色图新逻辑
+    } else {
+      /* 色图新逻辑
       for (let i = 0; i < count; i += 1) {
         const t = new Date().getTime() + i;
         resultMsgs.push(getImgCode(`http://localhost:60233/?type=setu&t=${t}`));
       }
+      */
     }
     return resultMsgs;
   } catch (err) {

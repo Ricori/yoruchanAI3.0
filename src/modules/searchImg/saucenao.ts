@@ -10,19 +10,20 @@ export default async function saucenaoSearch(imgURL: string) {
   // API请求与处理
   let res;
   try {
-    const ret = (await saucenaoFetch(imgURL)).data;
+    const ret = await saucenaoFetch(imgURL);
+
     if (ret.results && ret.results.length > 0) {
       res = ret.results[0] || {};
     } else {
-      console.error(`${new Date().toLocaleString()} [Saucenao Error]API Error`);
+      console.error(`${new Date().toLocaleString()} [Saucenao Error] API Error`);
       console.log(ret);
       return {
         success: false,
         msg: '',
       };
     }
-  } catch (error) {
-    console.error(`${new Date().toLocaleString()} [Saucenao Error]Fetch Error`);
+  } catch (error: any) {
+    console.error(`${new Date().toLocaleString()} [Saucenao Error] Fetch Error: ${error.message}`);
     return {
       success: false,
       msg: '',
@@ -80,7 +81,11 @@ export default async function saucenaoSearch(imgURL: string) {
   // 标题处理
   let displayTitle = '';
   if (!title) {
-    displayTitle = isAnime ? '[AniDB]' : '[YoruDB]';
+    if (jp_name) {
+      displayTitle = jp_name;
+    } else {
+      displayTitle = isAnime ? '[AniDB]' : '[YoruDB]';
+    }
   }
   if (member_name || author_name) {
     displayTitle = `「${title}」/「${member_name || author_name}」`;
@@ -142,8 +147,8 @@ interface ISaucenaoResult {
 /**
  * saucenao请求
  */
-function saucenaoFetch(imgURL: string) {
-  return Axios.get<ISaucenaoResult>('https://saucenao.com/search.php', {
+async function saucenaoFetch(imgURL: string) {
+  return (await Axios.get<ISaucenaoResult>('https://saucenao.com/search.php', {
     params: {
       api_key: '16abeee27bd15d00da11a60c92e7429321b8284e',
       db: SnDBEnum.ALL, // 搜索的DB
@@ -151,5 +156,7 @@ function saucenaoFetch(imgURL: string) {
       numres: 3, // 结果数量
       url: imgURL,
     },
-  });
+    responseType: 'json',
+    timeout: 6000,
+  })).data ?? {};
 }

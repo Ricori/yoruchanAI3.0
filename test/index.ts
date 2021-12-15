@@ -3,7 +3,7 @@ import saucenaoSearch from '../src/modules/searchImg/saucenao';
 import whatAnimeSearch from '../src/modules/searchImg/whatanime';
 import nhentaiSearch from '../src/modules/searchImg/nhentai';
 
-const TEST_URL = 'https://c2cpicdw.qpic.cn/offpic_new/515302066//515302066-2391056356-6A6FEF8832C2FD7A6AAE6E804C8B768B/0?term=255';
+const TEST_URL = 'https://c2cpicdw.qpic.cn/offpic_new/515302066//515302066-1715713257-5A2067B6C9174C9AEC89160AF032B73E/0?term=3';
 const TEST_URL2 = 'https://c2cpicdw.qpic.cn/offpic_new/515302066//515302066-1088592798-570ED8ADE33A25F95D8FF4480E46A3F7/0?term=255'
 
 async function searchImageTest() {
