@@ -38,3 +38,37 @@ export function getImgs(msg: string) {
   }
   return result;
 }
+
+/** 判断消息是否回复消息
+ * @param {string} msg 消息
+ * @returns 有则返回true
+ */
+export function hasReply(msg: string) {
+  return msg.indexOf('[CQ:reply') !== -1;
+}
+
+/** 从消息中提取回复reply id
+ * @param {string} msg
+ */
+export function getReplyMsgId(msg: string) {
+  const reg = /\[CQ:reply,id=([^,]+)\]/;
+  const search = reg.exec(msg);
+  if (search) {
+    return search[1]
+  } else {
+    return 0
+  }
+}
+
+/** 从消息中提取回复forward id
+ * @param {string} msg
+ */
+export function getForwardMessageId(msg: string) {
+  const reg = /\[CQ:forward,id=([^,]+)\]/;
+  const search = reg.exec(msg);
+  if (search) {
+    return search[1]
+  } else {
+    return 0
+  }
+}

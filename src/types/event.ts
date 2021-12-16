@@ -14,6 +14,7 @@ interface PrivateSender {
   sex?: 'male' | 'female' | 'unknown', // 性别
   age?: number // 年龄
 }
+
 interface GroupSender extends PrivateSender {
   card?: string, // 群名片／备注
   area?: string, // 地区
@@ -56,4 +57,13 @@ export interface GroupMessageEventData {
   raw_message: string, // 原始消息内容
   font: number, // 字体
   sender: GroupSender // 发送者信息
+}
+
+export interface SimpleMessageData {
+  message_id: number, // 消息ID
+  real_id: number, // 消息真实id
+  time: number, // 事件发生的时间戳
+  sender: GroupSender // 发送者信息
+  message: string, // 消息内容
+  raw_message: string, // 原始消息内容
 }

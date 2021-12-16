@@ -6,6 +6,7 @@ import { yoruConfig } from '../../../config';
 export async function adminMessageListener(data: PrivateMessageEventData) {
   const adminList = yoruConfig.admin || [];
   const userId = data.user_id;
+
   if (adminList.indexOf(userId) > -1) {
     const { message } = data;
     const exec = /--approve=([0-9]+)/.exec(message);

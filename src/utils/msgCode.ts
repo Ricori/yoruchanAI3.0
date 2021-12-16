@@ -70,6 +70,10 @@ export function getAtCode(qq: string) {
   return getMessageCode('at', { qq });
 }
 
+export function getReplyCode(msgId: number | string) {
+  return getMessageCode('reply', { id: `${msgId}` });
+}
+
 export function getImgCode(file: string, type?: 'flash' | 'show') {
   if (type) {
     return getMessageCode('image', { file, type });
@@ -100,11 +104,4 @@ export function getShareCode_UNSAFE(url: string, title: string, content?: string
     content,
     image,
   });
-}
-
-export function getForwardMessageId(message: string) {
-  if (message.indexOf('[CQ:forward,id') > -1) {
-    return message.substring(message.indexOf('id') + 3, message.indexOf(']'));
-  }
-  return 0;
 }

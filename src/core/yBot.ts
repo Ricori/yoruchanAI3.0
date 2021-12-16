@@ -1,13 +1,14 @@
 import { CQWebSocket } from 'cq-websocket';
 import { printLog } from '../utils/print';
-import { getAtCode } from '../utils/msgCode';
+import { getAtCode, getReplyCode } from '../utils/msgCode';
 import { wsConfig } from '../../config';
-
+import { SimpleMessageData } from '../types/event';
 import {
   RequestFirendListenerFc,
   PrivateMessageListenerFc,
   GroupMessageListenerFc,
 } from '../types/listener';
+
 
 export default class YBot {
   static instance: YBot;
@@ -114,11 +115,25 @@ export default class YBot {
     });
   };
 
+  /** 发送群回复消息
+   * @param {number} groupId 对方QQ号
+   * @param {string} msg 要发送的内容
+   * @param {string} replyMsgId 要回复的消息id
+   */
+  sendGroupReplyMsg = async (groupId: number, msg: string, replyMsgId: number | string) => {
+    if (msg.length === 0) return;
+    const prefix = getReplyCode(replyMsgId);
+    this.cqs('send_group_msg', {
+      group_id: groupId,
+      message: prefix + msg,
+    });
+  };
+
   /** 获取合并转发
    * @param {string} forwardId 合并转发id
    */
-  getGroupForwardMsg = async (forwardId: string) => {
-    if (forwardId.length === 0) return;
+  getGroupForwardMsg = async (forwardId: number | string) => {
+    if (!forwardId) return;
     const res = await this.cqs('get_forward_msg', {
       message_id: forwardId,
     });
@@ -135,6 +150,20 @@ export default class YBot {
       group_id: groupId,
       messages: msg,
     });
+  };
+
+  /** 获取消息
+   * @param {string} messageId 合并转发id
+   */
+  getMessageFromId = async (messageId: number | string) => {
+    if (!messageId) return;
+    const res = await this.cqs('get_msg', {
+      message_id: messageId,
+    });
+    if (res.retcode === 0 && res.data) {
+      return res.data as SimpleMessageData;
+    }
+    return undefined;
   };
 
   /** 撤回消息
