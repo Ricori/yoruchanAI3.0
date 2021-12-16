@@ -23,6 +23,10 @@ const yoruConfig = {
     whiteOnly: false,             //只允许白名单群使用
     whiteGroup: [829349264],      //白名单群
     whiteGroupLimit: 2,           //白名单群拥有的最高瑟图等级, 0=全年龄,1=混合,2=r18Only
+  },
+  biliDynamicPush: {      // B站动态推送
+    enable: true,
+    group: [829349264, 498888010]
   }
 }
 

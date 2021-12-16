@@ -14,6 +14,14 @@ export default class YData {
   /** 复读记录  */
   private repeaterData: Record<number | string, RepeaterLog | undefined> = {};
 
+  /** b站up最新动态时间  */
+  private biliLastestDynamicTime: Record<number, number> = {};
+
+  constructor() {
+    // 设置up最新动态时间为现在，防止bot启动立即推送
+    this.setBiliLastestDynamicTime(4549624, new Date().getTime())
+  }
+
   static getInstance() {
     if (!YData.instance) {
       YData.instance = new YData();
@@ -67,4 +75,14 @@ export default class YData {
       logObj.done = true;
     }
   }
+
+  /** 设置某up最新动态时间 */
+  setBiliLastestDynamicTime(uid: number, time: number) {
+    this.biliLastestDynamicTime[uid] = time;
+  }
+  /** 获取某up最新动态时间 */
+  getBiliLastestDynamicTime(uid: number) {
+    return this.biliLastestDynamicTime[uid] ?? 0;
+  }
+
 }

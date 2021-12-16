@@ -1,9 +1,11 @@
 import YBot from './core/YBot';
+import YTime from './core/YTime';
 import initProxy from './proxy';
 import { requestFirendListener } from './listener/request/requestFriend';
 import { adminMessageListener } from './listener/message/admin';
 import { commonMessageListener, defalutMessageListener } from './listener/message/common';
 import { groupMessageListener } from './listener/message/group';
+import BilibiliNewSharedJob from './tasks/bilibili';
 
 // https://docs.go-cqhttp.org/event/
 // https://12.onebot.dev/interface/event/notice/
@@ -11,6 +13,7 @@ import { groupMessageListener } from './listener/message/group';
 
 export default function init() {
   const ybot = YBot.getInstance();
+  const ytime = YTime.getInstance();
 
   // 绑定好友请监听
   ybot.bindRequestFirendListener(requestFirendListener);
@@ -36,6 +39,12 @@ export default function init() {
   // 启动本地代理
   // initProxy();
 
-  // 启动连接
+  // 启动 Bot 连接
   ybot.connect();
+
+  // 初始化并启动定时任务
+  ytime.initJobList([
+    BilibiliNewSharedJob
+  ]);
+
 }

@@ -26,7 +26,8 @@
     "koa": "2.13.1",
     "koa-router": "10.0.0",
     "lodash": "^4.17.21",
-    "nana-api": "1.1.4"
+    "nana-api": "1.1.4",
+    "toad-scheduler": "^1.6.0"
   },
   "devDependencies": {
     "@types/koa": "^2.13.3",

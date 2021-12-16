@@ -97,7 +97,7 @@ export default class YBot {
   };
 
   /** 发送群消息
-   * @param {number} groupId 对方QQ号
+   * @param {number} groupId 群号
    * @param {string} msg 要发送的内容
    * @param {string} atUser 可选，要at的qq
    * @param {string} plainText 消息内容是否作为纯文本发送
@@ -116,7 +116,7 @@ export default class YBot {
   };
 
   /** 发送群回复消息
-   * @param {number} groupId 对方QQ号
+   * @param {number} groupId 群号
    * @param {string} msg 要发送的内容
    * @param {string} replyMsgId 要回复的消息id
    */
