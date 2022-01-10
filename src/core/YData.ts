@@ -1,21 +1,26 @@
-
-
+interface RepeaterLog {
+  userId: number | string,
+  msg: string,
+  times: number,
+  done: boolean,
+}
 
 export default class YData {
-
   static instance: YData;
 
-  private searchMode = []; //搜图模式记录
+  /** 自动同意好友请求的名单  */
+  private approveFriendIds: number[] = [];
 
-  private searchCount = []; //搜索次数记录
-  private initDate = new Date().getDate();
-  private hPicData = { g: {}, u: {} };  //setu记录
-  private animeSearchLog = {};
+  /** 复读记录  */
+  private repeaterData: Record<number | string, RepeaterLog | undefined> = {};
 
+  /** b站up最新动态时间  */
+  private biliLastestDynamicTime: Record<number, number> = {};
 
-  private approveFriendIds = [] as number[];  //好友请求白名单
-  private repeaterData = [] as any;   //复读记录
-
+  constructor() {
+    // 设置up最新动态时间为现在，防止bot启动立即推送
+    this.setBiliLastestDynamicTime(4549624, new Date().getTime())
+  }
 
   static getInstance() {
     if (!YData.instance) {
@@ -24,75 +29,60 @@ export default class YData {
     return YData.instance;
   }
 
+  /** 新增好友白名单 */
+  addApproveFriendIds = (userId: number) => {
+    this.approveFriendIds = [...this.approveFriendIds, userId];
+  };
 
-  constructor() {
-    /*
-    //每分钟进行定时任务检测
-    setInterval(() => {
-      //清理每日搜索记录
-      const nowDate = new Date().getDate();
-      if (this.initDate != nowDate) {
-        this.initDate = nowDate;
+  /** 检查用户是否在好友白名单中 */
+  checkApproveFriend = (userId: number) => this.approveFriendIds.indexOf(userId) > -1;
 
-        this.approveFriendIds = [];
+  /** 在好友白名单中删除某用户 */
+  deleteApproveFriend = (userId: number) => {
+    this.approveFriendIds = this.approveFriendIds.filter((id) => id !== userId);
+  };
 
-        this.searchCount = [];
-      }
-    }, 60 * 1000);
-    */
-  }
-
-  //新增好友请求白名单
-  addApproveFriendIds = (userid: number) => {
-    this.approveFriendIds = [...this.approveFriendIds, userid]
-  }
-  //检查用户是否在好友白名单中
-  checkApproveFriend = (userid: number) => {
-    return this.approveFriendIds.indexOf(userid) > -1;
-  }
-  //在好友白名单中删除某用户
-  deleteApproveFriend = (userid: number) => {
-    this.approveFriendIds = this.approveFriendIds.filter(id => id != userid)
-  }
-
-
-  /**
-   * 记录某群复读情况
-   *
-   * @param {number} g 群号
-   * @param {number} u QQ号
+  /** 记录某群复读情况
+   * @param {number} groupId 群号
+   * @param {number} userId QQ号
    * @param {string} msg 消息
    * @returns 如果已经复读则返回0，否则返回当前复读次数
    */
-  saveRptLog(groupId: number, userId: number, msg: string) {
-    let lg = this.repeaterData[groupId];
-    //没有记录或另起复读则新建记录
-    if (!lg || lg.msg !== msg) {
-      lg = {
-        user: userId,
+  saveRepeaterLog(groupId: number, userId: number, msg: string) {
+    const logObj = this.repeaterData[groupId];
+    // 没有记录或另起复读则新建记录
+    if (!logObj || logObj.msg !== msg) {
+      this.repeaterData[groupId] = {
+        userId,
         msg,
         times: 1,
-        done: false
-      }
-      this.repeaterData[groupId] = lg;
-    } else if (lg.user !== userId) {
-      //不同人复读则次数加1
-      lg.user = userId;
-      lg.times++;
+        done: false,
+      };
+    } else if (logObj.userId !== userId) {
+      // 不同人复读则次数加1
+      logObj.userId = userId;
+      logObj.times += 1;
     }
-    return lg.done ? 0 : lg.times;
+    return logObj ? (logObj.done ? 0 : logObj?.times) : 0;
   }
 
-  /**
-   * 标记某群已复读
-   *
-   * @param {number} g 群号
+  /** 标记某群已复读
+   *  @param {number} groupId 群号
   */
-  setRptDone(groupId: number) {
-    this.repeaterData[groupId].done = true;
+  setRepeaterDone(groupId: number) {
+    const logObj = this.repeaterData[groupId];
+    if (logObj) {
+      logObj.done = true;
+    }
   }
 
-
-
+  /** 设置某up最新动态时间 */
+  setBiliLastestDynamicTime(uid: number, time: number) {
+    this.biliLastestDynamicTime[uid] = time;
+  }
+  /** 获取某up最新动态时间 */
+  getBiliLastestDynamicTime(uid: number) {
+    return this.biliLastestDynamicTime[uid] ?? 0;
+  }
 
 }

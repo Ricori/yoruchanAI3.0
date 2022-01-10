@@ -1,6 +1,5 @@
-import Axios from 'axios';
-import MessageCode from '../../core/MessageCode';
-const NanaAPI = require("nana-api");
+const NanaAPI = require('nana-api');
+
 const nana = new NanaAPI();
 
 const exts = {
@@ -17,8 +16,8 @@ export default async function nhentaiSearch(details: Record<string, any>) {
 
   return {
     success: false,
-    msg: ''
-  }
+    msg: '',
+  };
 
   /*
   try {
@@ -51,6 +50,4 @@ export default async function nhentaiSearch(details: Record<string, any>) {
     msg
   }
   */
-
 }
-
