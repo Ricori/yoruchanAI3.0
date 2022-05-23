@@ -60,8 +60,6 @@ const searchImage = async (imgUrls: string[]) => {
         resultMsgs.push(result2.msg);
       }
 
-      console.log(result, result2, saucenaoSuccess, ascii2dSuccess);
-
     }
 
     // 返回msg数组
