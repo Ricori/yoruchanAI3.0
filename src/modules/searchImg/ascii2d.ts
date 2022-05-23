@@ -79,7 +79,7 @@ function getDetail(html: string) {
     imageUrl: $title.attr('href'),
     title: $title ? (
       $author ? `「${$title.html()}」/「${$author.html()}」` : $title.html()
-    ) : $box.find('.detail - box.external').html(),
+    ) : $box.find('.detail-box .external').html(),
     thumbnail,
     authorUrl: $author.attr('href'),
   }
