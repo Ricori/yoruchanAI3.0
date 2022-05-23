@@ -77,9 +77,9 @@ function getDetail(html: string) {
   const $author = $($link[1]);
   return {
     imageUrl: $title.attr('href'),
-    title: $author
-      ? `「${$title.html()}」/「${$author.html()}」`
-      : $title.html(),
+    title: $title ? (
+      $author ? `「${$title.html()}」/「${$author.html()}」` : $title.html()
+    ) : $box.find('.detail - box.external').html(),
     thumbnail,
     authorUrl: $author.attr('href'),
   }

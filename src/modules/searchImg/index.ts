@@ -16,7 +16,7 @@ const searchImage = async (imgUrls: string[]) => {
       saucenaoSuccess = result.success;
       if (saucenaoSuccess) {
         const similarity = +(result.similarity ?? 0);
-        if (similarity < 60) {
+        if (similarity < 58) {
           // 相似度过低，追加ascii2d搜索
           result2 = await ascii2dSearch(imgUrl);
           ascii2dSuccess = result2.success;
