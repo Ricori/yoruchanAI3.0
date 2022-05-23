@@ -2,6 +2,7 @@ import _ from 'lodash';
 import Axios from 'axios';
 import { searchImageText } from '../../customize/replyTextConfig';
 import { escape, getImgCode, getVideoCode } from '../../utils/msgCode';
+import { printError } from '../../utils/print';
 
 /**
  * whatanime搜索
@@ -46,7 +47,7 @@ export default async function whatAnimeSearch(imgURL: string) {
     };
   }
   // 构造返回信息
-  let msg = escape(`相似度达到了${similarity}% \n出自第${episode}集的${time}`);
+  let msg = escape(`相似度达到了${similarity}% \n截图出自第${episode}集的${time}`);
   let extraMsg;
   const appendMsg = (str: string, needEsc = true) => {
     if (typeof (str) === 'string' && str.length > 0) {
@@ -55,11 +56,11 @@ export default async function whatAnimeSearch(imgURL: string) {
   };
   const dateObjToString = ({ year, month, day }: { year: string, month: string, day: string }) => [year, month, day].join('-');
   appendMsg(getImgCode(info.coverImage.large), false);
-  const titles = _.uniq(['romaji', 'native', 'chinese'].map((k) => info.title[k]).filter((v) => v));
-  appendMsg(titles.join('\n'));
+  const titles = _.uniq(['native', 'chinese'].map((k) => info.title[k] ? `「${info.title[k]}」` : undefined).filter((v) => v));
+  appendMsg(titles.join('/'));
   appendMsg(`类型：${info.type}-${info.format}`);
-  appendMsg(`开播：${dateObjToString(info.startDate)}`);
-  if (info.endDate.year > 0) appendMsg(`完结：${dateObjToString(info.endDate)}`);
+  appendMsg(`开播时间：${dateObjToString(info.startDate)}`);
+  // if (info.endDate.year > 0) appendMsg(`完结：${dateObjToString(info.endDate)}`);
   if (info.isAdult) {
     appendMsg(searchImageText.r18warn);
   } else {
@@ -89,7 +90,7 @@ async function getSearchResult(imgURL: string) {
     res.data = ret.data;
     res.code = ret.status;
   }).catch((e) => {
-    console.error(`${new Date().toLocaleString()} [WhatAnime Error]API Error`);
+    printError('[WhatAnime Error] API Error');
     if (e.response) {
       res.code = e.response.status;
       res.data = e.response.data;
@@ -136,7 +137,7 @@ async function getAnimeInfo(anilistID: number) {
     query: animeInfoQuery,
     variables: { id: anilistID },
   }).catch((e) => {
-    console.error(`${new Date().toLocaleString()} [WhatAnime Error]API2 Error: ${e.response.statusText}`);
+    printError(`[WhatAnime Error] API2 Error: ${e.response.statusText}`);
   });
   if (ret) {
     data = ret.data?.data?.Media;

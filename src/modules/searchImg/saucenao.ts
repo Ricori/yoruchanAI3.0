@@ -1,5 +1,7 @@
 import Axios from 'axios';
+import Cheerio from 'cheerio';
 import { getImgCode } from '../../utils/msgCode';
+import { printError } from '../../utils/print';
 
 /**
  * saucenao搜索
@@ -7,23 +9,18 @@ import { getImgCode } from '../../utils/msgCode';
  * @param {string} imgURL 图片地址
  */
 export default async function saucenaoSearch(imgURL: string) {
-  // API请求与处理
   let res;
-  try {
-    const ret = await saucenaoFetch(imgURL);
-
-    if (ret.results && ret.results.length > 0) {
-      res = ret.results[0] || {};
-    } else {
-      console.error(`${new Date().toLocaleString()} [Saucenao Error] API Error`);
-      console.log(ret);
-      return {
-        success: false,
-        msg: '',
-      };
-    }
-  } catch (error: any) {
-    console.error(`${new Date().toLocaleString()} [Saucenao Error] Fetch Error: ${error.message}`);
+  const ret = await saucenaoFetch(imgURL);
+  if (ret === null) {
+    return {
+      success: false,
+      msg: '',
+    };
+  }
+  if (ret.data?.results && ret.data?.results.length > 0) {
+    res = ret.data.results[0] || {};
+  } else {
+    printError('[Saucenao Error] API Error');
     return {
       success: false,
       msg: '',
@@ -43,37 +40,52 @@ export default async function saucenaoSearch(imgURL: string) {
       member_name,
       member_id,
       author_name,
+      source,
+      creator,
       jp_name,
     } = {},
   } = res;
 
-  let isAnime = false; let
-    isBook = false;
+  let isAnime = false;
+  let isBook = false;
   let url = extUrls[0] || '';
 
   // url处理
   if (pixivId) {
     url = `https://pixiv.net/i/${pixivId}`;
   } else {
-    // 如果url有多个，优先取danbooru的
+    // url有多个时优先处理逻辑
+    const pidRegExpRes = /pixiv.+illust_id=([0-9]+)/.exec(url);
     if (extUrls.length > 0) {
       for (const u of extUrls) {
+        if (pidRegExpRes) {
+          url = `https://pixiv.net/i/${pidRegExpRes[1]}`;
+          break;
+        }
         if (u.indexOf('danbooru') !== -1) {
           url = u;
           break;
         }
       }
     }
-    const pidRegExpRes = /pixiv.+illust_id=([0-9]+)/.exec(url);
-    if (pidRegExpRes) {
-      url = `https://pixiv.net/i/${pidRegExpRes[1]}`;
-    }
     url = url.replace('http://', 'https://');
   }
 
-  const origURL = url.replace('https://', '');
+  // danbooru和konachan特殊处理，拿到源url
+  if (url.includes('danbooru')) {
+    const danbooruSourceUrl = await getDanbooruSource(url);
+    if (danbooruSourceUrl && danbooruSourceUrl.length > 0) {
+      url = danbooruSourceUrl;
+    }
+  } else if (url.includes('konachan')) {
+    const konachanSourceUrl = await getKonachanSource(url);
+    if (konachanSourceUrl && konachanSourceUrl.length > 0) {
+      url = konachanSourceUrl;
+    }
+  }
+
   // 结果类型判断
-  isAnime = origURL.indexOf('anidb.net') !== -1;
+  isAnime = url.indexOf('anidb.net') !== -1;
   if (jp_name && jp_name.length > 0) {
     isBook = true;
   }
@@ -88,6 +100,8 @@ export default async function saucenaoSearch(imgURL: string) {
     }
   } else if (jp_name) {
     displayTitle = jp_name;
+  } else if (source) {
+    displayTitle = source;
   } else {
     displayTitle = isAnime ? '[AniDB]' : '[YoruDB]';
   }
@@ -98,8 +112,11 @@ export default async function saucenaoSearch(imgURL: string) {
     msgArr.push(getImgCode(thumbnail));
   }
   msgArr.push(url);
+  if (creator) {
+    msgArr.push(`作者: ${creator}`);
+  }
   if (member_id) {
-    msgArr.push(`作者PIXIV ID: ${member_id}`);
+    msgArr.push(`作者主页: https://www.pixiv.net/u/${member_id}`);
   }
   // msg = getShareCode(url, displayTitle, contentText, thumbnail);
   const msg = msgArr.join('\n');
@@ -109,10 +126,9 @@ export default async function saucenaoSearch(imgURL: string) {
     msg,
     isAnime,
     isBook,
+    similarity,
     details: {
-      similarity,
       jp_name,
-      origURL,
       thumbnail,
     },
   };
@@ -141,7 +157,9 @@ interface ISaucenaoResult {
       member_name: string,
       member_id?: string,
       author_name: string,
-      jp_name: string
+      jp_name: string,
+      creator?: string,
+      source?: string,
     }
   }[]
 }
@@ -149,16 +167,57 @@ interface ISaucenaoResult {
 /**
  * saucenao请求
  */
-async function saucenaoFetch(imgURL: string) {
-  return (await Axios.get<ISaucenaoResult>('https://saucenao.com/search.php', {
-    params: {
-      api_key: '16abeee27bd15d00da11a60c92e7429321b8284e',
-      db: SnDBEnum.ALL, // 搜索的DB
-      output_type: 2, // API返回方式，2=JSON
-      numres: 3, // 结果数量
-      url: imgURL,
-    },
+function saucenaoFetch(imgURL: string) {
+  const params = {
+    api_key: '16abeee27bd15d00da11a60c92e7429321b8284e',
+    db: SnDBEnum.ALL, // 搜索的DB
+    output_type: 2, // API返回方式，2=JSON
+    numres: 1, // 结果数量
+    url: imgURL,
+  };
+  return Axios.get<ISaucenaoResult>('https://saucenao.com/search.php', {
+    params,
     responseType: 'json',
     timeout: 8000,
-  })).data ?? {};
+  }).catch((error) => {
+    printError(`[Saucenao Error] Fetch Error: ${error.message}`);
+    return null;
+  })
+}
+
+/**
+ * 从danbooru获取源url
+ */
+async function getDanbooruSource(url: string) {
+  const ret = await Axios.get(url, {
+    responseType: 'text',
+    timeout: 8000,
+  }).catch((error) => {
+    printError(`[Danbooru Error] Fetch Error: ${error.message}`);
+    return null;
+  })
+  const $ = Cheerio.load(ret?.data || '');
+  const source = $("#content .image-container").attr('data-normalized-source');
+  return source;
+}
+
+/**
+ * 从konachan获取源url
+ */
+async function getKonachanSource(url: string) {
+  const ret = await Axios.get(url, {
+    responseType: 'text',
+    timeout: 8000,
+  }).catch((error) => {
+    printError(`[Konachan Error] Fetch Error: ${error.message}`);
+    return null;
+  })
+  const $ = Cheerio.load(ret?.data || '');
+  let source: string | undefined;
+  $('#stats li').each((i, e) => {
+    if (/^Source:/.exec($(e).text())) {
+      source = $(e).find('a').attr('href');
+    }
+  })
+  return source;
 }

@@ -1,11 +1,12 @@
 import YBot from './core/YBot';
 import YTime from './core/YTime';
-import initProxy from './proxy';
 import { requestFirendListener } from './listener/request/requestFriend';
 import { adminMessageListener } from './listener/message/admin';
 import { commonMessageListener, defalutMessageListener } from './listener/message/common';
 import { groupMessageListener } from './listener/message/group';
 import BilibiliNewSharedJob from './tasks/bilibili';
+// import initProxy from './proxy';
+// import '../test/axiosProxy.ts';
 
 // https://docs.go-cqhttp.org/event/
 // https://12.onebot.dev/interface/event/notice/

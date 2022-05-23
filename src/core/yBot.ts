@@ -1,8 +1,9 @@
 import { CQWebSocket } from 'cq-websocket';
 import { printLog } from '../utils/print';
 import { getAtCode, getReplyCode } from '../utils/msgCode';
-import { wsConfig } from '../../config';
 import { SimpleMessageData } from '../types/event';
+import { wsConfig, yoruConfig } from '../../config';
+
 import {
   RequestFirendListenerFc,
   PrivateMessageListenerFc,
@@ -40,13 +41,13 @@ export default class YBot {
 
   // 注册连接相关监听事件
   registerConnectingEvent = () => {
-    this.cqs.on('socket.connecting', (type) => { printLog(`[${type}]start ws connenct..`); });
+    this.cqs.on('socket.connecting', (type) => { printLog(`[WS Connect] ${type} start connenct..`); });
     this.cqs.on('socket.error', (type, err) => {
-      printLog(`[${type}]ws connect fail,Error: ${err}`);
+      printLog(`[WS Connect] ${type} connect fail,Error: ${err}`);
       this.connectState[type] = false;
     });
     this.cqs.on('socket.connect', (type) => {
-      printLog(`[${type}]connect successfully`);
+      printLog(`[WS Connect] ${type} connect successfully`);
       this.connectState[type] = true;
     });
   };
@@ -89,6 +90,9 @@ export default class YBot {
    */
   sendPrivateMsg = async (userId: number, msg: string, plainText?: boolean) => {
     if (msg.length === 0) return;
+    if (yoruConfig.debugMode) {
+      printLog(`[SendPrivateMsg] ${msg}`);
+    }
     this.cqs('send_private_msg', {
       user_id: userId,
       message: msg,
@@ -108,9 +112,12 @@ export default class YBot {
     if (atUser) {
       prefix = getAtCode(`${atUser}`);
     }
+    if (yoruConfig.debugMode) {
+      printLog(`[SendPrivateMsg] ${prefix}${msg}`);
+    }
     this.cqs('send_group_msg', {
       group_id: groupId,
-      message: prefix + msg,
+      message: `${prefix}${msg}`,
       auto_escape: !!plainText,
     });
   };

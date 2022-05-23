@@ -22,18 +22,21 @@
   "dependencies": {
     "axios": "0.24.0",
     "canvas": "2.8.0",
+    "cheerio": "^1.0.0-rc.11",
     "cq-websocket": "2.1.1",
     "koa": "2.13.1",
     "koa-router": "10.0.0",
     "lodash": "^4.17.21",
-    "nana-api": "1.1.4",
-    "toad-scheduler": "^1.6.0"
+    "toad-scheduler": "^1.6.0",
+    "nhentai-api": "^3.4.3",
+    "tunnel": "^0.0.6"
   },
   "devDependencies": {
     "@types/koa": "^2.13.3",
     "@types/koa-router": "^7.4.2",
     "@types/lodash": "^4.14.170",
     "@types/node": "^14.17.1",
+    "@types/tunnel": "^0.0.3",
     "@typescript-eslint/eslint-plugin": "^5.7.0",
     "@typescript-eslint/parser": "^5.7.0",
     "eslint": "^8.4.1",
