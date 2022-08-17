@@ -1,4 +1,4 @@
-/** websocket连接配置 */
+﻿/** websocket连接配置 */
 const wsConfig = {
   host: "127.0.0.1",
   //host: '123.207.7.202',
@@ -31,7 +31,7 @@ const yoruConfig = {
     /** 是否开启功能 */
     enable: true,
     /** 推送到的群号 */
-    group: [498888010]
+    group: [914620769]
   },
   /** 瑟图功能 */
   hPic: {
