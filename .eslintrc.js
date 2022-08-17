@@ -1,4 +1,4 @@
-export default {
+module.exports = {
   env: {
     browser: false,
     es6: true,
@@ -23,16 +23,17 @@ export default {
     '@typescript-eslint/naming-convention': 'off',
     'import/prefer-default-export': 'off',
     'no-use-before-define': 'off',
-    'camelcase': 'off',
+    camelcase: 'off',
     'max-len': 'off',
     'class-methods-use-this': 'off',
-    'radix': 'off',
+    radix: 'off',
     'prefer-spread': 'off',
     'consistent-return': 'off',
     'no-restricted-syntax': 'off',
     'no-await-in-loop': 'off',
     'no-nested-ternary': 'off',
     'linebreak-style': 'off',
-    'no-multiple-empty-lines': 'off'
+    'no-multiple-empty-lines': 'off',
+    'no-console': 'off',
   },
 };

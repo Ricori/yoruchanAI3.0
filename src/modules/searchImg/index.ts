@@ -10,27 +10,32 @@ const searchImage = async (imgUrls: string[]) => {
     for (const imgUrl of imgUrls) {
       let saucenaoSuccess = false;
       let ascii2dSuccess = false;
-
+      // saucenao结果
       const result = await saucenaoSearch(imgUrl);
-      let result2;
       saucenaoSuccess = result.success;
-      if (saucenaoSuccess) {
-        const similarity = +(result.similarity ?? 0);
-        if (similarity < 58) {
-          // 相似度过低，追加ascii2d搜索
-          result2 = await ascii2dSearch(imgUrl);
-          ascii2dSuccess = result2.success;
-        }
-      } else {
-        // saucenao失败时追加ascii2d搜索
+      // ascii2d结果
+      let result2;
+
+      // saucenao相似度
+      const similarity = +(result.similarity ?? 0);
+
+
+      // 相似度过低，或者saucenao失败时，追加ascii2d搜索
+      if ((saucenaoSuccess && similarity < 58) || !saucenaoSuccess) {
         result2 = await ascii2dSearch(imgUrl);
         ascii2dSuccess = result2.success;
       }
 
+      console.log(result, result2);
+
+
       // saucenao一级渠道搜索成功时，进行进一步的细分渠道搜索
-      if (saucenaoSuccess && !ascii2dSuccess) {
+      if (saucenaoSuccess) {
+        if (result.msg.length > 0) {
+          resultMsgs.push(result.msg);
+        }
         if (result.isAnime) {
-          // 是动画，只返回动画相关搜索文本
+          // saucenao判断是动画，相似度66%以上，追加what anime搜索
           const whatAnimeRes = await whatAnimeSearch(imgUrl);
           if (whatAnimeRes.success && whatAnimeRes.msg.length > 0) {
             resultMsgs.push(whatAnimeRes.msg);
@@ -38,28 +43,13 @@ const searchImage = async (imgUrls: string[]) => {
               resultMsgs.push(whatAnimeRes.extraMsg);
             }
           }
-        } else if (result.msg.length > 0) {
-          resultMsgs.push(result.msg);
         }
-
-        /* else if (result.isBook) {
-          // 是动画，返回本子搜索文本，兜底为saucenao
-          const nhentaiRes = await nhentaiSearch(result.details.jp_name || '');
-          if (nhentaiRes.success && nhentaiRes.msg.length > 0) {
-            resultMsgs.push(nhentaiRes.msg)
-          } else if (result.msg.length > 0) {
-            resultMsgs.push(result.msg);
-          }
-        }
-        */
-
       }
 
-      // ascii2d搜索成功时，直接返回结果
+      // ascii2d搜索成功时，加入搜索结果
       if (ascii2dSuccess && result2?.msg && result2.msg.length > 0) {
         resultMsgs.push(result2.msg);
       }
-
     }
 
     // 返回msg数组
@@ -75,3 +65,16 @@ const searchImage = async (imgUrls: string[]) => {
 };
 
 export default searchImage;
+
+
+/*
+if (result.isBook) {
+  // 是动画，返回本子搜索文本，兜底为saucenao
+  const nhentaiRes = await nhentaiSearch(result.details.jp_name || '');
+  if (nhentaiRes.success && nhentaiRes.msg.length > 0) {
+    resultMsgs.push(nhentaiRes.msg)
+  } else if (result.msg.length > 0) {
+    resultMsgs.push(result.msg);
+  }
+}
+*/

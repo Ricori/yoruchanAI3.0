@@ -4,7 +4,11 @@
     "outDir": "./build",
     "strict": true,
     "target": "es2017",
-    "lib": ["es2015", "es2016", "es2017"],
+    "lib": [
+      "es2015",
+      "es2016",
+      "es2017"
+    ],
     "allowJs": false,
     "declaration": false,
     "skipDefaultLibCheck": true,
@@ -16,12 +20,22 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "moduleResolution": "node",
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },
-  "include": ["index.ts", "config.ts", "./src"],
-  "exclude": ["node_modules", "build"]
+  "include": [
+    "index.ts",
+    "config.ts",
+    "./src",
+    ".eslintrc.js"
+  ],
+  "exclude": [
+    "node_modules",
+    "build"
+  ]
 }

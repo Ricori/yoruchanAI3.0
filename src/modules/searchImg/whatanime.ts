@@ -1,9 +1,9 @@
 import _ from 'lodash';
 import Axios from 'axios';
+import FormData from 'form-data';
 import { searchImageText } from '../../customize/replyTextConfig';
 import { escape, getImgCode, getVideoCode } from '../../utils/msgCode';
 import { printError } from '../../utils/print';
-
 /**
  * whatanime搜索
  */
@@ -25,6 +25,15 @@ export default async function whatAnimeSearch(imgURL: string) {
   // 提取信息
   const res = ret.data.result[0]; // 相似度最高的结果
   const similarity = (res.similarity * 100).toFixed(2); // 相似度
+
+  // 相似度小于80，就不要这个结果了
+  if (+(similarity ?? 0) < 80) {
+    return {
+      success: false,
+      msg: '',
+    };
+  }
+
   const {
     anilist, // 番剧 ID
     episode = '-', // 集数
@@ -56,7 +65,7 @@ export default async function whatAnimeSearch(imgURL: string) {
   };
   const dateObjToString = ({ year, month, day }: { year: string, month: string, day: string }) => [year, month, day].join('-');
   appendMsg(getImgCode(info.coverImage.large), false);
-  const titles = _.uniq(['native', 'chinese'].map((k) => info.title[k] ? `「${info.title[k]}」` : undefined).filter((v) => v));
+  const titles = _.uniq(['native', 'chinese'].map((k) => (info.title[k] ? `「${info.title[k]}」` : undefined)).filter((v) => v));
   appendMsg(titles.join('/'));
   appendMsg(`类型：${info.type}-${info.format}`);
   appendMsg(`开播时间：${dateObjToString(info.startDate)}`);
@@ -82,15 +91,17 @@ async function getSearchResult(imgURL: string) {
     code: 0,
     data: null as any,
   };
-  await Axios.get('https://api.trace.moe/search', {
-    params: {
-      url: imgURL,
-    },
-  }).then((ret) => {
+  const imgBuffer = await Axios.get(imgURL, { responseType: 'arraybuffer' }).then((r) => r.data).catch((error) => {
+    printError(`[WhatAnime Error] Fetch IMG Error: ${error.message}`);
+    return null;
+  });
+  const form = new FormData();
+  form.append('image', imgBuffer, 'image');
+  await Axios.post('https://api.trace.moe/search', form, { headers: form.getHeaders() }).then((ret) => {
     res.data = ret.data;
     res.code = ret.status;
   }).catch((e) => {
-    printError('[WhatAnime Error] API Error');
+    printError('[WhatAnime Error] Fetch Search API Error');
     if (e.response) {
       res.code = e.response.status;
       res.data = e.response.data;
