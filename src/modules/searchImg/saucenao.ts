@@ -182,7 +182,7 @@ function saucenaoFetch(imgURL: string) {
   }).catch((error) => {
     printError(`[Saucenao Error] Fetch Error: ${error.message}`);
     return null;
-  })
+  });
 }
 
 /**
@@ -195,9 +195,9 @@ async function getDanbooruSource(url: string) {
   }).catch((error) => {
     printError(`[Danbooru Error] Fetch Error: ${error.message}`);
     return null;
-  })
+  });
   const $ = Cheerio.load(ret?.data || '');
-  const source = $("#content .image-container").attr('data-normalized-source');
+  const source = $('#content .image-container').attr('data-normalized-source');
   return source;
 }
 
@@ -211,13 +211,13 @@ async function getKonachanSource(url: string) {
   }).catch((error) => {
     printError(`[Konachan Error] Fetch Error: ${error.message}`);
     return null;
-  })
+  });
   const $ = Cheerio.load(ret?.data || '');
   let source: string | undefined;
   $('#stats li').each((i, e) => {
     if (/^Source:/.exec($(e).text())) {
       source = $(e).find('a').attr('href');
     }
-  })
+  });
   return source;
 }
