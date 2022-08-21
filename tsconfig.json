@@ -5,9 +5,7 @@
     "strict": true,
     "target": "es2017",
     "lib": [
-      "es2015",
-      "es2016",
-      "es2017"
+      "es2019"
     ],
     "allowJs": false,
     "declaration": false,

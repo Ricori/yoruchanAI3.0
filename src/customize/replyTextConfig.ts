@@ -30,7 +30,7 @@ export const searchImageText = {
   error: '搜索图片发生错误，请主人等等再试试？', // 未知错误
   whatAnimeToLarge: '图片过大，无法搜索动画',
   whatAnimeLimit: '搜索动画超限制',
-  r18warn: '!!!R18 Waring!!!',
+  r18warn: '[R18 Waring]',
 };
 
 // 帮助文本

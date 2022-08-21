@@ -19,15 +19,11 @@ const searchImage = async (imgUrls: string[]) => {
       // saucenao相似度
       const similarity = +(result.similarity ?? 0);
 
-
       // 相似度过低，或者saucenao失败时，追加ascii2d搜索
       if ((saucenaoSuccess && similarity < 58) || !saucenaoSuccess) {
         result2 = await ascii2dSearch(imgUrl);
         ascii2dSuccess = result2.success;
       }
-
-      console.log(result, result2);
-
 
       // saucenao一级渠道搜索成功时，进行进一步的细分渠道搜索
       if (saucenaoSuccess) {

@@ -1,7 +1,9 @@
 import YBot from '../../core/YBot';
 import { PrivateMessageEventData, GroupMessageEventData } from '../../types/event';
 import { yoruConfig } from '../../../config';
-import { hasText, hasImage, hasReply, getReplyMsgId } from '../../utils/function';
+import {
+  hasText, hasImage, hasReply, getReplyMsgId,
+} from '../../utils/function';
 import { getDefaultReply, helpText } from '../../customize/replyTextConfig';
 import handleHpic from './handle/hpic';
 import handleSearchImg from './handle/searchImg';

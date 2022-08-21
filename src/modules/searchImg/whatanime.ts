@@ -56,7 +56,7 @@ export default async function whatAnimeSearch(imgURL: string) {
     };
   }
   // 构造返回信息
-  let msg = escape(`相似度达到了${similarity}% \n截图出自第${episode}集的${time}`);
+  let msg = escape(`相似度达到了${similarity}% \n截图出自第${episode || 0}集的${time}`);
   let extraMsg;
   const appendMsg = (str: string, needEsc = true) => {
     if (typeof (str) === 'string' && str.length > 0) {
