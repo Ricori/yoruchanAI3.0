@@ -26,10 +26,12 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true
   },
+  "ts-node": {
+    "esm": true
+  },
   "include": [
-    "index.ts",
-    "config.ts",
-    "./src",
+    "*.ts",
+    "**/src/**/*.ts",
     ".eslintrc.js"
   ],
   "exclude": [

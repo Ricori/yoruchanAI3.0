@@ -1,14 +1,13 @@
 ﻿/** websocket连接配置 */
 const wsConfig = {
   host: '127.0.0.1',
-  // host: '123.207.7.202',
   port: 6700, // ws端口
   enableAPI: true, // 启用 /api 连线
   enableEvent: true, // 启用 /event 连线
   access_token: '', // 访问密钥
   reconnection: true, // 错误自动重连
-  reconnectionAttempts: 8, // 错误重连最大次数
-  reconnectionDelay: 8000, // 重连延迟
+  reconnectionAttempts: 5, // 错误重连最大次数
+  reconnectionDelay: 12000, // 重连延迟
 };
 
 /** 夜夜酱配置 */
@@ -32,6 +31,13 @@ const yoruConfig = {
     enable: true,
     /** 推送到的群号 */
     group: [914620769],
+  },
+  /** openAI */
+  openAi: {
+    /** 是否开启chatGPT回复 */
+    enable: true,
+    /** openAI key */
+    apiKey: '',
   },
   /** 瑟图功能 */
   hPic: {

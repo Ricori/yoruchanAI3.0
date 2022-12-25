@@ -2,12 +2,12 @@ import YBot from '../../core/YBot';
 import { PrivateMessageEventData, GroupMessageEventData } from '../../types/event';
 import { yoruConfig } from '../../../config';
 import {
-  hasText, hasImage, hasReply, getReplyMsgId,
+  hasText, hasImage, hasReply, getReplyMsgId, deleteAtFromMsg,
 } from '../../utils/function';
 import { getDefaultReply, helpText } from '../../customize/replyTextConfig';
 import handleHpic from './handle/hpic';
 import handleSearchImg from './handle/searchImg';
-
+import { getOpenAiReply } from '../../modules/openai';
 
 export async function commonMessageListener(data: PrivateMessageEventData | GroupMessageEventData) {
   const ybot = YBot.getInstance();
@@ -71,12 +71,27 @@ export async function defalutMessageListener(data: PrivateMessageEventData | Gro
   const ybot = YBot.getInstance();
   const isGroupMessage = data.message_type === 'group';
   const userId = data.user_id;
-  if (isGroupMessage) {
-    const groupId = (data as GroupMessageEventData).group_id;
-    const messageId = (data as GroupMessageEventData).message_id;
-    ybot.sendGroupReplyMsg(groupId, getDefaultReply(), messageId);
+
+  let replyText = '';
+  if (yoruConfig.openAi.enable) {
+    // 开启了chatGpt回复
+    const prompt = deleteAtFromMsg(data.message);
+    const res = await getOpenAiReply(prompt);
+    if (res) {
+      replyText = res;
+    } else {
+      replyText = getDefaultReply();
+    }
   } else {
-    ybot.sendPrivateMsg(userId, getDefaultReply());
+    replyText = getDefaultReply();
+  }
+
+  if (isGroupMessage) {
+    const groupId = data.group_id;
+    const messageId = data.message_id;
+    ybot.sendGroupReplyMsg(groupId, replyText, messageId);
+  } else {
+    ybot.sendPrivateMsg(userId, replyText);
   }
   return true;
 }

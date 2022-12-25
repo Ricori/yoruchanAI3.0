@@ -21,7 +21,7 @@
   "license": "GPL-3.0",
   "dependencies": {
     "axios": "0.24.0",
-    "canvas": "2.8.0",
+    "canvas": "2.11.0",
     "cheerio": "^1.0.0-rc.11",
     "cq-websocket": "2.1.1",
     "form-data": "^4.0.0",
@@ -29,6 +29,7 @@
     "koa-router": "10.0.0",
     "lodash": "^4.17.21",
     "nhentai-api": "^3.4.3",
+    "openai": "^3.1.0",
     "toad-scheduler": "^1.6.0",
     "tunnel": "^0.0.6"
   },

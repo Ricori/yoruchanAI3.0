@@ -5,12 +5,8 @@ import { adminMessageListener } from './listener/message/admin';
 import { commonMessageListener, defalutMessageListener } from './listener/message/common';
 import { groupMessageListener } from './listener/message/group';
 import BilibiliNewSharedJob from './tasks/bilibili';
-// import initProxy from './proxy';
 // import '../test/axiosProxy.ts';
 
-// https://docs.go-cqhttp.org/event/
-// https://12.onebot.dev/interface/event/notice/
-// https://github.com/momocow/node-cq-websocket/blob/master/docs/api/EventListener.md#eventlistener
 
 export default function init() {
   const ybot = YBot.getInstance();
@@ -37,15 +33,11 @@ export default function init() {
     groupMessageListener,
   ]);
 
-  // 启动本地代理
-  // initProxy();
-
   // 启动 Bot 连接
   ybot.connect();
 
   // 初始化并启动定时任务
   ytime.initJobList([
-    BilibiliNewSharedJob
+    BilibiliNewSharedJob,
   ]);
-
 }

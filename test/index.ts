@@ -9,7 +9,8 @@ import BilibiliNewSharedJob from '../src/tasks/bilibili';
 import getBiliDynamic from '../src/service/biliDynamic';
 import ascii2dSearch from '../src/modules/searchImg/ascii2d';
 import { printError } from '../src/utils/print';
-import './axiosProxy.ts';
+import { getOpenAiReply } from '../src/modules/openai';
+//import './axiosProxy.ts';
 
 
 const TEST_URL = 'https://c2cpicdw.qpic.cn/offpic_new/515302066//515302066-1715713257-5A2067B6C9174C9AEC89160AF032B73E/0?term=3';
@@ -59,3 +60,5 @@ ytime.initJobList([
 // nhentaiSearchText()
 //searchImageTest();
 //ascii2dSearch(TEST_URL);
+
+getOpenAiReply('今天吃什么？').then((res) => console.log(res))

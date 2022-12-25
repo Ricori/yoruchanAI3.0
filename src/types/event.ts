@@ -28,37 +28,6 @@ interface Anonymous {
   flag: string; // 匿名用户 flag, 在调用禁言 API 时需要传入
 }
 
-export interface PrivateMessageEventData {
-  time: number, // 事件发生的时间戳
-  self_id: number, // 收到事件的机器人 QQ 号
-  post_type: 'message', // 上报类型
-  message_type: 'private', // 消息类型
-  sub_type: 'friend' | 'group' | 'other', // 消息子类型,好友=friend,群临时会话=group
-  temp_source: number, // 临时会话来源
-  message_id: number, // 消息ID
-  user_id: number, // 发送者QQ号
-  message: string, // 消息内容
-  raw_message: string, // 原始消息内容
-  font: number, // 字体
-  sender: PrivateSender // 发送者信息
-}
-
-export interface GroupMessageEventData {
-  time: number, // 事件发生的时间戳
-  self_id: number, // 收到事件的机器人 QQ 号
-  post_type: 'message', // 上报类型
-  message_type: 'group', // 消息类型
-  sub_type: 'normal' | 'anonymous' | 'notice', // 正常消息=normal,匿名消息=anonymous,系统提示=notice
-  message_id: number, // 消息ID
-  group_id: number, // 群号
-  user_id: number, // 发送者QQ号
-  anonymous: Anonymous | null, // 匿名信息, 如果不是匿名消息则为 null
-  message: string, // 消息内容
-  raw_message: string, // 原始消息内容
-  font: number, // 字体
-  sender: GroupSender // 发送者信息
-}
-
 export interface SimpleMessageData {
   message_id: number, // 消息ID
   real_id: number, // 消息真实id
@@ -66,4 +35,25 @@ export interface SimpleMessageData {
   sender: GroupSender // 发送者信息
   message: string, // 消息内容
   raw_message: string, // 原始消息内容
+}
+
+export interface PrivateMessageEventData extends SimpleMessageData {
+  self_id: number, // 收到事件的机器人 QQ 号
+  post_type: 'message', // 上报类型
+  message_type: 'private', // 消息类型
+  sub_type: 'friend' | 'group' | 'other', // 消息子类型,好友=friend,群临时会话=group
+  temp_source: number, // 临时会话来源
+  user_id: number, // 发送者QQ号
+  font: number, // 字体
+}
+
+export interface GroupMessageEventData extends SimpleMessageData {
+  self_id: number, // 收到事件的机器人 QQ 号
+  post_type: 'message', // 上报类型
+  message_type: 'group', // 消息类型
+  sub_type: 'normal' | 'anonymous' | 'notice', // 正常消息=normal,匿名消息=anonymous,系统提示=notice
+  group_id: number, // 群号
+  user_id: number, // 发送者QQ号
+  anonymous: Anonymous | null, // 匿名信息, 如果不是匿名消息则为 null
+  font: number, // 字体
 }
