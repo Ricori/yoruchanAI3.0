@@ -1,7 +1,7 @@
+import { SimpleIntervalJob, AsyncTask } from 'toad-scheduler';
 import YBot from '../core/YBot';
 import YData from '../core/YData';
-import { printLog, } from '../utils/print';
-import { SimpleIntervalJob, AsyncTask } from 'toad-scheduler';
+import { printLog } from '../utils/print';
 import getBiliDynamic from '../service/biliDynamic';
 import { getImgCode } from '../utils/msgCode';
 import { yoruConfig } from '../../config';
@@ -22,41 +22,39 @@ const task = new AsyncTask('biliTask', async () => {
         if (newTime > lastestTime) {
           const msgTextArr = [];
           if (dyData.title) {
-            msgTextArr.push(dyData.title)
+            msgTextArr.push(dyData.title);
           }
-          let description = dyData.item.description;
+          let { description } = dyData.item;
           if (description) {
             if (description.length > 100) {
-              description = description.substring(0, 150) + '...';
+              description = `${description.substring(0, 150)}...`;
             }
-            msgTextArr.push(description)
+            msgTextArr.push(description);
           }
           const images = dyData.item.images ?? [];
           for (let i = 0; i < images.length; i += 1) {
-            msgTextArr.push(getImgCode(images[i]))
+            msgTextArr.push(getImgCode(images[i]));
             if (i > 1) {
               break;
             }
           }
-          msgTextArr.push(`动态链接：${dyData.item.link ?? ''}`)
+          msgTextArr.push(`动态链接：${dyData.item.link ?? ''}`);
           const msg = msgTextArr.join('\n');
           if (Array.isArray(config.group)) {
-            config.group.forEach(groupId => {
+            config.group.forEach((groupId) => {
               ybot.sendGroupMsg(groupId, msg);
-            })
+            });
           }
-          ydata.setBiliLastestDynamicTime(LIYUU_UID, newTime)
+          ydata.setBiliLastestDynamicTime(LIYUU_UID, newTime);
         }
       }
     } catch (err) {
-      printLog(`[biliTask] Error: ${err}`)
+      printLog(`[biliTask] Error: ${err}`);
     }
   }
 });
 
 
-const BilibiliNewSharedJob = new SimpleIntervalJob(
-  { seconds: 30 }, task, 'bilibiliNewShared'
-);
+const BilibiliNewSharedJob = new SimpleIntervalJob({ seconds: 30 }, task, 'bilibiliNewShared');
 
 export default BilibiliNewSharedJob;
