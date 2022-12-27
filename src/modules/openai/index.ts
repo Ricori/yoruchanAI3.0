@@ -16,7 +16,7 @@ export async function getOpenAiReply(prompt: string) {
     top_p: 1,
     frequency_penalty: 0.0,
     presence_penalty: 0.6,
-    // stop: [' Human:', ' AI:'],
+    stop: [' Human:', ' AI:'],
   }, {
     timeout: 30000,
   }).catch(() => undefined);
