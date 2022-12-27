@@ -11,7 +11,7 @@ export async function getOpenAiReply(prompt: string) {
   const response = await openai.createCompletion({
     model: 'text-davinci-003',
     prompt,
-    temperature: 0.7, // 每次返回的答案的相似度0-1（0：每次都一样，1：每次都不一样）
+    temperature: 0.6, // 每次返回的答案的相似度0-1（0：每次都一样，1：每次都不一样）
     max_tokens: 3000, // 最多4096
     top_p: 1,
     frequency_penalty: 0.0,
@@ -25,6 +25,9 @@ export async function getOpenAiReply(prompt: string) {
     let { text } = response.data.choices[0];
     if (text.startsWith('\n\n')) {
       text = text.substring(2);
+    }
+    if (text.startsWith('？')) {
+      text = text.substring(1).trimStart();
     }
     return text;
   }

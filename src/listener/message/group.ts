@@ -1,5 +1,5 @@
-import YBot from '../../core/YBot';
-import YData from '../../core/YData';
+import YBot from '../../core/yBot';
+import YData from '../../core/yData';
 import { GroupMessageEventData } from '../../types/event';
 import { yoruConfig } from '../../../config';
 import handleHpic from './handle/hpic';

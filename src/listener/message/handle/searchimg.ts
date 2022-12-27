@@ -1,4 +1,4 @@
-import YBot from '../../../core/YBot';
+import YBot from '../../../core/yBot';
 import { getImgs } from '../../../utils/function';
 import searchImage from '../../../modules/searchImg';
 

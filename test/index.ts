@@ -61,4 +61,4 @@ ytime.initJobList([
 //searchImageTest();
 //ascii2dSearch(TEST_URL);
 
-getOpenAiReply('今天吃什么？').then((res) => console.log(res))
+//getOpenAiReply('今天吃什么？').then((res) => console.log(res))

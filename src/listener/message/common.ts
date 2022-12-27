@@ -1,4 +1,4 @@
-import YBot from '../../core/YBot';
+import YBot from '../../core/yBot';
 import { PrivateMessageEventData, GroupMessageEventData } from '../../types/event';
 import { yoruConfig } from '../../../config';
 import {
@@ -6,7 +6,7 @@ import {
 } from '../../utils/function';
 import { getDefaultReply, helpText } from '../../customize/replyTextConfig';
 import handleHpic from './handle/hpic';
-import handleSearchImg from './handle/searchImg';
+import handleSearchImg from './handle/searchimg';
 import { getOpenAiReply } from '../../modules/openai';
 
 export async function commonMessageListener(data: PrivateMessageEventData | GroupMessageEventData) {

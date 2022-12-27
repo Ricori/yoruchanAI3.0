@@ -19,7 +19,7 @@ export default class YData {
 
   constructor() {
     // 设置up最新动态时间为现在，防止bot启动立即推送
-    this.setBiliLastestDynamicTime(4549624, new Date().getTime())
+    this.setBiliLastestDynamicTime(4549624, new Date().getTime());
   }
 
   static getInstance() {
@@ -80,9 +80,9 @@ export default class YData {
   setBiliLastestDynamicTime(uid: number, time: number) {
     this.biliLastestDynamicTime[uid] = time;
   }
+
   /** 获取某up最新动态时间 */
   getBiliLastestDynamicTime(uid: number) {
     return this.biliLastestDynamicTime[uid] ?? 0;
   }
-
 }

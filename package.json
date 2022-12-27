@@ -2,12 +2,12 @@
   "name": "yoruchan-ai",
   "version": "2.1.0",
   "description": "Is my dear Yoruchan online ? (.jpg",
-  "main": "index.js",
+  "main": "index.ts",
   "scripts": {
-    "dev": "ts-node index.ts",
-    "build": "tsc",
+    "dev": "tsx index.ts",
+    "build": "esbuild index.ts --outfile=build/index.js --platform=node --external:canvas --bundle --minify",
     "prod": "node ./build/index.js",
-    "test": "ts-node ./test/index.ts",
+    "test": "tsx ./test/index.ts",
     "lint": "eslint --ext .ts src/ --quiet",
     "lint-fix": "eslint --fix --ext .ts src/ --quiet"
   },
@@ -17,7 +17,7 @@
     "yoruchan",
     "bot"
   ],
-  "author": "Takamichika",
+  "author": "TakamiChika",
   "license": "GPL-3.0",
   "dependencies": {
     "axios": "0.24.0",

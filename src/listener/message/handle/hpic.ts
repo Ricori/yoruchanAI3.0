@@ -1,4 +1,4 @@
-import YBot from '../../../core/YBot';
+import YBot from '../../../core/yBot';
 import { yoruConfig } from '../../../../config';
 import { hasText } from '../../../utils/function';
 import getHPic from '../../../modules/hPic';

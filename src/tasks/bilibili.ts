@@ -1,6 +1,6 @@
 import { SimpleIntervalJob, AsyncTask } from 'toad-scheduler';
-import YBot from '../core/YBot';
-import YData from '../core/YData';
+import YBot from '../core/yBot';
+import YData from '../core/yData';
 import { printLog } from '../utils/print';
 import getBiliDynamic from '../service/biliDynamic';
 import { getImgCode } from '../utils/msgCode';

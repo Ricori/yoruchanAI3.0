@@ -1,5 +1,5 @@
-import YBot from './core/YBot';
-import YTime from './core/YTime';
+import YBot from './core/yBot';
+import YTime from './core/yTime';
 import { requestFirendListener } from './listener/request/requestFriend';
 import { adminMessageListener } from './listener/message/admin';
 import { commonMessageListener, defalutMessageListener } from './listener/message/common';

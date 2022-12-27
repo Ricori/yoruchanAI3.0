@@ -1,7 +1,7 @@
 import { searchImageText } from '../../customize/replyTextConfig';
 import saucenaoSearch from './saucenao';
 // import nhentaiSearch from './nhentai';
-import whatAnimeSearch from './whatAnime';
+import whatAnimeSearch from './whatanime';
 import ascii2dSearch from './ascii2d';
 
 const searchImage = async (imgUrls: string[]) => {
