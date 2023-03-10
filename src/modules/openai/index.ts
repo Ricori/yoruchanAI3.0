@@ -45,7 +45,7 @@ export async function getOpenAiReply(userId: number, prompt: string) {
     // console.log(response.data);
     const { message } = response.data.choices[0];
     yData.setGroupChatConversations(userId, [...messages, message]);
-    return message.content;
+    return message.content.replace('夜夜酱：', '');
   }
   return undefined;
 }
