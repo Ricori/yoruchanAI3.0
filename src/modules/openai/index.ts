@@ -28,8 +28,6 @@ export async function getOpenAiReply(userId: number, prompt: string) {
     content: prompt,
   });
 
-  // console.log(messages);
-
   const response = await openai.createChatCompletion({
     model: 'gpt-3.5-turbo-0301',
     messages,
@@ -40,7 +38,7 @@ export async function getOpenAiReply(userId: number, prompt: string) {
     presence_penalty: 0.6, // 存在惩罚，增加模型谈论新主题可能性
   }, {
     timeout: 30000,
-  }).catch((e) => printError(`[OpenAi]${e.response.data.message}`));
+  }).catch((e) => printError(`[OpenAi]${e.response ? e.response.data?.message : e}`));
 
   if (response?.data?.choices?.[0]?.message) {
     // console.log(response.data);
