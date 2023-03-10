@@ -5,6 +5,7 @@ import YData from '../../core/yData';
 
 const configuration = new Configuration({
   apiKey: yoruConfig.openAi.apiKey,
+  basePath: 'https://openapi.ssiic.com/v1',
 });
 
 const openai = new OpenAIApi(configuration);
@@ -37,8 +38,8 @@ export async function getOpenAiReply(userId: number, prompt: string) {
     // frequency_penalty: 0.0,  // 频率惩罚，减少重复可能性
     presence_penalty: 0.6, // 存在惩罚，增加模型谈论新主题可能性
   }, {
-    timeout: 30000,
-  }).catch((e) => printError(`[OpenAi]${e.response ? e.response.data?.message : e}`));
+    timeout: 12000,
+  }).catch((e) => printError(`[OpenAi]${e}`));
 
   if (response?.data?.choices?.[0]?.message) {
     // console.log(response.data);
