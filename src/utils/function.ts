@@ -68,10 +68,11 @@ export function getForwardMessageId(msg: string) {
 }
 
 
-/** 从消息中去除@文本
+/** 从消息中去除@和replay文本
  * @param {string} msg
  */
 export function deleteAtFromMsg(msg: string) {
-  const reg = /\[CQ:at,qq=([^,]+)\]/;
-  return msg.replace(reg, '').trimStart();
+  const reg = /\[CQ:at,qq=([^,]+)\]/g;
+  const reg2 = /\[CQ:reply,id=([^,]+)\]/;
+  return msg.replace(reg, '').replace(reg2, '').trimStart();
 }

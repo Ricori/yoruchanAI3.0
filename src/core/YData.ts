@@ -1,3 +1,5 @@
+import { ChatCompletionRequestMessage } from 'openai';
+
 interface RepeaterLog {
   userId: number | string,
   msg: string,
@@ -16,6 +18,9 @@ export default class YData {
 
   /** b站up最新动态时间  */
   private biliLastestDynamicTime: Record<number, number> = {};
+
+  /** 群消息对话（每个id最多记录8条）  */
+  private groupChatConversations: Record<number, ChatCompletionRequestMessage[]> = {};
 
   constructor() {
     // 设置up最新动态时间为现在，防止bot启动立即推送
@@ -84,5 +89,21 @@ export default class YData {
   /** 获取某up最新动态时间 */
   getBiliLastestDynamicTime(uid: number) {
     return this.biliLastestDynamicTime[uid] ?? 0;
+  }
+
+  /** 设置某qq的群会话 */
+  setGroupChatConversations(userId: number, messages: ChatCompletionRequestMessage[]) {
+    const conversation = this.groupChatConversations[userId];
+    if (conversation && conversation.length > 8) {
+      messages.shift();
+      this.groupChatConversations[userId] = messages;
+    } else {
+      this.groupChatConversations[userId] = messages;
+    }
+  }
+
+  /** 获取某qq的群会话 */
+  getGroupChatConversations(userId: number) {
+    return this.groupChatConversations[userId] ?? [];
   }
 }

@@ -76,7 +76,7 @@ export async function defalutMessageListener(data: PrivateMessageEventData | Gro
   if (yoruConfig.openAi.enable) {
     // 开启了chatGpt回复
     const prompt = deleteAtFromMsg(data.message);
-    const res = await getOpenAiReply(prompt);
+    const res = await getOpenAiReply(userId, prompt);
     if (res) {
       replyText = res;
     } else {
