@@ -29,9 +29,11 @@ export async function getOpenAiReply(userId: number, prompt: string) {
     content: prompt,
   });
 
+  const commitMessages = [systemMsg, ...messages];
+
   const response = await openai.createChatCompletion({
     model: 'gpt-3.5-turbo-0301',
-    messages: [systemMsg, ...messages],
+    messages: commitMessages,
     temperature: 0.6, // 每次返回的答案的相似度0-2（0：每次都一样，1：每次都不一样）
     // max_tokens: 4096,
     // top_p: 1,
