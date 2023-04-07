@@ -5,7 +5,7 @@ import YData from '../../core/yData';
 
 const configuration = new Configuration({
   apiKey: yoruConfig.openAi.apiKey,
-  basePath: 'https://openapi.ssiic.com/v1',
+  basePath: 'https://closeai.deno.dev/v1',
 });
 
 const openai = new OpenAIApi(configuration);
