@@ -3,6 +3,9 @@ import Cheerio from 'cheerio';
 import FormData from 'form-data';
 import { getImgCode } from '../../utils/msgCode';
 import { printError } from '../../utils/print';
+
+const UA = 'Mozilla / 5.0(Windows NT 10.0; Win64; x64) AppleWebKit / 537.36(KHTML, like Gecko) Chrome / 113.0.0.0 Safari / 537.36';
+
 /**
  * ascii2d搜索
  *
@@ -56,7 +59,15 @@ async function getAscii2dResult(url: string) {
   });
   const form = new FormData();
   form.append('file', imgBuffer, 'image');
-  const ret = await Axios.post('https://ascii2d.net/search/file', form, { headers: form.getHeaders() }).catch((error) => {
+  const ret = await Axios.post('https://ascii2d.net/search/file', form, {
+    headers:
+    {
+      ...form.getHeaders(),
+      Origin: 'https://ascii2d.net',
+      Referer: 'https://ascii2d.net/',
+      'User-Agent': UA,
+    },
+  }).catch((error) => {
     printError(`[Ascii2d Error] Upload File Error: ${error.message}`);
     return null;
   });
