@@ -1,8 +1,8 @@
 # Myself
 build
 
-#/config.ts
-config_debug.ts
+# Debug
+config_debug.json
 
 # Logs
 logs

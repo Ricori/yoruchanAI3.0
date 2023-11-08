@@ -1,15 +1,15 @@
-import YBot from '../src/core/YBot';
-import YTime from '../src/core/YTime';
+import yorubot from '@/core/yoruBot';
+import yoruSchedule from '@/core/yoruSchedule';
 import Axios from 'axios';
-import searchImage from '../src/modules/searchImg';
-import saucenaoSearch from '../src/modules/searchImg/saucenao';
-import whatAnimeSearch from '../src/modules/searchImg/whatanime';
-import nhentaiSearch from '../src/modules/searchImg/nhentai';
-import BilibiliNewSharedJob from '../src/tasks/bilibili';
-import getBiliDynamic from '../src/service/biliDynamic';
-import ascii2dSearch from '../src/modules/searchImg/ascii2d';
-import { printError } from '../src/utils/print';
-import { getOpenAiReply } from '../src/modules/openai';
+import searchImage from '@/modules/searchImg';
+import saucenaoSearch from '@/modules/searchImg/saucenao';
+import whatAnimeSearch from '@/modules/searchImg/whatanime';
+import nhentaiSearch from '@/modules/searchImg/nhentai';
+import BilibiliNewSharedJob from '@/tasks/bilibili';
+import getBiliDynamic from '@/service/biliDynamic';
+import ascii2dSearch from '@/modules/searchImg/ascii2d';
+import { printError } from '@/utils/print';
+import { getOpenAiReply } from '@/modules/openai';
 //import './axiosProxy.ts';
 
 
@@ -49,9 +49,7 @@ async function nhentaiSearchText() {
 //searchImageTest();
 
 /*
-const ybot = YBot.getInstance();
-const ytime = YTime.getInstance();
-ytime.initJobList([
+yoruSchedule.initJobList([
   BilibiliNewSharedJob
 ]);
 */

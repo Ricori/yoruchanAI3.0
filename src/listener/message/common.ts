@@ -1,16 +1,15 @@
-import YBot from '../../core/yBot';
+import yorubot from '@/core/yoruBot';
 import { PrivateMessageEventData, GroupMessageEventData } from '../../types/event';
-import { yoruConfig } from '../../../config';
 import {
   hasText, hasImage, hasReply, getReplyMsgId, deleteAtFromMsg,
-} from '../../utils/function';
-import { getDefaultReply, helpText } from '../../customize/replyTextConfig';
+} from '@/utils/function';
+import { getOpenAiReply } from '@/modules/openai';
 import handleHpic from './handle/hpic';
 import handleSearchImg from './handle/searchimg';
-import { getOpenAiReply } from '../../modules/openai';
+
+const helpText = '有问题请联系开发者takamichikan，本帮助最后更新于2019年4月8日。';
 
 export async function commonMessageListener(data: PrivateMessageEventData | GroupMessageEventData) {
-  const ybot = YBot.getInstance();
   const isGroupMessage = data.message_type === 'group';
   const userId = data.user_id;
   const { message } = data;
@@ -27,9 +26,9 @@ export async function commonMessageListener(data: PrivateMessageEventData | Grou
     if (isGroupMessage) {
       const groupId = (data as GroupMessageEventData).group_id;
       const messageId = (data as GroupMessageEventData).message_id;
-      ybot.sendGroupReplyMsg(groupId, helpText, messageId);
+      yorubot.sendGroupReplyMsg(groupId, helpText, messageId);
     } else {
-      ybot.sendPrivateMsg(userId, helpText);
+      yorubot.sendPrivateMsg(userId, helpText);
     }
     return true;
   }
@@ -38,7 +37,7 @@ export async function commonMessageListener(data: PrivateMessageEventData | Grou
   if (hasReply(message)) {
     // 如果是回复消息，提取原消息
     const replyMsgId = getReplyMsgId(message);
-    const replyMsgData = await ybot.getMessageFromId(replyMsgId);
+    const replyMsgData = await yorubot.getMessageFromId(replyMsgId);
     if (replyMsgData) {
       const rMsg = replyMsgData.message;
       if (hasImage(rMsg)) {
@@ -56,7 +55,7 @@ export async function commonMessageListener(data: PrivateMessageEventData | Grou
   }
 
   // 3.发送瑟图
-  if (yoruConfig.hPic.enable) {
+  if (yorubot.config.hPic.enable) {
     const exec = /((要|发|份|点|张)大?(色|h|瑟|涩)图)/.exec(message);
     if (exec !== null) {
       handleHpic(handleParams);
@@ -67,13 +66,22 @@ export async function commonMessageListener(data: PrivateMessageEventData | Grou
   return false;
 }
 
+// 不在功能范围时默认回复
+export function getDefaultReply() {
+  return '夜夜酱受到了特殊电波干扰，暂时没法回答主人的问题呢，主人可以过会儿重新询问夜夜酱哦';
+  // return randomText([
+  //   '渣滓主人请不要提过分的要求',
+  //   '你说你🐎呢',
+  // ]);
+}
+
+
 export async function defalutMessageListener(data: PrivateMessageEventData | GroupMessageEventData) {
-  const ybot = YBot.getInstance();
   const isGroupMessage = data.message_type === 'group';
   const userId = data.user_id;
 
   let replyText = '';
-  if (yoruConfig.openAi.enable) {
+  if (yorubot.config.openAi.enable) {
     // 开启了chatGpt回复
     const prompt = deleteAtFromMsg(data.message);
     const res = await getOpenAiReply(userId, prompt);
@@ -89,9 +97,9 @@ export async function defalutMessageListener(data: PrivateMessageEventData | Gro
   if (isGroupMessage) {
     const groupId = data.group_id;
     const messageId = data.message_id;
-    ybot.sendGroupReplyMsg(groupId, replyText, messageId);
+    yorubot.sendGroupReplyMsg(groupId, replyText, messageId);
   } else {
-    ybot.sendPrivateMsg(userId, replyText);
+    yorubot.sendPrivateMsg(userId, replyText);
   }
   return true;
 }

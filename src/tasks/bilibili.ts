@@ -1,26 +1,23 @@
 import { SimpleIntervalJob, AsyncTask } from 'toad-scheduler';
-import YBot from '../core/yBot';
-import YData from '../core/yData';
+import yorubot from '@/core/yoruBot';
+import yoruStorage from '@/core/yoruStorage';
 import { printLog } from '../utils/print';
 import getBiliDynamic from '../service/biliDynamic';
 import { getImgCode } from '../utils/msgCode';
-import { yoruConfig } from '../../config';
 
 const LIYUU_UID = 4549624;
 
 const task = new AsyncTask('biliTask', async () => {
-  const ybot = YBot.getInstance();
-  const ydata = YData.getInstance();
-  const botIsConnect = ybot.getBotIsConnect();
-  const config = yoruConfig.biliDynamicPush;
+  const botIsConnect = yorubot.getIsBotConnecting();
+  const config = yorubot.config.biliDynamicPush;
   if (botIsConnect) {
     try {
       const dyData = await getBiliDynamic(LIYUU_UID);
       if (dyData) {
         const newTime = dyData.item.pubDate ?? 0;
-        const lastestTime = ydata.getBiliLastestDynamicTime(LIYUU_UID);
+        const lastestTime = yoruStorage.getBiliLastestDynamicTime(LIYUU_UID);
         if (newTime > lastestTime) {
-          const msgTextArr = [];
+          const msgTextArr = [] as string[];
           if (dyData.title) {
             msgTextArr.push(dyData.title);
           }
@@ -42,10 +39,10 @@ const task = new AsyncTask('biliTask', async () => {
           const msg = msgTextArr.join('\n');
           if (Array.isArray(config.group)) {
             config.group.forEach((groupId) => {
-              ybot.sendGroupMsg(groupId, msg);
+              yorubot.sendGroupMsg(groupId, msg);
             });
           }
-          ydata.setBiliLastestDynamicTime(LIYUU_UID, newTime);
+          yoruStorage.setBiliLastestDynamicTime(LIYUU_UID, newTime);
         }
       }
     } catch (err) {
@@ -55,6 +52,7 @@ const task = new AsyncTask('biliTask', async () => {
 });
 
 
-const BilibiliNewSharedJob = new SimpleIntervalJob({ seconds: 30 }, task, 'bilibiliNewShared');
+const BilibiliNewSharedJob = new SimpleIntervalJob({ seconds: 30 }, task, { id: 'bilibiliNewShared' });
+yoruStorage.setBiliLastestDynamicTime(4549624, new Date().getTime());
 
 export default BilibiliNewSharedJob;

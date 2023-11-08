@@ -1,12 +1,9 @@
-import YBot from '../../core/yBot';
-import YData from '../../core/yData';
+import yorubot from '@/core/yoruBot';
+import yoruStorage from '@/core/yoruStorage';
 import { GroupMessageEventData } from '../../types/event';
-import { yoruConfig } from '../../../config';
 import handleHpic from './handle/hpic';
 
 export async function groupMessageListener(data: GroupMessageEventData) {
-  const ybot = YBot.getInstance();
-  const ydata = YData.getInstance();
   const userId = data.user_id;
   const { message } = data;
 
@@ -18,7 +15,7 @@ export async function groupMessageListener(data: GroupMessageEventData) {
   };
 
   // 1.发送瑟图
-  if (yoruConfig.hPic.enable) {
+  if (yorubot.config.hPic.enable) {
     const exec = /((要|发|份|点|张)大?(色|h|瑟|涩)图)/.exec(message);
     if (exec !== null) {
       handleHpic(handleParams);
@@ -27,12 +24,12 @@ export async function groupMessageListener(data: GroupMessageEventData) {
   }
 
   // 2.群聊复读机功能
-  if (yoruConfig.repeater.enable) {
-    const res = ydata.saveRepeaterLog(data.group_id, userId, message);
-    if (res >= yoruConfig.repeater.times) {
-      ydata.setRepeaterDone(data.group_id);
+  if (yorubot.config.repeater.enable) {
+    const res = yoruStorage.saveRepeaterLog(data.group_id, userId, message);
+    if (res >= yorubot.config.repeater.times) {
+      yoruStorage.setRepeaterDone(data.group_id);
       setTimeout(() => {
-        ybot.sendGroupMsg(data.group_id, message);
+        yorubot.sendGroupMsg(data.group_id, message);
       }, 1000);
     }
   }

@@ -28,12 +28,16 @@
     ],
     "allowSyntheticDefaultImports": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
   },
   "include": [
-    "*.ts",
-    "**/src/**/*.ts",
-    ".eslintrc.js"
+    "src",
+    "test"
   ],
   "exclude": [
     "node_modules",

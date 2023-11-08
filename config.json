@@ -1,0 +1,40 @@
+{
+  "wsConfig": {
+    "host": "127.0.0.1",
+    "port": 6700,
+    "enableAPI": true,
+    "enableEvent": true,
+    "access_token": "",
+    "reconnection": true,
+    "reconnectionAttempts": 5,
+    "reconnectionDelay": 12000
+  },
+  "botConfig": {
+    "admin": [
+      515302066
+    ],
+    "autoAddFriend": false,
+    "repeater": {
+      "enable": true,
+      "times": 3
+    },
+    "biliDynamicPush": {
+      "enable": true,
+      "group": [
+        914620769
+      ]
+    },
+    "openAi": {
+      "enable": true,
+      "apiKey": ""
+    },
+    "hPic": {
+      "enable": true,
+      "whiteGroupOnly": false,
+      "whiteGroupIds": [
+        829349264
+      ],
+      "whiteGroupCustomLimit": 2
+    }
+  }
+}

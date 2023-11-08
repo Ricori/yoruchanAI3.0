@@ -1,4 +1,4 @@
-import { ChatCompletionRequestMessage } from 'openai';
+import { ChatCompletionMessageParam } from 'openai/resources';
 
 interface RepeaterLog {
   userId: number | string,
@@ -7,8 +7,7 @@ interface RepeaterLog {
   done: boolean,
 }
 
-export default class YData {
-  static instance: YData;
+class YoruStorage {
 
   /** 自动同意好友请求的名单  */
   private approveFriendIds: number[] = [];
@@ -20,19 +19,8 @@ export default class YData {
   private biliLastestDynamicTime: Record<number, number> = {};
 
   /** 群消息对话（每个id最多记录8条）  */
-  private groupChatConversations: Record<number, ChatCompletionRequestMessage[]> = {};
+  private groupChatConversations: Record<number, ChatCompletionMessageParam[]> = {};
 
-  constructor() {
-    // 设置up最新动态时间为现在，防止bot启动立即推送
-    this.setBiliLastestDynamicTime(4549624, new Date().getTime());
-  }
-
-  static getInstance() {
-    if (!YData.instance) {
-      YData.instance = new YData();
-    }
-    return YData.instance;
-  }
 
   /** 新增好友白名单 */
   addApproveFriendIds = (userId: number) => {
@@ -92,7 +80,7 @@ export default class YData {
   }
 
   /** 设置某qq的群会话 */
-  setGroupChatConversations(userId: number, messages: ChatCompletionRequestMessage[]) {
+  setGroupChatConversations(userId: number, messages: ChatCompletionMessageParam[]) {
     const conversation = this.groupChatConversations[userId];
     if (conversation && conversation.length > 8) {
       messages.shift();
@@ -107,3 +95,5 @@ export default class YData {
     return this.groupChatConversations[userId] ?? [];
   }
 }
+
+export default new YoruStorage();

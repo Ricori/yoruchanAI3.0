@@ -1,4 +1,4 @@
-const TEST_FORWARD = [
+export const TEST_FORWARD = [
   {
     "type": "node",
     "data": {

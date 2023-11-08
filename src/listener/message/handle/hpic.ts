@@ -1,8 +1,15 @@
-import YBot from '../../../core/yBot';
-import { yoruConfig } from '../../../../config';
-import { hasText } from '../../../utils/function';
-import getHPic from '../../../modules/hPic';
-import { hPicReplyText } from '../../../customize/replyTextConfig';
+import yorubot from '@/core/yoruBot';
+import { hasText } from '@/utils/function';
+import getHPic from '@/modules/hPic';
+
+enum HPicLevel {
+  /** All ages */
+  SAFE = 0,
+  /** All ages and R18 mixed */
+  MIX = 1,
+  /** R18 Only */
+  R18 = 2,
+}
 
 export default function handleHpic({
   message,
@@ -15,40 +22,47 @@ export default function handleHpic({
   isGroupMessage: boolean,
   groupId?: number
 }) {
-  const ybot = YBot.getInstance();
-  const bigMode = !!hasText(message, '大');
-  let count = 1;
-  const countExec = /([0-9]+)[张份]/.exec(message);
-  if (countExec && countExec[1]) {
-    count = Number(countExec[1]);
-  }
+  if (!groupId) return;
+
   if (isGroupMessage) {
-    if (!groupId) return;
-    let limitLevel = 0 as 0 | 1 | 2; // 0=全年龄, 1=混合, 2=r18Only
-    const { whiteOnly, whiteGroup, whiteGroupLimit } = yoruConfig.hPic;
-    const inWhiteList = whiteGroup.includes(groupId);
-    if (whiteOnly && !inWhiteList) {
-      // 该群无色图权限
-      ybot.sendGroupMsg(groupId, hPicReplyText.noAuth, userId);
+    const { whiteGroupOnly, whiteGroupIds, whiteGroupCustomLimit } = yorubot.config.hPic;
+    const inWhiteList = whiteGroupIds.includes(groupId);
+
+    // Check permissions
+    if (whiteGroupOnly && !inWhiteList) {
+      // This group has no permissions
+      return;
     }
-    if (inWhiteList && [0, 1, 2].includes(whiteGroupLimit)) {
-      limitLevel = whiteGroupLimit as 0 | 1 | 2;
+
+    // Get the final Hpic level
+    let hPicLevel = 0 as HPicLevel;
+    if (inWhiteList && Object.values(HPicLevel).includes(whiteGroupCustomLimit)) {
+      hPicLevel = whiteGroupCustomLimit;
     }
-    const limitCount = inWhiteList ? 20 : 9;
-    if (count > limitCount) {
-      count = limitCount;
+
+    // Does the image need to appear larger
+    const bigMode = !!hasText(message, '大');
+
+    // Get image Count
+    let count = 1;
+    const countExec = /([0-9]+)[张份]/.exec(message);
+    if (countExec && countExec[1]) {
+      count = Number(countExec[1]);
     }
-    getHPic(limitLevel, bigMode, count, false, true).then((resultMsgs) => {
-      const delay = inWhiteList ? 1200 : 4000;
+    count = count > 10 ? 10 : count;
+
+    // Get Reply Text
+    getHPic({ hPicLevel, bigMode, count }).then((resultMsgs) => {
       let i = 0;
       resultMsgs.forEach((msg) => {
+        // Delay to prevent QQ limit
         setTimeout(() => {
-          ybot.sendGroupMsg(groupId, msg);
-        }, i * delay);
+          yorubot.sendGroupMsg(groupId, msg);
+        }, i * 1500);
         i += 1;
       });
     });
   } else {
-    ybot.sendPrivateMsg(userId, '因腾讯限制，私聊上传图片失败概率高，请在群中使用此功能');
+    yorubot.sendPrivateMsg(userId, '因腾讯限制，私聊图片发送失败概率高，请在群中使用此功能');
   }
 }

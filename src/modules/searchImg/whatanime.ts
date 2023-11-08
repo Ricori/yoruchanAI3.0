@@ -1,9 +1,9 @@
 import _ from 'lodash';
 import Axios from 'axios';
 import FormData from 'form-data';
-import { searchImageText } from '../../customize/replyTextConfig';
-import { escape, getImgCode, getVideoCode } from '../../utils/msgCode';
-import { printError } from '../../utils/print';
+import { searchImageText } from './';
+import { escape, getImgCode, getVideoCode } from '@/utils/msgCode';
+import { printError } from '@/utils/print';
 /**
  * whatanime搜索
  */
@@ -143,7 +143,7 @@ query ($id: Int) {
  * @param {number} anilistID
  */
 async function getAnimeInfo(anilistID: number) {
-  let data = null;
+  let data: Record<string, any> | undefined;
   const ret = await Axios.post(`https://trace.moe/anilist/${anilistID}`, {
     query: animeInfoQuery,
     variables: { id: anilistID },

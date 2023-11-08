@@ -1,21 +1,18 @@
-import YBot from '../../core/yBot';
-import YData from '../../core/yData';
-import { RequestFirendEventData } from '../../types/event';
-import { yoruConfig } from '../../../config';
+import yorubot from '@/core/yoruBot';
+import yoruStorage from '@/core/yoruStorage';
+import { RequestFirendEventData } from '@/types/event';
 
 export async function requestFirendListener(data: RequestFirendEventData) {
-  const ybot = YBot.getInstance();
-  const ydata = YData.getInstance();
   const userId = data.user_id;
-  if (yoruConfig.autoAddFriend || ydata.checkApproveFriend(userId)) {
-    ybot.setFriendAddRequest(data.flag, true);
-    ydata.deleteApproveFriend(userId);
-    (yoruConfig.admin || []).forEach((adminId) => {
+  if (yorubot.config.autoAddFriend || yoruStorage.checkApproveFriend(userId)) {
+    yorubot.setFriendAddRequest(data.flag, true);
+    yoruStorage.deleteApproveFriend(userId);
+    (yorubot.config.admin || []).forEach((adminId) => {
       if (!Number.isNaN(Number(adminId))) {
-        ybot.sendPrivateMsg(adminId, `[YoruBot] 新增好友${userId}`);
+        yorubot.sendPrivateMsg(adminId, `[YoruBot] 新增好友${userId}`);
       }
     });
   } else {
-    ybot.setFriendAddRequest(data.flag, false);
+    yorubot.setFriendAddRequest(data.flag, false);
   }
 }

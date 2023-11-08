@@ -1,46 +1,51 @@
 import { CQWebSocket } from 'cq-websocket';
-import { printLog } from '../utils/print';
-import { getAtCode, getReplyCode } from '../utils/msgCode';
-import { SimpleMessageData } from '../types/event';
-import { wsConfig, yoruConfig } from '../../config';
+import { printError, printLog } from '@/utils/print';
+import { getAtCode, getReplyCode } from '@/utils/msgCode';
+import { SimpleMessageData } from '@/types/event';
 
 import {
   RequestFirendListenerFc,
   PrivateMessageListenerFc,
   GroupMessageListenerFc,
-} from '../types/listener';
+} from '@/types/listener';
+import { BotConfig, YoruConfig } from '@/types/config';
+import { loadConfigFile } from '@/utils/io';
 
+const debugMode = process.env.YDEBUG === 'true';
 
-export default class YBot {
-  static instance: YBot;
+class Yorubot {
 
+  /** CQWebSocket Object */
   private cqs: CQWebSocket;
 
-  private on: CQWebSocket['on'];
-
-  private once: CQWebSocket['once'];
-
+  /** Bot connection status */
   private connectState = {
     '/event': false,
     '/api': false,
   };
 
+  /** Is in debug mode */
+  readonly debugMode = debugMode;
+
+  /** Bot configs */
+  readonly config: BotConfig;
+
   constructor() {
-    this.cqs = new CQWebSocket(wsConfig);
-    this.on = this.cqs.on.bind(this.cqs);
-    this.once = this.cqs.once.bind(this.cqs);
-    this.registerConnectingEvent();
+    // If you use debug mode, you need to create the `config_debug.json` manually
+    const configFileName = debugMode ? 'config_debug.json' : 'config.json';
+    const config = loadConfigFile(configFileName) as YoruConfig;
+
+    // config
+    this.debugMode = debugMode;
+    this.config = config.botConfig;
+
+    // create cqs object
+    this.cqs = new CQWebSocket(config.wsConfig);
   }
 
-  static getInstance() {
-    if (!YBot.instance) {
-      YBot.instance = new YBot();
-    }
-    return YBot.instance;
-  }
-
-  // 注册连接相关监听事件
-  registerConnectingEvent = () => {
+  /** Start bot */
+  start() {
+    // register connection-related listening events
     this.cqs.on('socket.connecting', (type) => { printLog(`[WS Connect] ${type} start connenct..`); });
     this.cqs.on('socket.error', (type, err) => {
       printLog(`[WS Connect] ${type} connect fail,Error: ${err}`);
@@ -50,31 +55,35 @@ export default class YBot {
       printLog(`[WS Connect] ${type} connect successfully`);
       this.connectState[type] = true;
     });
-  };
-
-  // 启动连接
-  connect = () => {
+    // ws connect
     this.cqs.connect();
   };
 
-  // bot是否连接中
-  getBotIsConnect = () => {
+  /** Get bot connecting status */
+  getIsBotConnecting() {
     if (this.connectState['/api'] && this.connectState['/event']) {
       return true;
     }
     return false;
   };
 
-  /* BOT API LIST */
-  /* https://docs.go-cqhttp.org/api/ */
+  /** Check connection status */
+  checkBotState() {
+    if (!this.getIsBotConnecting()) {
+      printError('[Error] Bot already disconnected, unable to perform action.')
+      return;
+    }
+  }
 
-  /** 处理好友请求 */
+  /** Handle friend requests */
   setFriendAddRequest = (flag: string | number, approve: boolean) => {
+    this.checkBotState();
     this.cqs('set_friend_add_request', { flag: `${flag}`, approve });
   };
 
-  /** 处理邀请加群 */
+  /** Handle group requests */
   setGroupAddRequest = (flag: string | number, approve: boolean) => {
+    this.checkBotState();
     this.cqs('set_group_add_request', {
       flag: `${flag}`,
       type: 'invite',
@@ -83,15 +92,17 @@ export default class YBot {
     });
   };
 
+
   /** 发送私聊消息
    * @param {number} userId 对方QQ号
    * @param {string} msg 要发送的内容
    * @param {string} plainText 消息内容是否作为纯文本发送
    */
   sendPrivateMsg = async (userId: number, msg: string, plainText?: boolean) => {
+    this.checkBotState();
     if (msg.length === 0) return;
-    if (yoruConfig.debugMode) {
-      printLog(`[SendPrivateMsg] ${msg}`);
+    if (this.debugMode) {
+      printLog(`[Send Private Msg] ${msg}`);
     }
     this.cqs('send_private_msg', {
       user_id: userId,
@@ -107,13 +118,11 @@ export default class YBot {
    * @param {string} plainText 消息内容是否作为纯文本发送
    */
   sendGroupMsg = async (groupId: number, msg: string, atUser?: number | string, plainText?: boolean) => {
+    this.checkBotState();
     if (msg.length === 0) return;
-    let prefix = '';
-    if (atUser) {
-      prefix = getAtCode(`${atUser}`);
-    }
-    if (yoruConfig.debugMode) {
-      printLog(`[SendPrivateMsg] ${prefix}${msg}`);
+    const prefix = atUser ? getAtCode(`${atUser}`) : '';
+    if (this.debugMode) {
+      printLog(`[Send Group Msg] ${prefix}${msg}`);
     }
     this.cqs('send_group_msg', {
       group_id: groupId,
@@ -128,8 +137,12 @@ export default class YBot {
    * @param {string} replyMsgId 要回复的消息id
    */
   sendGroupReplyMsg = async (groupId: number, msg: string, replyMsgId: number | string) => {
+    this.checkBotState();
     if (msg.length === 0) return;
     const prefix = getReplyCode(replyMsgId);
+    if (this.debugMode) {
+      printLog(`[Send Group Msg] ${prefix}${msg}`);
+    }
     this.cqs('send_group_msg', {
       group_id: groupId,
       message: prefix + msg,
@@ -140,7 +153,11 @@ export default class YBot {
    * @param {string} forwardId 合并转发id
    */
   getGroupForwardMsg = async (forwardId: number | string) => {
+    this.checkBotState();
     if (!forwardId) return;
+    if (this.debugMode) {
+      printLog(`[Get Group Forward Msg] forwardId:${forwardId}`);
+    }
     const res = await this.cqs('get_forward_msg', {
       message_id: forwardId,
     });
@@ -152,7 +169,11 @@ export default class YBot {
    * @param {object} msg 内容，参照 https://docs.go-cqhttp.org/cqcode
    */
   sendGroupForwardMsg = async (groupId: number, msg: any[]) => {
+    this.checkBotState();
     if (msg.length === 0) return;
+    if (this.debugMode) {
+      printLog(`[Send Group Forward Msg]\n`, msg);
+    }
     this.cqs('send_group_forward_msg', {
       group_id: groupId,
       messages: msg,
@@ -163,6 +184,7 @@ export default class YBot {
    * @param {string} messageId 合并转发id
    */
   getMessageFromId = async (messageId: number | string) => {
+    this.checkBotState();
     if (!messageId) return;
     const res = await this.cqs('get_msg', {
       message_id: messageId,
@@ -177,6 +199,7 @@ export default class YBot {
    * @param {number} messageId 消息 ID
    */
   deleteMsg = async (messageId: number) => {
+    this.checkBotState();
     this.cqs('delete_msg', {
       message_id: messageId,
     });
@@ -186,6 +209,7 @@ export default class YBot {
    * @param {string} file 图片缓存文件名
    */
   getImageInfo = async (file: string) => {
+    this.checkBotState();
     const data = await this.cqs('get_image', {
       file,
     }) as unknown as null | { size: number; filename: string; url: string };
@@ -196,15 +220,15 @@ export default class YBot {
    * @param {string} content 内容
    */
   getWordSlices = async (content: string) => {
+    this.checkBotState();
     const data = await this.cqs('get_word_slices', {
       content,
     }) as unknown as null | { slices: string[] };
     return data;
   };
 
-  /* BOT EVENT LIST */
-  /* https://12.onebot.dev/interface/event/meta/ */
 
+  /** Do actions */
   doFc = async (fcs: PrivateMessageListenerFc[] | GroupMessageListenerFc[], data: any) => {
     for (let index = 0; index < fcs.length; index += 1) {
       const fc = fcs[index];
@@ -218,27 +242,33 @@ export default class YBot {
     }
   };
 
+  /** Bind request firend listener */
   bindRequestFirendListener = (listenerFc: RequestFirendListenerFc) => {
-    this.on('request.friend', async (data: any) => {
+    this.cqs.on('request.friend', async (data: any) => {
       listenerFc(data);
     });
   };
 
+  /** Bind private message listener */
   bindPrivateMessageListeners = (listenerFcs: PrivateMessageListenerFc[]) => {
-    this.on('message.private', async (_, data: any) => {
+    this.cqs.on('message.private', async (_, data: any) => {
       this.doFc(listenerFcs, data);
     });
   };
 
+  /** Bind group at bot message listener */
   bindGroupAtBotMessageListeners = (listenerFcs: GroupMessageListenerFc[]) => {
-    this.on('message.group.@.me', async (_, data: any) => {
+    this.cqs.on('message.group.@.me', async (_, data: any) => {
       this.doFc(listenerFcs, data);
     });
   };
 
+  /** Bind group common message listener */
   bindGroupCommonMessageListeners = (listenerFcs: GroupMessageListenerFc[]) => {
-    this.on('message.group', async (_, data: any) => {
+    this.cqs.on('message.group', async (_, data: any) => {
       this.doFc(listenerFcs, data);
     });
   };
 }
+
+export default new Yorubot();

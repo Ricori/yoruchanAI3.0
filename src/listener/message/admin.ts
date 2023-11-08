@@ -1,10 +1,9 @@
-import YBot from '../../core/yBot';
-import YData from '../../core/yData';
+import yorubot from '@/core/yoruBot';
+import yoruStorage from '@/core/yoruStorage';
 import { PrivateMessageEventData, GroupMessageEventData } from '../../types/event';
-import { yoruConfig } from '../../../config';
 
 export async function adminMessageListener(data: PrivateMessageEventData) {
-  const adminList = yoruConfig.admin || [];
+  const adminList = yorubot.config.admin || [];
   const userId = data.user_id;
 
   if (adminList.indexOf(userId) > -1) {
@@ -12,10 +11,8 @@ export async function adminMessageListener(data: PrivateMessageEventData) {
     const exec = /--approve=([0-9]+)/.exec(message);
     if (exec !== null) {
       const approveId = exec[1];
-      const ybot = YBot.getInstance();
-      const ydata = YData.getInstance();
-      ybot.sendPrivateMsg(userId, `[Yoru Bot] 已记录${approveId}至好友白名单`);
-      ydata.addApproveFriendIds(parseInt(approveId));
+      yorubot.sendPrivateMsg(userId, `[Yoru Bot] 已记录${approveId}至好友白名单`);
+      yoruStorage.addApproveFriendIds(parseInt(approveId));
       return true;
     }
   }

@@ -65,7 +65,7 @@ type CQType =
 /** string转CQ类 */
 export function getCQCodesFromStr(str: string) {
   const reg = /\[CQ:([^,[\]]+)((?:,[^,=[\]]+=[^,[\]]*)*)\]/g;
-  const result = [];
+  const result = [] as CQCode[];
   // eslint-disable-next-line no-cond-assign
   for (let match; (match = reg.exec(str));) {
     const [, type, dataStr] = match;

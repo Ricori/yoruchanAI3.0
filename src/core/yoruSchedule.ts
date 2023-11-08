@@ -1,17 +1,9 @@
 import { ToadScheduler, SimpleIntervalJob } from 'toad-scheduler';
 import { printLog } from '../utils/print';
 
-export default class YTime {
-  static instance: YTime;
+class YoruSchedule {
 
   private scheduler = new ToadScheduler();
-
-  static getInstance() {
-    if (!YTime.instance) {
-      YTime.instance = new YTime();
-    }
-    return YTime.instance;
-  }
 
   initJobList(jobList: SimpleIntervalJob[]) {
     let count = 0;
@@ -46,3 +38,5 @@ export default class YTime {
     return this.scheduler.removeById(id);
   }
 }
+
+export default new YoruSchedule();

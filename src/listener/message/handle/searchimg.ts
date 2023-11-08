@@ -1,4 +1,4 @@
-import YBot from '../../../core/yBot';
+import yorubot from '@/core/yoruBot';
 import { getImgs } from '../../../utils/function';
 import searchImage from '../../../modules/searchImg';
 
@@ -14,20 +14,19 @@ export default function handleSearchImg({
   isGroupMessage: boolean,
   groupId?: number
 }) {
-  const ybot = YBot.getInstance();
   const imgsData = getImgs(message);
   const urls = imgsData.map((item) => item.url);
   if (isGroupMessage) {
     if (!groupId) return;
     searchImage(urls).then((resultMsgs) => {
       resultMsgs.forEach((msg) => {
-        ybot.sendGroupMsg(groupId, msg);
+        yorubot.sendGroupMsg(groupId, msg);
       });
     });
   } else {
     searchImage(urls).then((resultMsgs) => {
       resultMsgs.forEach((msg) => {
-        ybot.sendPrivateMsg(userId, msg);
+        yorubot.sendPrivateMsg(userId, msg);
       });
     });
   }

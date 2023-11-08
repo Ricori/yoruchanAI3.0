@@ -1,8 +1,14 @@
-import { searchImageText } from '../../customize/replyTextConfig';
 import saucenaoSearch from './saucenao';
 // import nhentaiSearch from './nhentai';
 import whatAnimeSearch from './whatanime';
 import ascii2dSearch from './ascii2d';
+
+export const searchImageText = {
+  error: '搜索图片发生错误，请主人等等再试试？', // 未知错误
+  whatAnimeToLarge: '图片过大，无法搜索动画',
+  whatAnimeLimit: '搜索动画超限制',
+  r18warn: '[R18 Waring]',
+};
 
 const searchImage = async (imgUrls: string[]) => {
   const resultMsgs = [] as string[];
