@@ -41,6 +41,10 @@ class CQCode {
     return this;
   }
 
+  pickData(keys: string[]) {
+    return _.pick(Object.fromEntries(this.data.entries()), keys);
+  }
+
   toString() {
     const list = Array.from(this.data.entries())
       .filter(([, v]) => !_.isNil(v))
@@ -56,6 +60,29 @@ type CQType =
   'share' | 'music' | 'image' | 'reply' | 'redbag' |
   'poke' | 'forward' | 'node' | 'xml' | 'json' |
   'cardimage' | 'tts';
+
+
+/** string转CQ类 */
+export function getCQCodesFromStr(str: string) {
+  const reg = /\[CQ:([^,[\]]+)((?:,[^,=[\]]+=[^,[\]]*)*)\]/g;
+  const result = [] as CQCode[];
+  // eslint-disable-next-line no-cond-assign
+  for (let match; (match = reg.exec(str));) {
+    const [, type, dataStr] = match;
+    const data = _.transform(
+      _.filter(dataStr.split(',')),
+      (obj: any, kv: any) => {
+        const [key, ...value] = kv.split('=');
+        // eslint-disable-next-line no-param-reassign
+        obj[unescape(key)] = unescape(value.join('='));
+      },
+      {},
+    );
+    result.push(new CQCode(type, data));
+  }
+  return result;
+}
+
 
 /**
  * CQ码文本转换

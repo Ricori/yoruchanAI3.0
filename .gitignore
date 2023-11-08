@@ -1,9 +1,8 @@
 # Myself
 build
 
-#/config.ts
-/data/*.json
-/restart.bat
+# Debug
+config_debug.json
 
 # Logs
 logs
@@ -20,9 +19,6 @@ node_modules/
 
 # Optional eslint cache
 .eslintcache
-
-# Optional REPL history
-.node_repl_history
 
 # Yarn Integrity file
 .yarn-integrity

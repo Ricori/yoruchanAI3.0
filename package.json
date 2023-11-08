@@ -1,46 +1,49 @@
 {
   "name": "yoruchan-ai",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "description": "Is my dear Yoruchan online ? (.jpg",
-  "main": "index.js",
+  "main": "index.ts",
   "scripts": {
-    "dev": "ts-node index.ts",
-    "build": "tsc",
-    "prod": "node ./build/index.js",
-    "test": "ts-node ./test/index.ts",
+    "dev": "tsx ./src/index.ts",
+    "prod": "tsx ./src/index.ts",
+    "debug": "set YDEBUG=true&& tsx ./src/index.ts",
+    "test": "set YDEBUG=true&& tsx ./test/index.ts",
     "lint": "eslint --ext .ts src/ --quiet",
     "lint-fix": "eslint --fix --ext .ts src/ --quiet"
   },
   "keywords": [
-    "robot",
-    "QQ",
-    "yoruchan",
-    "bot"
+    "QQ Robot",
+    "yoruchan"
   ],
-  "author": "Takamichika",
+  "author": "TakamiChika",
   "license": "GPL-3.0",
+  "type": "module",
   "dependencies": {
-    "axios": "0.24.0",
-    "canvas": "2.8.0",
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.11",
     "cq-websocket": "2.1.1",
+    "form-data": "^4.0.0",
     "koa": "2.13.1",
     "koa-router": "10.0.0",
     "lodash": "^4.17.21",
-    "nana-api": "1.1.4",
-    "toad-scheduler": "^1.6.0"
+    "nhentai-api": "^3.4.3",
+    "openai": "^4.16.1",
+    "toad-scheduler": "^3.0.0",
+    "tunnel": "^0.0.6"
   },
   "devDependencies": {
     "@types/koa": "^2.13.3",
     "@types/koa-router": "^7.4.2",
     "@types/lodash": "^4.14.170",
     "@types/node": "^14.17.1",
+    "@types/tunnel": "^0.0.3",
     "@typescript-eslint/eslint-plugin": "^5.7.0",
     "@typescript-eslint/parser": "^5.7.0",
     "eslint": "^8.4.1",
     "eslint-config-airbnb-base": "^15.0.0",
     "eslint-config-airbnb-typescript": "^16.1.0",
     "eslint-plugin-import": "^2.25.3",
-    "ts-node": "^9.1.1",
+    "tsx": "^3.14.0",
     "typescript": "^4.3.2"
   }
 }

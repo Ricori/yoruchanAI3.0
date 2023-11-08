@@ -1,27 +1,46 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
-    "outDir": "./build",
-    "strict": true,
-    "target": "es2017",
-    "lib": ["es2015", "es2016", "es2017"],
-    "allowJs": false,
+    "module": "ESNext",
+    "target": "ES2020",
+    "lib": [
+      "ESNext"
+    ],
+    "outDir": "build",
+    "strict": false,
+    "allowJs": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "strictNullChecks": true,
     "declaration": false,
     "skipDefaultLibCheck": true,
     "skipLibCheck": true,
-    "strictNullChecks": true,
     "strictFunctionTypes": true,
     "strictPropertyInitialization": true,
     "noImplicitThis": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "moduleResolution": "node",
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ]
+    }
   },
-  "include": ["index.ts", "config.ts", "./src"],
-  "exclude": ["node_modules", "build"]
+  "include": [
+    "src",
+    "test"
+  ],
+  "exclude": [
+    "node_modules",
+    "build"
+  ]
 }

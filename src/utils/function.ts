@@ -1,3 +1,5 @@
+import { getCQCodesFromStr } from './msgCode';
+
 /** 返回文本数组中随机文本 */
 export function randomText(textArr: string[]) {
   const i = Math.floor(Math.random() * textArr.length);
@@ -26,17 +28,11 @@ export function hasImage(msg: string) {
  * @returns 图片URL数组
  */
 export function getImgs(msg: string) {
-  const reg = /\[CQ:image,file=([^,]+),url=([^\]]+)\]/g;
-  const result = [];
-  let search = reg.exec(msg);
-  while (search) {
-    result.push({
-      file: search[1],
-      url: search[2],
-    });
-    search = reg.exec(msg);
-  }
-  return result;
+  const cqimgs = getCQCodesFromStr(msg).filter((cq) => cq.type === 'image');
+  return cqimgs.map((cq) => {
+    const data = cq.pickData(['file', 'url']);
+    return data;
+  });
 }
 
 /** 判断消息是否回复消息
@@ -47,6 +43,14 @@ export function hasReply(msg: string) {
   return msg.indexOf('[CQ:reply') !== -1;
 }
 
+/** 判断消息重是否有@人
+ * @param {string} msg 消息
+ * @returns 有则返回true
+ */
+export function hasAt(msg: string) {
+  return msg.indexOf('[CQ:at') !== -1;
+}
+
 /** 从消息中提取回复reply id
  * @param {string} msg
  */
@@ -54,10 +58,9 @@ export function getReplyMsgId(msg: string) {
   const reg = /\[CQ:reply,id=([^,]+)\]/;
   const search = reg.exec(msg);
   if (search) {
-    return search[1]
-  } else {
-    return 0
+    return search[1];
   }
+  return 0;
 }
 
 /** 从消息中提取回复forward id
@@ -67,8 +70,19 @@ export function getForwardMessageId(msg: string) {
   const reg = /\[CQ:forward,id=([^,]+)\]/;
   const search = reg.exec(msg);
   if (search) {
-    return search[1]
-  } else {
-    return 0
+    return search[1];
   }
+  return 0;
 }
+
+/** 从消息中去除@和replay文本
+ * @param {string} msg
+ */
+export function deleteAtFromMsg(msg: string) {
+  const reg = /\[CQ:at,qq=([^,]+)\]/g;
+  const reg2 = /\[CQ:reply,id=([^,]+)\]/;
+  return msg.replace(reg, '').replace(reg2, '').trimStart();
+}
+
+/** sleep */
+export const sleep = (seconds: number) => new Promise((resolve) => setTimeout(resolve, seconds));

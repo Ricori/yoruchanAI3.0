@@ -1,29 +1,21 @@
 import { ToadScheduler, SimpleIntervalJob } from 'toad-scheduler';
 import { printLog } from '../utils/print';
 
-export default class YTime {
+class YoruSchedule {
 
-  static instance: YTime;
   private scheduler = new ToadScheduler();
 
-  static getInstance() {
-    if (!YTime.instance) {
-      YTime.instance = new YTime();
-    }
-    return YTime.instance;
-  }
-
-  initJobList(jobList: SimpleIntervalJob[]) {
+  loadJob(list: SimpleIntervalJob[]) {
     let count = 0;
-    jobList.forEach(job => {
+    list.forEach((job) => {
       try {
         this.scheduler.addSimpleIntervalJob(job);
         count += 1;
       } catch (error) {
-        printLog('Scheduled task Add Error.')
+        printLog('[YoruSchedule] Scheduled task Add Error.');
       }
-    })
-    printLog(`Successfully added ${count} scheduled tasks.`)
+    });
+    printLog(`[YoruSchedule] Successfully added ${count} scheduled tasks.`);
   }
 
   getById(id: string) {
@@ -39,11 +31,12 @@ export default class YTime {
   }
 
   stopAll() {
-    this.scheduler.stop()
+    this.scheduler.stop();
   }
 
   removeById(id: string) {
-    return this.scheduler.removeById(id)
+    return this.scheduler.removeById(id);
   }
-
 }
+
+export default new YoruSchedule();
