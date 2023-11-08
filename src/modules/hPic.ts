@@ -3,7 +3,7 @@ import Axios from 'axios';
 import { getImgCode, getBigImgCode } from '../utils/msgCode';
 
 const API_URI = 'https://api.lolicon.app/setu/?apikey=170792005f99b428151719';
-const MY_PROXY = 'https://i.pixiv.cat'; // or http://pximg.cdn.kvv.me
+const MY_PROXY = 'https://i.pixiv.cat/'; // or http://pximg.cdn.kvv.me
 
 export default async function getHPic(
   {
@@ -26,7 +26,7 @@ export default async function getHPic(
     }
     const { data } = res1.data;
     for (const item of data) {
-      const imgurl = item.url.replace('https://i.pximg.net', MY_PROXY).replace('https://i.pixiv.re/', MY_PROXY);
+      const imgurl = item.url.replace('https://i.pximg.net/', MY_PROXY).replace('https://i.pixiv.re/', MY_PROXY);
       let resultMsg;
       if (bigMode) {
         resultMsg = getBigImgCode(imgurl);
