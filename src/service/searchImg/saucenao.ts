@@ -3,13 +3,45 @@ import Cheerio from 'cheerio';
 import { getImgCode } from '@/utils/msgCode';
 import { printError } from '@/utils/print';
 
+enum SnDBEnum {
+  ALL = 999,
+  PIXIV = 5,
+  DANBOORU = 9,
+  BOOK = 18,
+  ANIME = 21,
+}
+
+interface ISaucenaoResult {
+  header: {
+    similarity: string,
+    thumbnail: string,
+    index_name: string
+  },
+  data: {
+    ext_urls: string[],
+    title: string,
+    pixiv_id: number,
+    member_name: string,
+    member_id?: string,
+    author_name: string,
+    jp_name: string,
+    creator?: string,
+    source?: string,
+  }
+}
+
+interface ISaucenaoResponse {
+  header: any,
+  results: ISaucenaoResult[]
+}
+
 /**
  * saucenao搜索
  *
  * @param {string} imgURL 图片地址
  */
 export default async function saucenaoSearch(imgURL: string) {
-  let res;
+  let res: ISaucenaoResult;
   const ret = await saucenaoFetch(imgURL);
   if (ret === null) {
     return {
@@ -134,35 +166,6 @@ export default async function saucenaoSearch(imgURL: string) {
   };
 }
 
-enum SnDBEnum {
-  ALL = 999,
-  PIXIV = 5,
-  DANBOORU = 9,
-  BOOK = 18,
-  ANIME = 21,
-}
-
-interface ISaucenaoResult {
-  header: any,
-  results: {
-    header: {
-      similarity: string,
-      thumbnail: string,
-      index_name: string
-    },
-    data: {
-      ext_urls: string[],
-      title: string,
-      pixiv_id: number,
-      member_name: string,
-      member_id?: string,
-      author_name: string,
-      jp_name: string,
-      creator?: string,
-      source?: string,
-    }
-  }[]
-}
 
 /**
  * saucenao请求
@@ -175,7 +178,7 @@ function saucenaoFetch(imgURL: string) {
     numres: 1, // 结果数量
     url: imgURL,
   };
-  return Axios.get<ISaucenaoResult>('https://saucenao.com/search.php', {
+  return Axios.get<ISaucenaoResponse>('https://saucenao.com/search.php', {
     params,
     responseType: 'json',
     timeout: 8000,

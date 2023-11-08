@@ -1,7 +1,7 @@
 
 import yorubot from '@/core/yoruBot';
 import yoruSchedule from '@/core/yoruSchedule';
-import BilibiliNewSharedJob from './tasks/bilibili';
+import BilibiliNewSharedJob from '@/tasks/bilibili';
 import RequestFriendModule from '@/modules/request/requestFriend';
 import AdminModule from '@/modules/admin/admin';
 import ImageSearchModule from '@/modules/general/imageSearch';
