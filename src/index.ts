@@ -1,39 +1,42 @@
 
 import yorubot from '@/core/yoruBot';
 import yoruSchedule from '@/core/yoruSchedule';
-import { requestFirendListener } from './listener/request/requestFriend';
-import { adminMessageListener } from './listener/message/admin';
-import { commonMessageListener, defalutMessageListener } from './listener/message/common';
-import { groupMessageListener } from './listener/message/group';
 import BilibiliNewSharedJob from './tasks/bilibili';
+import RequestFriendModule from '@/modules/request/requestFriend';
+import AdminModule from '@/modules/admin/admin';
+import ImageSearchModule from '@/modules/general/imageSearch';
+import HPicModule from '@/modules/general/hPic';
+import DefaultReplyModule from '@/modules/general/default';
+import RepeaterModule from '@/modules/group/repeater';
 
+// 加载好友请求模块
+yorubot.loadModule('request', [RequestFriendModule]);
 
-// 绑定好友请监听
-yorubot.bindRequestFirendListener(requestFirendListener);
-
-// 绑定私聊消息监听
-yorubot.bindPrivateMessageListeners([
-  adminMessageListener,
-  commonMessageListener,
-  defalutMessageListener,
+// 加载私聊消息模块
+yorubot.loadModule('private', [
+  AdminModule,
+  ImageSearchModule,
+  HPicModule,
+  DefaultReplyModule
 ]);
 
-// 绑定群@消息监听
-yorubot.bindGroupAtBotMessageListeners([
-  commonMessageListener,
-  defalutMessageListener,
+// 加载群@消息模块
+yorubot.loadModule('groupAt', [
+  ImageSearchModule,
+  HPicModule,
+  DefaultReplyModule
 ]);
 
-// 绑定群所有消息默认监听
-yorubot.bindGroupCommonMessageListeners([
-  groupMessageListener,
+// 加载群消息默认监听
+yorubot.loadModule('group', [
+  HPicModule,
+  RepeaterModule
 ]);
 
-// 启动 Bot 连接
-yorubot.start();
-
-// 初始化并启动定时任务
-yoruSchedule.initJobList([
+// 加载定时任务
+yoruSchedule.loadJob([
   BilibiliNewSharedJob,
 ]);
 
+// 夜夜酱，启 —— 动 ！！
+yorubot.start();

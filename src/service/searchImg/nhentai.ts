@@ -1,10 +1,8 @@
 import { API } from 'nhentai-api';
 import { escape } from 'querystring';
-import { printError } from '../../utils/print';
-import tunnel from 'tunnel';
+import { printError } from '@/utils/print';
 
 const api = new API();
-
 
 /**
  * nhentai搜索 (无法解决代理问题，暂不启用)

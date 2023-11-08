@@ -1,6 +1,6 @@
 import Axios from 'axios';
-import { printLog } from '../utils/print';
-import { getImgCode } from '../utils/msgCode';
+import { printLog } from '@/utils/print';
+import { getImgCode } from '@/utils/msgCode';
 
 interface CardItem {
   desc: any,

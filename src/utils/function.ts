@@ -43,6 +43,14 @@ export function hasReply(msg: string) {
   return msg.indexOf('[CQ:reply') !== -1;
 }
 
+/** 判断消息重是否有@人
+ * @param {string} msg 消息
+ * @returns 有则返回true
+ */
+export function hasAt(msg: string) {
+  return msg.indexOf('[CQ:at') !== -1;
+}
+
 /** 从消息中提取回复reply id
  * @param {string} msg
  */
@@ -67,7 +75,6 @@ export function getForwardMessageId(msg: string) {
   return 0;
 }
 
-
 /** 从消息中去除@和replay文本
  * @param {string} msg
  */
@@ -76,3 +83,6 @@ export function deleteAtFromMsg(msg: string) {
   const reg2 = /\[CQ:reply,id=([^,]+)\]/;
   return msg.replace(reg, '').replace(reg2, '').trimStart();
 }
+
+/** sleep */
+export const sleep = (seconds: number) => new Promise((resolve) => setTimeout(resolve, seconds));

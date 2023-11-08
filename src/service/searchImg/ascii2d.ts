@@ -1,8 +1,8 @@
 import Axios from 'axios';
 import Cheerio from 'cheerio';
 import FormData from 'form-data';
-import { getImgCode } from '../../utils/msgCode';
-import { printError } from '../../utils/print';
+import { getImgCode } from '@/utils/msgCode';
+import { printError } from '@/utils/print';
 
 const UA = 'Mozilla / 5.0(Windows NT 10.0; Win64; x64) AppleWebKit / 537.36(KHTML, like Gecko) Chrome / 113.0.0.0 Safari / 537.36';
 

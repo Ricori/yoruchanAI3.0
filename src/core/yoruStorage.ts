@@ -10,7 +10,7 @@ interface RepeaterLog {
 class YoruStorage {
 
   /** 自动同意好友请求的名单  */
-  private approveFriendIds: number[] = [];
+  private toBeAddedList: number[] = [];
 
   /** 复读记录  */
   private repeaterData: Record<number | string, RepeaterLog | undefined> = {};
@@ -22,17 +22,13 @@ class YoruStorage {
   private groupChatConversations: Record<number, ChatCompletionMessageParam[]> = {};
 
 
-  /** 新增好友白名单 */
-  addApproveFriendIds = (userId: number) => {
-    this.approveFriendIds = [...this.approveFriendIds, userId];
-  };
-
-  /** 检查用户是否在好友白名单中 */
-  checkApproveFriend = (userId: number) => this.approveFriendIds.indexOf(userId) > -1;
-
-  /** 在好友白名单中删除某用户 */
-  deleteApproveFriend = (userId: number) => {
-    this.approveFriendIds = this.approveFriendIds.filter((id) => id !== userId);
+  /** 新增好友到待添加名单 */
+  joinToBeAddedList = (userId: number) => this.toBeAddedList = [...this.toBeAddedList, userId];
+  /** 检查是否在待添加的好友名单中 */
+  getIsInToBeAddedList = (userId: number) => this.toBeAddedList.indexOf(userId) > -1;
+  /** 在待添加的好友名单中删除某用户 */
+  deleteIdFromToBeAddedList = (userId: number) => {
+    this.toBeAddedList = this.toBeAddedList.filter((id) => id !== userId);
   };
 
   /** 记录某群复读情况
@@ -41,7 +37,7 @@ class YoruStorage {
    * @param {string} msg 消息
    * @returns 如果已经复读则返回0，否则返回当前复读次数
    */
-  saveRepeaterLog(groupId: number, userId: number, msg: string) {
+  saveLogAndGetRepeaterTimes(groupId: number, userId: number, msg: string) {
     const logObj = this.repeaterData[groupId];
     // 没有记录或另起复读则新建记录
     if (!logObj || logObj.msg !== msg) {

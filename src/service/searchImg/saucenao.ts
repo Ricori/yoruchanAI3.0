@@ -1,7 +1,7 @@
 import Axios from 'axios';
 import Cheerio from 'cheerio';
-import { getImgCode } from '../../utils/msgCode';
-import { printError } from '../../utils/print';
+import { getImgCode } from '@/utils/msgCode';
+import { printError } from '@/utils/print';
 
 /**
  * saucenao搜索

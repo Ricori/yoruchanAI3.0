@@ -5,17 +5,17 @@ class YoruSchedule {
 
   private scheduler = new ToadScheduler();
 
-  initJobList(jobList: SimpleIntervalJob[]) {
+  loadJob(list: SimpleIntervalJob[]) {
     let count = 0;
-    jobList.forEach((job) => {
+    list.forEach((job) => {
       try {
         this.scheduler.addSimpleIntervalJob(job);
         count += 1;
       } catch (error) {
-        printLog('Scheduled task Add Error.');
+        printLog('[YoruSchedule] Scheduled task Add Error.');
       }
     });
-    printLog(`Successfully added ${count} scheduled tasks.`);
+    printLog(`[YoruSchedule] Successfully added ${count} scheduled tasks.`);
   }
 
   getById(id: string) {

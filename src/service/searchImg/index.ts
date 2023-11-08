@@ -1,5 +1,4 @@
 import saucenaoSearch from './saucenao';
-// import nhentaiSearch from './nhentai';
 import whatAnimeSearch from './whatanime';
 import ascii2dSearch from './ascii2d';
 

@@ -1,9 +1,9 @@
 import { SimpleIntervalJob, AsyncTask } from 'toad-scheduler';
 import yorubot from '@/core/yoruBot';
 import yoruStorage from '@/core/yoruStorage';
-import { printLog } from '../utils/print';
-import getBiliDynamic from '../service/biliDynamic';
-import { getImgCode } from '../utils/msgCode';
+import { printLog } from '@/utils/print';
+import getBiliDynamic from '@/service/bilibili/dynamic';
+import { getImgCode } from '@/utils/msgCode';
 
 const LIYUU_UID = 4549624;
 
