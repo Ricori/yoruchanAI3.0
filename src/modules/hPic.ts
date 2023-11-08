@@ -26,7 +26,7 @@ export default async function getHPic(
     }
     const { data } = res1.data;
     for (const item of data) {
-      const imgurl = item.url.replace('https://i.pximg.net', MY_PROXY);
+      const imgurl = item.url.replace('https://i.pximg.net', MY_PROXY).replace('https://i.pixiv.re/', MY_PROXY);
       let resultMsg;
       if (bigMode) {
         resultMsg = getBigImgCode(imgurl);
@@ -37,7 +37,7 @@ export default async function getHPic(
     }
     return resultMsgs;
   } catch (err) {
-    console.error(`${new Date().toLocaleString()} [Hpic Error]}\n${err}`);
+    console.error(`${new Date().toLocaleString()} [Hpic Error]\n${err}`);
     return ['色图库被烧，没法取色图啦，可以联系我的主人解决哦'];
   }
 }
