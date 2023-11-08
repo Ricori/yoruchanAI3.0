@@ -82,7 +82,7 @@ class YoruStorage {
   /** 设置某qq的群会话 */
   setGroupChatConversations(userId: number, messages: ChatCompletionMessageParam[]) {
     const conversation = this.groupChatConversations[userId];
-    if (conversation && conversation.length > 8) {
+    if (conversation && conversation.length > 9) {
       messages.shift();
       this.groupChatConversations[userId] = messages;
     } else {
