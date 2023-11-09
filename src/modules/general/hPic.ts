@@ -71,7 +71,7 @@ export default class HPicModule extends YoruModuleBase<PrivateMessageData | Grou
         for (const url of resultImgUrls) {
           const msg = bigMode ? getBigImgCode(url) : getImgCode(url);
           yorubot.sendGroupMsg(groupId, msg);
-          await sleep(1500);
+          await sleep(4000);
         }
       }
     } else {
