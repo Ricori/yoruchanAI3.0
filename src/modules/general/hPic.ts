@@ -5,15 +5,13 @@ import { hasText, sleep } from '@/utils/function';
 import getHPic from "@/service/hpic/hPic";
 import { getBigImgCode, getImgCode } from "@/utils/msgCode";
 
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.66 Safari/537.36';
-
 enum HPicLevel {
   /** All ages */
   SAFE = 0,
-  /** All ages and R18 mixed */
-  MIX = 1,
   /** R18 Only */
-  R18 = 2,
+  R18 = 1,
+  /** All ages and R18 mixed */
+  MIX = 2,
 }
 
 export default class HPicModule extends YoruModuleBase<PrivateMessageData | GroupMessageData> {
@@ -71,7 +69,7 @@ export default class HPicModule extends YoruModuleBase<PrivateMessageData | Grou
         for (const url of resultImgUrls) {
           const msg = bigMode ? getBigImgCode(url) : getImgCode(url);
           yorubot.sendGroupMsg(groupId, msg);
-          await sleep(1500);
+          await sleep(4000);
         }
       }
     } else {

@@ -51,7 +51,7 @@ export interface BotConfig {
     whiteGroupOnly: boolean;
     /** 白名单群号 */
     whiteGroupIds: number[];
-    /** 白名单群色图定制等级, 0=全年龄,1=混合,2=r18Only */
+    /** 白名单群色图定制等级, 0=全年龄,1=r18Only,2=混合 */
     whiteGroupCustomLimit: number,
   },
 }
