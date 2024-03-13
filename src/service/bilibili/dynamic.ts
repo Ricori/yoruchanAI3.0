@@ -36,14 +36,13 @@ export default async function getBiliDynamic(uid: number) {
     },
     headers: {
       referer: `https://space.bilibili.com/${uid}/`,
-    }
-  }).catch(err => {
+    },
+  }).catch((err) => {
     printLog(`[Service Error] GetBiliDynamic API Error: ${err.message}`);
-    return;
   }) ?? {}).data;
   if (result && result.data && result.data.cards?.length > 0) {
     const card = result.data.cards[0] as CardItem;
-    const uname = card.desc?.user_profile?.info?.uname || ''
+    const uname = card.desc?.user_profile?.info?.uname || '';
     const item = getItem(card);
     const channel = {
       title: `【${uname} 发新动态啦！】`,
@@ -53,7 +52,7 @@ export default async function getBiliDynamic(uid: number) {
     } as RssChannel;
     return channel;
   }
-  return;
+  return undefined;
 }
 
 
@@ -132,130 +131,130 @@ desc.type
 function getItem(item: any) {
   let card;
   try {
-    card = JSON.parse(item.card || {})
+    card = JSON.parse(item.card || {});
   } catch {
     return;
   }
-  const data = card.item || card;
-  const origin = card.origin;
+  const itemData = card.item || card;
+  const { origin } = card;
   // img
-  let images: string[] = []
+  let images: string[] = [];
   const getImgs = (data: any) => {
-    const imgs: string[] = []
+    const imgs: string[] = [];
     // 动态图片
     if (data.pictures) {
       for (let i = 0; i < data.pictures.length; i++) {
-        imgs.push(data.pictures[i].img_src)
+        imgs.push(data.pictures[i].img_src);
       }
     }
     // 专栏封面
     if (data.image_urls) {
       for (let i = 0; i < data.image_urls.length; i++) {
-        imgs.push(data.image_urls[i])
+        imgs.push(data.image_urls[i]);
       }
     }
     // 视频封面
     if (data.pic) {
-      imgs.push(data.pic)
+      imgs.push(data.pic);
     }
     // 音频/番剧/直播间封面
     if (data.cover) {
-      imgs.push(data.cover)
+      imgs.push(data.cover);
     }
     // 专题页封面
     if (data?.sketch?.cover_url) {
-      imgs.push(data.sketch.cover_url)
+      imgs.push(data.sketch.cover_url);
     }
-    return imgs
-  }
+    return imgs;
+  };
 
-  images = images.concat(getImgs(data))
+  images = images.concat(getImgs(itemData));
 
   if (origin) {
-    images = images.concat(getImgs(origin.item || origin))
+    images = images.concat(getImgs(origin.item || origin));
   }
   // link
-  let link = ''
-  if (data.dynamic_id_str) {
-    link = `https://t.bilibili.com/${data.dynamic_id_str}`
+  let link = '';
+  if (itemData.dynamic_id_str) {
+    link = `https://t.bilibili.com/${itemData.dynamic_id_str}`;
   } else if (item?.desc?.dynamic_id_str) {
-    link = `https://t.bilibili.com/${item.desc.dynamic_id_str}`
+    link = `https://t.bilibili.com/${item.desc.dynamic_id_str}`;
   }
-  const getTitle = (data: any) => data.title || ''
+  const getTitle = (data: any) => data.title || '';
   const getDes = (data: any) => {
     if (!data) {
-      return ''
+      return '';
     }
-    let des = data.desc || data.description || data.content || data.summary || (data?.vest?.content ? data.vest.content : '') + (data?.sketch ? `\n${data.sketch?.title}\n${data.sketch?.desc_text}` : '') || data.intro || data.update_info || ''
+    let des = data.desc || data.description || data.content || data.summary || (data?.vest?.content ? data.vest.content : '') + (data?.sketch ? `\n${data.sketch?.title}\n${data.sketch?.desc_text}` : '') || data.intro || data.update_info || '';
     if (item?.display?.emoji_info) {
-      const emoji = item?.display?.emoji_info?.emoji_details
+      const emoji = item?.display?.emoji_info?.emoji_details;
       emoji?.forEach((e: any) => {
         des = des.replace(
           new RegExp(`\\${e.text}`, 'g'),
           getImgCode(`${e.url}@40w_1e_1c.png`),
-        )
-      })
+        );
+      });
     }
-    return des
-  }
+    return des;
+  };
   const getOriginDes = (data: any) => {
     if (!data) {
-      return ''
+      return '';
     }
-    let text = ''
+    let text = '';
     if (data?.apiSeasonInfo?.title) {
-      text += `\n//转发自: ${data.apiSeasonInfo.title}`
+      text += `\n//转发自: ${data.apiSeasonInfo.title}`;
     }
     if (data?.index_title) {
-      text += `\n${data.index_title}`
+      text += `\n${data.index_title}`;
     }
-    return text
-  }
-  const getOriginName = (data: any) => data.uname || data.author?.name || data.upper || data.user?.uname || data.user?.name || data?.owner?.name || data?.up_info?.name || ''
+    return text;
+  };
+  const getOriginName = (data: any) => data.uname || data.author?.name || data.upper || data.user?.uname || data.user?.name || data?.owner?.name || data?.up_info?.name || '';
   const getOriginTitle = (data: any) => {
     if (!data) {
-      return ''
+      return '';
     }
-    let title = ''
+    let title = '';
     if (data?.title) {
-      title += `${data.title}\n`
+      title += `${data.title}\n`;
     }
     if (data?.subtitle) {
-      title += `${data.subtitle}\n`
+      title += `${data.subtitle}\n`;
     }
-    return title
-  }
+    return title;
+  };
   const getUrl = (data: any) => {
     if (!data) {
-      return ''
+      return '';
     }
-    const type: number = item?.desc?.type
+    const type: number = item?.desc?.type;
     if (data.aid) {
-      const bvid = item?.desc?.bvid || item?.desc?.origin?.bvid
-      return `\n视频地址：https://www.bilibili.com/video/${bvid}`
+      const bvid = item?.desc?.bvid || item?.desc?.origin?.bvid;
+      return `\n视频地址：https://www.bilibili.com/video/${bvid}`;
     }
     if (data.image_urls) {
-      return `\n专栏地址：https://www.bilibili.com/read/cv${data?.id}`
+      return `\n专栏地址：https://www.bilibili.com/read/cv${data?.id}`;
     }
     if (data.upper) {
-      return `\n音频地址：https://www.bilibili.com/audio/au${data?.id}`
+      return `\n音频地址：https://www.bilibili.com/audio/au${data?.id}`;
     }
     if (data.roomid) {
-      return `\n直播间地址：https://live.bilibili.com/${data?.roomid}`
+      return `\n直播间地址：https://live.bilibili.com/${data?.roomid}`;
     }
     if (data.sketch) {
-      return `\n活动地址：${data?.sketch?.target_url}`
+      return `\n活动地址：${data?.sketch?.target_url}`;
     }
     if (data.url) {
-      return `\n地址：${data?.url}`
+      return `\n地址：${data?.url}`;
     }
-    return ''
-  }
+    return '';
+  };
   return {
-    title: getTitle(data),
+    title: getTitle(itemData),
     link,
-    description: `${getDes(data)}${origin && getOriginName(origin) ? `\n//@${getOriginName(origin)}: ${getOriginTitle(origin.item || origin)}${getDes(origin.item || origin)}` : `${getOriginDes(origin)}`}${getUrl(data)}${getUrl(origin)}`,
+    description: `${getDes(itemData)}${origin && getOriginName(origin) ? `\n//@${getOriginName(origin)}: ${getOriginTitle(origin.item || origin)}${getDes(origin.item || origin)}` : `${getOriginDes(origin)}`}${getUrl(itemData)}${getUrl(origin)}`,
     images,
     pubDate: Number(item.desc.timestamp * 1000),
-  } as RssItem
+  } as RssItem;
 }

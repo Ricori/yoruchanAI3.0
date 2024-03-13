@@ -46,6 +46,7 @@
     "no-nested-ternary": "off",
     "linebreak-style": "off",
     "no-multiple-empty-lines": "off",
-    "no-console": "off"
+    "no-console": "off",
+    "no-plusplus": "off"
   }
 }
