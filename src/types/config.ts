@@ -33,8 +33,8 @@ export interface BotConfig {
   biliDynamicPush: {
     /** 是否开启功能 */
     enable: boolean;
-    /** 推送到的群号 */
-    group: number[];
+    /** 推送配置 {b站uid : 要推送的群号列表 } */
+    config: Record<string, number[]>;
   },
   /** openAI */
   openAi: {

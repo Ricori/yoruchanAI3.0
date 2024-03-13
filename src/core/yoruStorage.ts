@@ -8,7 +8,6 @@ interface RepeaterLog {
 }
 
 class YoruStorage {
-
   /** 自动同意好友请求的名单  */
   private toBeAddedList: number[] = [];
 
@@ -16,16 +15,18 @@ class YoruStorage {
   private repeaterData: Record<number | string, RepeaterLog | undefined> = {};
 
   /** b站up最新动态时间  */
-  private biliLastestDynamicTime: Record<number, number> = {};
+  private biliLastestDynamicTime: Record<string, number> = {};
 
   /** 群消息对话（每个id最多记录8条）  */
   private groupChatConversations: Record<number, ChatCompletionMessageParam[]> = {};
 
 
   /** 新增好友到待添加名单 */
-  joinToBeAddedList = (userId: number) => this.toBeAddedList = [...this.toBeAddedList, userId];
+  joinToBeAddedList = (userId: number) => { this.toBeAddedList = [...this.toBeAddedList, userId]; };
+
   /** 检查是否在待添加的好友名单中 */
   getIsInToBeAddedList = (userId: number) => this.toBeAddedList.indexOf(userId) > -1;
+
   /** 在待添加的好友名单中删除某用户 */
   deleteIdFromToBeAddedList = (userId: number) => {
     this.toBeAddedList = this.toBeAddedList.filter((id) => id !== userId);
@@ -66,12 +67,12 @@ class YoruStorage {
   }
 
   /** 设置某up最新动态时间 */
-  setBiliLastestDynamicTime(uid: number, time: number) {
+  setBiliLastestDynamicTime(uid: string, time: number) {
     this.biliLastestDynamicTime[uid] = time;
   }
 
   /** 获取某up最新动态时间 */
-  getBiliLastestDynamicTime(uid: number) {
+  getBiliLastestDynamicTime(uid: string) {
     return this.biliLastestDynamicTime[uid] ?? 0;
   }
 

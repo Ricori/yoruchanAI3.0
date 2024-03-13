@@ -31,10 +31,10 @@ export class YoruCore {
   /** Request modules currently loaded */
   requestMessageModuleList: typeof YoruModuleBase<RequestFirendMessageData>[] = [];
 
-  /** private message modules currently loaded  */
+  /** Private message modules currently loaded  */
   privateMessageModuleList: typeof YoruModuleBase<PrivateMessageData>[] = [];
 
-  /** group message currently loaded  */
+  /** Group message currently loaded  */
   groupAtMessageModuleList: typeof YoruModuleBase<GroupMessageData>[] = [];
 
   /** Request modules currently loaded  */

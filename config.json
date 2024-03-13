@@ -20,9 +20,15 @@
     },
     "biliDynamicPush": {
       "enable": true,
-      "group": [
-        914620769
-      ]
+      "config": {
+        "4549624": [
+          914620769,
+          870677348
+        ],
+        "13184888": [
+          870677348
+        ]
+      }
     },
     "openAi": {
       "enable": true,

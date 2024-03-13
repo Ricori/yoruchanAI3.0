@@ -29,7 +29,7 @@ export interface RssChannel {
   item: RssItem
 }
 
-export default async function getBiliDynamic(uid: number) {
+export default async function getBiliDynamic(uid: string) {
   const result = (await Axios.get('https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/space_history', {
     params: {
       host_uid: uid,
