@@ -13,7 +13,6 @@ type Module = typeof YoruModuleBase<RequestFirendMessageData> |
 
 
 export class YoruCore {
-
   /** CQWebSocket Object */
   protected cqs: CQWebSocket;
 
@@ -31,10 +30,13 @@ export class YoruCore {
 
   /** Request modules currently loaded */
   requestMessageModuleList: typeof YoruModuleBase<RequestFirendMessageData>[] = [];
+
   /** private message modules currently loaded  */
   privateMessageModuleList: typeof YoruModuleBase<PrivateMessageData>[] = [];
+
   /** group message currently loaded  */
   groupAtMessageModuleList: typeof YoruModuleBase<GroupMessageData>[] = [];
+
   /** Request modules currently loaded  */
   groupMessageModuleList: typeof YoruModuleBase<GroupMessageData>[] = [];
 
@@ -67,7 +69,7 @@ export class YoruCore {
   loadModule(type: 'group', ModuleList: typeof YoruModuleBase<(PrivateMessageData | GroupMessageData) >[]): void;
   /** Loaded modules in different message type */
   loadModule(type: 'request' | 'private' | 'groupAt' | 'group', ModuleList: typeof YoruModuleBase[]) {
-    this[type + 'MessageModuleList']?.push(...ModuleList);
+    this[`${type}MessageModuleList`]?.push(...ModuleList);
   }
 
   /** Module flow */
@@ -78,20 +80,21 @@ export class YoruCore {
       try {
         // check conditions
         const hit = await obj.checkConditions();
-        if (!hit) continue;
-        // run
-        await obj.run();
-        // get res
-        const { finished, extraData } = obj.processingNextData();
-        // check finished
-        if (finished) return;
-        // extraData
-        extra = extraData;
+        if (hit) {
+          // run
+          await obj.run();
+          // get res
+          const { finished, extraData } = obj.processingNextData();
+          // check finished
+          if (finished) return;
+          // extraData
+          extra = extraData;
+        }
       } catch (error) {
         printLog(`[${Module.NAME || 'MODULE'} Error] ${error}`);
       }
     }
-  };
+  }
 
   /** Start bot */
   start() {
@@ -107,23 +110,23 @@ export class YoruCore {
     });
     // Bind request firend event listener
     this.cqs.on('request.friend', async (data: Record<string, any>) => {
-      this.flow(this.requestMessageModuleList, data)
+      this.flow(this.requestMessageModuleList, data);
     });
     // Bind private message listener
     this.cqs.on('message.private', async (_, data: any) => {
-      this.flow(this.privateMessageModuleList, data)
+      this.flow(this.privateMessageModuleList, data);
     });
-    // Bind group at bot message listener 
+    // Bind group at bot message listener
     this.cqs.on('message.group.@.me', async (_, data: any) => {
-      this.flow(this.groupAtMessageModuleList, data)
+      this.flow(this.groupAtMessageModuleList, data);
     });
-    // Bind group common message listener 
+    // Bind group common message listener
     this.cqs.on('message.group', async (_, data: any) => {
-      this.flow(this.groupMessageModuleList, data)
+      this.flow(this.groupMessageModuleList, data);
     });
     // ws connect
     this.cqs.connect();
-  };
+  }
 
   /** Get bot connecting status */
   getIsBotConnecting() {
@@ -131,14 +134,12 @@ export class YoruCore {
       return true;
     }
     return false;
-  };
+  }
 
   /** Check connection status */
   checkBotState() {
     if (!this.getIsBotConnecting()) {
-      printError('[Error] Bot already disconnected, unable to perform action.')
-      return;
+      printError('[Error] Bot already disconnected, unable to perform action.');
     }
   }
-
 }

@@ -1,6 +1,6 @@
 {
   "name": "yoruchan-ai",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Is my dear Yoruchan online ? (.jpg",
   "main": "index.ts",
   "scripts": {

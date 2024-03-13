@@ -4,15 +4,10 @@ import { SimpleMessageData } from '@/types/event';
 import { YoruCore } from './yoruCore';
 
 class YoruBot extends YoruCore {
-
-  constructor() {
-    super();
-  }
-
   /** 处理好友请求 */
   setFriendAddRequest(flag: string | number, approve: boolean) {
     this.cqs('set_friend_add_request', { flag: `${flag}`, approve });
-  };
+  }
 
   /** 处理拉群请求 */
   setGroupAddRequest(flag: string | number, approve: boolean) {
@@ -22,7 +17,7 @@ class YoruBot extends YoruCore {
       approve,
       reason: '该群无授权，请联系Yoru管理员',
     });
-  };
+  }
 
   /** 发送私聊消息
    * @param {number} userId 对方QQ号
@@ -39,7 +34,7 @@ class YoruBot extends YoruCore {
       message: msg,
       auto_escape: !!plainText,
     });
-  };
+  }
 
   /** 发送群消息
    * @param {number} groupId 群号
@@ -58,7 +53,7 @@ class YoruBot extends YoruCore {
       message: `${prefix}${msg}`,
       auto_escape: !!plainText,
     });
-  };
+  }
 
   /** 发送群回复消息
    * @param {number} groupId 群号
@@ -75,7 +70,7 @@ class YoruBot extends YoruCore {
       group_id: groupId,
       message: prefix + msg,
     });
-  };
+  }
 
   /** 获取合并转发
    * @param {string} forwardId 合并转发id
@@ -89,7 +84,7 @@ class YoruBot extends YoruCore {
       message_id: forwardId,
     });
     return res;
-  };
+  }
 
   /** 发送合并转发
    * @param {number} groupId 对方QQ号
@@ -98,13 +93,13 @@ class YoruBot extends YoruCore {
   async sendGroupForwardMsg(groupId: number, msg: any[]) {
     if (msg.length === 0) return;
     if (this.debugMode) {
-      printLog(`[Send Group Forward Msg]\n`, msg);
+      printLog('[Send Group Forward Msg]\n', msg);
     }
     this.cqs('send_group_forward_msg', {
       group_id: groupId,
       messages: msg,
     });
-  };
+  }
 
   /** 获取消息
    * @param {string} messageId 合并转发id
@@ -118,7 +113,7 @@ class YoruBot extends YoruCore {
       return res.data as SimpleMessageData;
     }
     return undefined;
-  };
+  }
 
   /** 撤回消息
    * @param {number} messageId 消息 ID
@@ -127,7 +122,7 @@ class YoruBot extends YoruCore {
     this.cqs('delete_msg', {
       message_id: messageId,
     });
-  };
+  }
 
   /** 获取图片信息
    * @param {string} file 图片缓存文件名
@@ -137,7 +132,7 @@ class YoruBot extends YoruCore {
       file,
     }) as unknown as null | { size: number; filename: string; url: string };
     return data;
-  };
+  }
 
   /** 获取中文分词[不稳定]
    * @param {string} content 内容
@@ -147,7 +142,7 @@ class YoruBot extends YoruCore {
       content,
     }) as unknown as null | { slices: string[] };
     return data;
-  };
+  }
 
   /** 下载文件到缓存目录[不稳定]
     * @param {string} url 链接地址
@@ -155,10 +150,10 @@ class YoruBot extends YoruCore {
   */
   async downloadFile(url: string, headers: string[]) {
     const data = await this.cqs('download_file', {
-      url, headers
+      url, headers,
     }) as unknown as null | { file: string };
     return data?.file;
-  };
+  }
 }
 
 export default new YoruBot();
