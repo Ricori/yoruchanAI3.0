@@ -17,20 +17,20 @@ yorubot.loadModule('private', [
   AdminModule,
   ImageSearchModule,
   HPicModule,
-  DefaultReplyModule
+  DefaultReplyModule,
 ]);
 
 // 加载群@消息模块
 yorubot.loadModule('groupAt', [
   ImageSearchModule,
   HPicModule,
-  DefaultReplyModule
+  DefaultReplyModule,
 ]);
 
 // 加载群消息默认监听
 yorubot.loadModule('group', [
   HPicModule,
-  RepeaterModule
+  RepeaterModule,
 ]);
 
 // 加载定时任务
