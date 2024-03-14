@@ -60,7 +60,7 @@ const task = new AsyncTask('biliTask', async () => {
 });
 
 
-const BilibiliNewSharedJob = new SimpleIntervalJob({ seconds: 3 }, task, { id: 'bilibiliNewShared' });
+const BilibiliNewSharedJob = new SimpleIntervalJob({ seconds: 30 }, task, { id: 'bilibiliNewShared' });
 
 // 启动bot时将动态最新时间设置为现在，防止立即推送
 Object.keys(yorubot.config.biliDynamicPush.config).forEach((uid: string) => {
