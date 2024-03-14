@@ -3,30 +3,32 @@ import { printLog } from '@/utils/print';
 import { getImgCode } from '@/utils/msgCode';
 
 interface CardItem {
-  desc: any,
-  card: any,
-  extend_json: any,
-  extra: any,
-  display: any,
+  desc: any;
+  card: any;
+  extend_json: any;
+  extra: any;
+  display: any;
 }
 interface RssItem {
-  title: string
-  author?: string
-  category?: string | string[]
-  link: string
-  description: string
-  guid?: string
-  pubDate?: number
-  images?: string[]
-  enclosure_url?: string
-  enclosure_length?: string
-  enclosure_type?: string
+  title: string;
+  author?: string;
+  category?: string | string[];
+  link: string;
+  description: string;
+  guid?: string;
+  pubDate?: number;
+  images?: string[];
+  enclosure_url?: string;
+  enclosure_length?: string;
+  enclosure_type?: string;
 }
-export interface RssChannel {
-  title: string
-  link: string
-  description: string
-  item: RssItem
+export interface Post {
+  title: string;
+  link: string;
+  description: string;
+  images: string[];
+  pubDate: number;
+  dylink: string;
 }
 
 export default async function getBiliDynamic(uid: string) {
@@ -44,14 +46,30 @@ export default async function getBiliDynamic(uid: string) {
     const card = result.data.cards[0] as CardItem;
     const uname = card.desc?.user_profile?.info?.uname || '';
     const item = getItem(card);
-    const channel = {
-      title: `【${uname} 发新动态啦！】`,
+
+    let title = '';
+    if (item?.title) {
+      if (item.title.startsWith('【')) {
+        title = item.title;
+      } else {
+        title = `【${item.title}】`;
+      }
+    } else {
+      title = `【${uname} 发新动态啦！】`;
+    }
+
+    const post = {
+      title,
       link: `https://space.bilibili.com/${uid}/#/dynamic`,
-      description: `${uname} 的 bilibili 动态`,
-      item,
-    } as RssChannel;
-    return channel;
+      description: item?.description || '',
+      images: item?.images ?? [],
+      pubDate: item?.pubDate ?? 0,
+      dylink: item?.link ?? '',
+    } as Post;
+
+    return post;
   }
+
   return undefined;
 }
 
@@ -195,6 +213,10 @@ function getItem(item: any) {
         );
       });
     }
+    if (des.length > 150) {
+      des = `${des.substring(0, 150)}...`;
+    }
+    des = des.replace('\n\n', '\n');
     return des;
   };
   const getOriginDes = (data: any) => {
@@ -228,7 +250,7 @@ function getItem(item: any) {
     if (!data) {
       return '';
     }
-    const type: number = item?.desc?.type;
+    // const type: number = item?.desc?.type;
     if (data.aid) {
       const bvid = item?.desc?.bvid || item?.desc?.origin?.bvid;
       return `\n视频地址：https://www.bilibili.com/video/${bvid}`;
@@ -250,10 +272,20 @@ function getItem(item: any) {
     }
     return '';
   };
+
+  const des = getDes(itemData);
+
+  let originDes = '';
+  if (origin && getOriginName(origin)) {
+    originDes = `\n//@${getOriginName(origin)}: ${getOriginTitle(origin.item || origin)}${getDes(origin.item || origin)}`;
+  } else {
+    originDes = getOriginDes(origin);
+  }
+
   return {
     title: getTitle(itemData),
     link,
-    description: `${getDes(itemData)}${origin && getOriginName(origin) ? `\n//@${getOriginName(origin)}: ${getOriginTitle(origin.item || origin)}${getDes(origin.item || origin)}` : `${getOriginDes(origin)}`}${getUrl(itemData)}${getUrl(origin)}`,
+    description: `${des}${originDes}${getUrl(itemData)}`,
     images,
     pubDate: Number(item.desc.timestamp * 1000),
   } as RssItem;

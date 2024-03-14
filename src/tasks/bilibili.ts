@@ -9,28 +9,21 @@ async function checkBiliDynamic(uid: string, groupIds: number[]) {
   try {
     const dyData = await getBiliDynamic(uid);
     if (dyData) {
-      const newTime = dyData.item.pubDate ?? 0;
+      const newTime = dyData.pubDate;
       const lastestTime = yoruStorage.getBiliLastestDynamicTime(uid);
       if (newTime > lastestTime) {
         const msgTextArr = [] as string[];
-        if (dyData.title) {
-          msgTextArr.push(dyData.title);
-        }
-        let { description } = dyData.item;
-        if (description) {
-          if (description.length > 100) {
-            description = `${description.substring(0, 150)}...`;
-          }
-          msgTextArr.push(description);
-        }
-        const images = dyData.item.images ?? [];
+        msgTextArr.push(dyData.title);
+        msgTextArr.push(dyData.description);
+
+        const images = dyData.images ?? [];
         for (let i = 0; i < images.length; i += 1) {
           msgTextArr.push(getImgCode(images[i]));
           if (i > 1) {
             break;
           }
         }
-        msgTextArr.push(`动态链接：${dyData.item.link ?? ''}`);
+        msgTextArr.push(`动态链接：${dyData.dylink}`);
         const msg = msgTextArr.join('\n');
 
         groupIds.forEach((groupId) => {
