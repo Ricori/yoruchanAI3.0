@@ -34,7 +34,9 @@ async function checkBiliDynamic(uid: string, groupIds: number[]) {
             break;
           }
         }
-        msgTextArr.push(`动态链接：${dyData.dylink}`);
+        if (!dyData.description.includes('视频地址：')) {
+          msgTextArr.push(`动态链接：${dyData.dylink}`);
+        }
         const msg = msgTextArr.join('\n');
 
         groupIds.forEach((groupId) => {
