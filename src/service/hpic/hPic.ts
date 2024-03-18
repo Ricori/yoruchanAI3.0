@@ -12,7 +12,7 @@ export default async function getHPic(hPicLevel: 0 | 1 | 2, count: number) {
     const { data } = res1.data;
     const resultUrls = [] as string[];
     for (const item of data) {
-      const url = item.url;
+      const { url } = item;
       // const imgurl = url.replace('https://i.pximg.net/', MY_PROXY).replace('https://i.pixiv.re/', MY_PROXY);
       resultUrls.push(url);
     }

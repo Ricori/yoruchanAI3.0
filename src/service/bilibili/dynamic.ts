@@ -216,7 +216,6 @@ function getItem(item: any) {
     if (des.length > 150) {
       des = `${des.substring(0, 150)}...`;
     }
-    des = des.replace('\n\n', '\n');
     return des;
   };
   const getOriginDes = (data: any) => {

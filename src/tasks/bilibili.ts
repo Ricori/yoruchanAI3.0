@@ -12,6 +12,17 @@ async function checkBiliDynamic(uid: string, groupIds: number[]) {
       const newTime = dyData.pubDate;
       const lastestTime = yoruStorage.getBiliLastestDynamicTime(uid);
       if (newTime > lastestTime) {
+        yoruStorage.setBiliLastestDynamicTime(uid, newTime);
+
+        if (uid === '629994228' && dyData.description.includes('今日速览')) {
+          if (dyData.images[0]) {
+            groupIds.forEach((groupId) => {
+              yorubot.sendGroupMsg(groupId, getImgCode(dyData.images[0]));
+            });
+          }
+          return;
+        }
+
         const msgTextArr = [] as string[];
         msgTextArr.push(dyData.title);
         msgTextArr.push(dyData.description);
@@ -29,8 +40,6 @@ async function checkBiliDynamic(uid: string, groupIds: number[]) {
         groupIds.forEach((groupId) => {
           yorubot.sendGroupMsg(groupId, msg);
         });
-
-        yoruStorage.setBiliLastestDynamicTime(uid, newTime);
       }
     }
   } catch (err) {
