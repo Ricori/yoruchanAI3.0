@@ -204,18 +204,20 @@ function getItem(item: any) {
       return '';
     }
     let des = data.desc || data.description || data.content || data.summary || (data?.vest?.content ? data.vest.content : '') + (data?.sketch ? `\n${data.sketch?.title}\n${data.sketch?.desc_text}` : '') || data.intro || data.update_info || '';
+
+    if (des.length > 150) {
+      des = `${des.substring(0, 150)}...`;
+    }
     if (item?.display?.emoji_info) {
       const emoji = item?.display?.emoji_info?.emoji_details;
       emoji?.forEach((e: any) => {
         des = des.replace(
           new RegExp(`\\${e.text}`, 'g'),
-          getImgCode(`${e.url}@40w_1e_1c.png`),
+          getImgCode(`${e.url}@48w_48h.png`),
         );
       });
     }
-    if (des.length > 150) {
-      des = `${des.substring(0, 150)}...`;
-    }
+
     return des;
   };
   const getOriginDes = (data: any) => {
