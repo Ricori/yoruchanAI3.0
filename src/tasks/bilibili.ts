@@ -5,9 +5,11 @@ import { printLog } from '@/utils/print';
 import getBiliDynamic from '@/service/bilibili/dynamic';
 import { getImgCode } from '@/utils/msgCode';
 
-async function checkBiliDynamic(uid: string, groupIds: number[]) {
+async function checkBiliDynamic(
+  { uid, groupIds, myBiliCookie }: { uid: string, groupIds: number[], myBiliCookie: string }
+) {
   try {
-    const dyData = await getBiliDynamic(uid);
+    const dyData = await getBiliDynamic(uid, myBiliCookie);
     if (dyData) {
       const newTime = dyData.pubDate;
       const lastestTime = yoruStorage.getBiliLastestDynamicTime(uid);
@@ -53,11 +55,15 @@ async function checkBiliDynamic(uid: string, groupIds: number[]) {
 const task = new AsyncTask('biliTask', async () => {
   const botIsConnect = yorubot.getIsBotConnecting();
   const config = yorubot.config.biliDynamicPush;
+  if (!config.enable || !config.cookie) return;
   if (botIsConnect) {
     Object.keys(config.config).forEach((uid: string) => {
       if (Array.isArray(config.config[uid])) {
-        const groupIds = config.config[uid];
-        checkBiliDynamic(uid, groupIds);
+        checkBiliDynamic({
+          uid,
+          groupIds: config.config[uid],
+          myBiliCookie: config.cookie
+        });
       }
     });
   }

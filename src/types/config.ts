@@ -35,6 +35,8 @@ export interface BotConfig {
     enable: boolean;
     /** 推送配置 {b站uid : 要推送的群号列表 } */
     config: Record<string, number[]>;
+    /** 因近期B站API增加鉴权，需要配置自己账号的cookie */
+    cookie: string;
   },
   /** openAI */
   openAi: {

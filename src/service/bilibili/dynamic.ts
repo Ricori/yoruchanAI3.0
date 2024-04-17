@@ -31,17 +31,18 @@ export interface Post {
   dylink: string;
 }
 
-export default async function getBiliDynamic(uid: string) {
+export default async function getBiliDynamic(uid: string, myBiliCookie: string) {
   const result = (await Axios.get('https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/space_history', {
     params: {
       host_uid: uid,
     },
     headers: {
-      referer: `https://space.bilibili.com/${uid}/`,
+      cookie: myBiliCookie
     },
   }).catch((err) => {
     printLog(`[Service Error] GetBiliDynamic API Error: ${err.message}`);
   }) ?? {}).data;
+
   if (result && result.data && result.data.cards?.length > 0) {
     const card = result.data.cards[0] as CardItem;
     const uname = card.desc?.user_profile?.info?.uname || '';
