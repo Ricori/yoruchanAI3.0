@@ -8,7 +8,7 @@ export interface WSActionRes {
   /** 对错误的详细解释(中文), 仅在 API 调用失败时有该字段 */
   wording: string,
   /** 响应数据 */
-  data: Record<string, any>,
+  data: any,
   /** 若请求时指定了 echo, 响应也会包含 echo */
   echo?: string,
 }

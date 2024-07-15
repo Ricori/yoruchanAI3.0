@@ -72,20 +72,6 @@ class YoruBot extends YoruCore {
     });
   }
 
-  /** 获取合并转发
-   * @param {string} forwardId 合并转发id
-   */
-  async getGroupForwardMsg(forwardId: number | string) {
-    if (!forwardId) return;
-    if (this.debugMode) {
-      printLog(`[Get Group Forward Msg] forwardId:${forwardId}`);
-    }
-    const res = await this.yoruWS.call('get_forward_msg', {
-      message_id: forwardId,
-    });
-    return res;
-  }
-
   /** 发送合并转发
    * @param {number} groupId 对方QQ号
    * @param {object} msg 内容，参照 https://docs.go-cqhttp.org/cqcode
@@ -128,10 +114,13 @@ class YoruBot extends YoruCore {
    * @param {string} file 图片缓存文件名
    */
   async getImageInfo(file: string) {
-    const data = await this.yoruWS.call('get_image', {
+    const res = await this.yoruWS.call('get_image', {
       file,
-    }) as unknown as null | { size: number; filename: string; url: string };
-    return data;
+    })
+    if (res.retcode === 0 && res.data) {
+      return res.data as { size: number; filename: string; url: string };
+    }
+    return undefined;
   }
 
 }
