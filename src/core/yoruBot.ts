@@ -102,7 +102,7 @@ class YoruBot extends YoruCore {
   }
 
   /** 获取消息
-   * @param {string} messageId 合并转发id
+   * @param {string} messageId 消息id
    */
   async getMessageFromId(messageId: number | string) {
     if (!messageId) return;
@@ -116,7 +116,7 @@ class YoruBot extends YoruCore {
   }
 
   /** 撤回消息
-   * @param {number} messageId 消息 ID
+   * @param {number} messageId 消息id
    */
   async deleteMsg(messageId: number) {
     this.cqs('delete_msg', {
