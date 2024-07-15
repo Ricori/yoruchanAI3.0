@@ -1,10 +1,11 @@
 import WebSocketClient from 'websocket/lib/WebSocketClient';
 import { connection as Connection } from 'websocket';
 import { nanoid } from 'nanoid';
+import { printError, printLog } from '@/utils/print';
 import { WSConfig } from '@/types/config';
 import { WSActionRes } from '@/types/ws';
-import { printError, printLog } from '@/utils/print';
 import { GroupMessageData, PrivateMessageData, RequestFirendMessageData } from '@/types/event';
+
 
 type WSType = 'api' | 'event';
 
