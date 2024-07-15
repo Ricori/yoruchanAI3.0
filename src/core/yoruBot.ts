@@ -6,12 +6,12 @@ import { YoruCore } from './yoruCore';
 class YoruBot extends YoruCore {
   /** 处理好友请求 */
   setFriendAddRequest(flag: string | number, approve: boolean) {
-    this.cqs('set_friend_add_request', { flag: `${flag}`, approve });
+    this.yoruWS.call('set_friend_add_request', { flag: `${flag}`, approve });
   }
 
   /** 处理拉群请求 */
   setGroupAddRequest(flag: string | number, approve: boolean) {
-    this.cqs('set_group_add_request', {
+    this.yoruWS.call('set_group_add_request', {
       flag: `${flag}`,
       type: 'invite',
       approve,
@@ -29,7 +29,7 @@ class YoruBot extends YoruCore {
     if (this.debugMode) {
       printLog(`[Send Private Msg] ${msg}`);
     }
-    this.cqs('send_private_msg', {
+    this.yoruWS.call('send_private_msg', {
       user_id: userId,
       message: msg,
       auto_escape: !!plainText,
@@ -48,7 +48,7 @@ class YoruBot extends YoruCore {
     if (this.debugMode) {
       printLog(`[Send Group Msg] ${prefix}${msg}`);
     }
-    this.cqs('send_group_msg', {
+    this.yoruWS.call('send_group_msg', {
       group_id: groupId,
       message: `${prefix}${msg}`,
       auto_escape: !!plainText,
@@ -66,7 +66,7 @@ class YoruBot extends YoruCore {
     if (this.debugMode) {
       printLog(`[Send Group Msg] ${prefix}${msg}`);
     }
-    this.cqs('send_group_msg', {
+    this.yoruWS.call('send_group_msg', {
       group_id: groupId,
       message: prefix + msg,
     });
@@ -80,7 +80,7 @@ class YoruBot extends YoruCore {
     if (this.debugMode) {
       printLog(`[Get Group Forward Msg] forwardId:${forwardId}`);
     }
-    const res = await this.cqs('get_forward_msg', {
+    const res = await this.yoruWS.call('get_forward_msg', {
       message_id: forwardId,
     });
     return res;
@@ -95,7 +95,7 @@ class YoruBot extends YoruCore {
     if (this.debugMode) {
       printLog('[Send Group Forward Msg]\n', msg);
     }
-    this.cqs('send_group_forward_msg', {
+    this.yoruWS.call('send_group_forward_msg', {
       group_id: groupId,
       messages: msg,
     });
@@ -106,7 +106,7 @@ class YoruBot extends YoruCore {
    */
   async getMessageFromId(messageId: number | string) {
     if (!messageId) return;
-    const res = await this.cqs('get_msg', {
+    const res = await this.yoruWS.call('get_msg', {
       message_id: messageId,
     });
     if (res.retcode === 0 && res.data) {
@@ -119,7 +119,7 @@ class YoruBot extends YoruCore {
    * @param {number} messageId 消息id
    */
   async deleteMsg(messageId: number) {
-    this.cqs('delete_msg', {
+    this.yoruWS.call('delete_msg', {
       message_id: messageId,
     });
   }
@@ -128,32 +128,12 @@ class YoruBot extends YoruCore {
    * @param {string} file 图片缓存文件名
    */
   async getImageInfo(file: string) {
-    const data = await this.cqs('get_image', {
+    const data = await this.yoruWS.call('get_image', {
       file,
     }) as unknown as null | { size: number; filename: string; url: string };
     return data;
   }
 
-  /** 获取中文分词[不稳定]
-   * @param {string} content 内容
-   */
-  async getWordSlices(content: string) {
-    const data = await this.cqs('get_word_slices', {
-      content,
-    }) as unknown as null | { slices: string[] };
-    return data;
-  }
-
-  /** 下载文件到缓存目录[不稳定]
-    * @param {string} url 链接地址
-    * @param {array} headers 请求头
-  */
-  async downloadFile(url: string, headers: string[]) {
-    const data = await this.cqs('download_file', {
-      url, headers,
-    }) as unknown as null | { file: string };
-    return data?.file;
-  }
 }
 
 export default new YoruBot();

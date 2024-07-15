@@ -1,9 +1,9 @@
-import { CQWebSocket } from 'cq-websocket';
 import { printError, printLog } from '@/utils/print';
 import { GroupMessageData, PrivateMessageData, RequestFirendMessageData } from '@/types/event';
 import { BotConfig, YoruConfig } from '@/types/config';
 import { loadConfigFile } from '@/utils/io';
 import YoruModuleBase from '@/modules/base';
+import { YoruWebsocket } from './yoruWS';
 
 const debugMode = process.env.YDEBUG === 'true';
 
@@ -13,14 +13,9 @@ type Module = typeof YoruModuleBase<RequestFirendMessageData> |
 
 
 export class YoruCore {
-  /** CQWebSocket Object */
-  protected cqs: CQWebSocket;
 
-  /** Bot connection status */
-  protected connectState = {
-    '/event': false,
-    '/api': false,
-  };
+  /** YoruWebSocket Object */
+  protected yoruWS: YoruWebsocket;
 
   /** Is in debug mode */
   readonly debugMode = debugMode;
@@ -49,8 +44,28 @@ export class YoruCore {
     this.debugMode = debugMode;
     this.config = config.botConfig;
 
-    // create cqs object
-    this.cqs = new CQWebSocket(config.wsConfig);
+    // event listeners
+    const eventFC = {
+      friend: async (data: RequestFirendMessageData) => {
+        if (this.debugMode) printLog(`[Recive friend event]`, data);
+        this.flow(this.requestMessageModuleList, data);
+      },
+      private: async (data: PrivateMessageData) => {
+        if (this.debugMode) printLog(`[Recive private msg]`, data);
+        this.flow(this.privateMessageModuleList, data);
+      },
+      groupAtMe: async (data: GroupMessageData) => {
+        if (this.debugMode) printLog(`[Recive group at msg]`, data);
+        this.flow(this.groupAtMessageModuleList, data);
+      },
+      group: async (data: GroupMessageData) => {
+        if (this.debugMode) printLog(`[Recive group msg]`, data);
+        this.flow(this.groupMessageModuleList, data);
+      },
+    }
+
+    // create yoruWS object
+    this.yoruWS = new YoruWebsocket(config.wsConfig, eventFC);
   }
 
   /** Loaded request message type modules */
@@ -91,55 +106,22 @@ export class YoruCore {
           extra = extraData;
         }
       } catch (error) {
-        printLog(`[${Module.NAME || 'MODULE'} Error] ${error}`);
+        printError(`[${Module.NAME || 'MODULE'} Error] ${error}`);
       }
     }
   }
 
   /** Start bot */
   start() {
-    // register connection-related listening events
-    this.cqs.on('socket.connecting', (type) => { printLog(`[WS Connect] ${type} start connenct..`); });
-    this.cqs.on('socket.error', (type, err) => {
-      printLog(`[WS Connect] ${type} connect fail,Error: ${err}`);
-      this.connectState[type] = false;
-    });
-    this.cqs.on('socket.connect', (type) => {
-      printLog(`[WS Connect] ${type} connect successfully`);
-      this.connectState[type] = true;
-    });
-    // Bind request firend event listener
-    this.cqs.on('request.friend', async (data: Record<string, any>) => {
-      this.flow(this.requestMessageModuleList, data);
-    });
-    // Bind private message listener
-    this.cqs.on('message.private', async (_, data: any) => {
-      this.flow(this.privateMessageModuleList, data);
-    });
-    // Bind group at bot message listener
-    this.cqs.on('message.group.@.me', async (_, data: any) => {
-      this.flow(this.groupAtMessageModuleList, data);
-    });
-    // Bind group common message listener
-    this.cqs.on('message.group', async (_, data: any) => {
-      this.flow(this.groupMessageModuleList, data);
-    });
-    // ws connect
-    this.cqs.connect();
+    this.yoruWS.connect()
   }
 
   /** Get bot connecting status */
   getIsBotConnecting() {
-    if (this.connectState['/api'] && this.connectState['/event']) {
+    const state = this.yoruWS.getConnectingState();
+    if (state.api && state.event) {
       return true;
     }
     return false;
-  }
-
-  /** Check connection status */
-  checkBotState() {
-    if (!this.getIsBotConnecting()) {
-      printError('[Error] Bot already disconnected, unable to perform action.');
-    }
   }
 }

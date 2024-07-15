@@ -1,20 +1,8 @@
-interface WSConfig {
+export interface WSConfig {
   /** host地址 */
   host: string;
   /** ws端口 */
   port: number;
-  /** 启用 /api 连线 */
-  enableAPI: boolean;
-  /** 启用 /event 连线 */
-  enableEvent: boolean;
-  /** 访问密钥 */
-  access_token?: string;
-  /** 错误自动重连 */
-  reconnection?: boolean;
-  /** 错误重连最大次数 */
-  reconnectionAttempts?: number;
-  /** 重连延迟 */
-  reconnectionDelay?: number;
 }
 
 export interface BotConfig {
