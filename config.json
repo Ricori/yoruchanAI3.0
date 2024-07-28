@@ -1,13 +1,7 @@
 {
   "wsConfig": {
     "host": "127.0.0.1",
-    "port": 6700,
-    "enableAPI": true,
-    "enableEvent": true,
-    "access_token": "",
-    "reconnection": true,
-    "reconnectionAttempts": 5,
-    "reconnectionDelay": 12000
+    "port": 6700
   },
   "botConfig": {
     "admin": [
