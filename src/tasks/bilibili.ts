@@ -57,13 +57,13 @@ const task = new AsyncTask('biliTask', async () => {
   const config = yorubot.config.biliDynamicPush;
   if (!config.enable || !config.cookie) return;
   if (botIsConnect) {
-    Object.keys(config.config).forEach((uid: string) => {
+    Object.keys(config.config).forEach((uid: string, i: number) => {
       if (Array.isArray(config.config[uid])) {
-        checkBiliDynamic({
+        setTimeout(() => checkBiliDynamic({
           uid,
           groupIds: config.config[uid],
           myBiliCookie: config.cookie
-        });
+        }), i * 2000)
       }
     });
   }
