@@ -91,6 +91,11 @@ class YoruStorage {
   getGroupChatConversations(userId: number) {
     return this.groupChatConversations[userId] ?? [];
   }
+
+  /** 清理所有qq群会话缓存 */
+  cleanGroupChatConversations() {
+    this.groupChatConversations = {};
+  }
 }
 
 export default new YoruStorage();
