@@ -23,6 +23,20 @@ export function hasImage(msg: string) {
   return msg.indexOf('[CQ:image') !== -1;
 }
 
+/** 判断消息是否有询问类文本
+ * @param {string} msg 消息
+ * @returns 有则返回true
+ */
+export function hasQuestionText(msg: string) {
+  for (const str of ['帮', '答', '问题', '看']) {
+    if (msg.indexOf(str) !== -1) {
+      return true;
+    }
+  }
+  return false;
+}
+
+
 /** 从消息中提取图片
  * @param {string} msg
  * @returns 图片URL数组

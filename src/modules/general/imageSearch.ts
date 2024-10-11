@@ -1,7 +1,7 @@
 import { GroupMessageData, PrivateMessageData } from "@/types/event";
 import YoruModuleBase from "../base";
 import yorubot from '@/core/yoruBot';
-import { hasImage, hasReply, getReplyMsgId, getImgs } from '@/utils/function';
+import { hasImage, hasReply, getReplyMsgId, getImgs, hasQuestionText } from '@/utils/function';
 import searchImage from "@/service/searchImg";
 
 export default class ImageSearchModule extends YoruModuleBase<PrivateMessageData | GroupMessageData> {
@@ -18,12 +18,12 @@ export default class ImageSearchModule extends YoruModuleBase<PrivateMessageData
       const replyMsgData = await yorubot.getMessageFromId(replyMsgId);
       if (replyMsgData) {
         const rMsg = replyMsgData.message;
-        if (hasImage(rMsg)) {
+        if (hasImage(rMsg) && !hasQuestionText(message)) {
           this.tempMessage = rMsg;
           return true;
         }
       }
-    } else if (hasImage(message)) {
+    } else if (hasImage(message) && !hasQuestionText(message)) {
       this.tempMessage = message;
       return true;
     }
