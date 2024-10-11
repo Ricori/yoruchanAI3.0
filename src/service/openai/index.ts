@@ -65,9 +65,6 @@ export async function getOpenAiReply(userId: number, text: string, imgUrl?: stri
     });
   }
 
-  console.log(messages);
-
-
   const commitMessages = [systemMsg, ...messages];
   const chatCompletion = await openai.chat.completions.create({
     model: 'gpt-4o',
