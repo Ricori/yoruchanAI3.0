@@ -69,7 +69,7 @@ export async function getOpenAiReply(userId: number, text: string, imgUrl?: stri
   const chatCompletion = await openai.chat.completions.create({
     model: 'gpt-4o',
     messages: commitMessages,
-    temperature: 0.7, // 每次返回的答案的相似度0-2（0：每次都一样，1：每次都不一样）
+    temperature: 0.8, // 每次返回的答案的相似度0-2（0：每次都一样，1：每次都不一样）
     presence_penalty: 0.7, // 存在惩罚，增加模型谈论新主题可能性
   }, {
     timeout: 25000,
