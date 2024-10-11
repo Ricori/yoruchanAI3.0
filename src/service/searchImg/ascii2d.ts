@@ -4,7 +4,7 @@ import FormData from 'form-data';
 import { getImgCode } from '@/utils/msgCode';
 import { printError } from '@/utils/print';
 
-const UA = 'Mozilla / 5.0(Windows NT 10.0; Win64; x64) AppleWebKit / 537.36(KHTML, like Gecko) Chrome / 113.0.0.0 Safari / 537.36';
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36';
 
 /**
  * ascii2d搜索
@@ -45,7 +45,7 @@ export default async function ascii2dSearch(imgURL: string) {
 /**
  * 获取ascii2d搜索结果
  */
-async function getAscii2dResult(url: string) {
+export async function getAscii2dResult(url: string) {
   const axiosConfig = {
     responseType: 'text' as 'text',
     timeout: 8000,
@@ -59,7 +59,7 @@ async function getAscii2dResult(url: string) {
   });
   const form = new FormData();
   form.append('file', imgBuffer, 'image');
-  const ret = await Axios.post('https://ascii2d.net/search/file', form, {
+  const ret = await Axios.post('https://b5f94086-ttt.ccttt.workers.dev/https://ascii2d.net/search/file', form, {
     headers:
     {
       ...form.getHeaders(),
