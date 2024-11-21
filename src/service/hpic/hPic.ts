@@ -5,7 +5,7 @@ const API_URI = 'https://api.lolicon.app/setu/?apikey=170792005f99b428151719';
 
 export default async function getHPic(hPicLevel: 0 | 1 | 2, count: number) {
   try {
-    const res1 = await Axios.get(`${API_URI}&r18=${hPicLevel}&num=${count}`);
+    const res1 = await Axios.get(`${API_URI}&r18=${hPicLevel}&num=${count}&excludeAI=true`);
     if (res1.data.code !== 0 || res1.data.data?.length < 1) {
       return [];
     }
