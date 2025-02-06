@@ -15,7 +15,7 @@ export function generateAiObj(useDeepSeek: boolean) {
   const baseURL = useDeepSeek ? 'https://api.siliconflow.cn/v1' : 'https://api.openai-proxy.com/v1';
   const apiKey = useDeepSeek ? yorubot.config.aiReply.deepSeekKey : yorubot.config.aiReply.openAiKey;
   //model = useDeepSeek ? 'deepseek-reasoner' : 'gpt-4o';
-  model = useDeepSeek ? 'deepseek-ai/DeepSeek-R1' : 'gpt-4o';
+  model = useDeepSeek ? 'Pro/deepseek-ai/DeepSeek-R1' : 'gpt-4o';
 
   openai = new OpenAI({
     apiKey,
@@ -86,7 +86,7 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
     model,
     messages: commitMessages,
   }, {
-    timeout: 40000,
+    timeout: 45000,
   }).catch((e) => printError(`[AiModule Error] ${e}`));
 
   if (chatCompletion?.choices?.[0]?.message) {
