@@ -84,7 +84,7 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
     model,
     messages: commitMessages,
   }, {
-    timeout: 22000,
+    timeout: 40000,
   }).catch((e) => printError(`[AiModule Error] ${e}`));
 
   if (chatCompletion?.choices?.[0]?.message) {
