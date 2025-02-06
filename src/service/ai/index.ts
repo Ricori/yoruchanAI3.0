@@ -6,6 +6,7 @@ import yoruStorage from '@/core/yoruStorage';
 import Axios from 'axios';
 import FormData from 'form-data';
 import { newSystemPrompt } from './systemText';
+import { trimChar } from '@/utils/function';
 
 let openai: OpenAI;
 let model: string;
@@ -96,7 +97,7 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
       content: message.content
     };
     yoruStorage.setGroupChatConversations(userId, [...messages, newMsg]);
-    return message.content;
+    return trimChar(message.content, "\"");
   }
   return undefined;
 }

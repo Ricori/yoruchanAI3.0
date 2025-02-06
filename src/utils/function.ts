@@ -97,5 +97,19 @@ export function deleteAtFromMsg(msg: string) {
   return msg.replace(reg, '').replace(reg2, '').trimStart();
 }
 
+
+/** 去除首尾指定字符
+ */
+export function trimChar(str: string | null, char: string) {
+  if (!str) return undefined;
+  if (str.charAt(0) === char) {
+    str = str.substring(1);
+  }
+  if (str.charAt(str.length - 1) === char) {
+    str = str.substring(0, str.length - 1);
+  }
+  return str;
+}
+
 /** sleep */
 export const sleep = (seconds: number) => new Promise((resolve) => setTimeout(resolve, seconds));
