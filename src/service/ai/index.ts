@@ -92,12 +92,13 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
 
   if (chatCompletion?.choices?.[0]?.message) {
     const { message } = chatCompletion.choices[0];
+    const newContent = trimChar(message.content, "\"")?.replace(/\（.*?\）/g, '');
     const newMsg = {
       role: message.role,
-      content: message.content
+      content: newContent
     };
     yoruStorage.setGroupChatConversations(userId, [...messages, newMsg]);
-    return trimChar(message.content, "\"");
+    return newContent;
   }
   return undefined;
 }
