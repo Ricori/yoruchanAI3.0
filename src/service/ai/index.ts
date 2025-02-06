@@ -71,8 +71,6 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
         }
       ]
     });
-
-
   } else {
     messages.push({
       role: 'user',
@@ -81,6 +79,7 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
   };
 
   const commitMessages = [systemMsg, ...messages];
+
   const chatCompletion = await openai.chat.completions.create({
     model,
     messages: commitMessages,
@@ -90,7 +89,11 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
 
   if (chatCompletion?.choices?.[0]?.message) {
     const { message } = chatCompletion.choices[0];
-    yoruStorage.setGroupChatConversations(userId, [...messages, message]);
+    const newMsg = {
+      role: message.role,
+      content: message.content
+    };
+    yoruStorage.setGroupChatConversations(userId, [...messages, newMsg]);
     return message.content;
   }
   return undefined;
