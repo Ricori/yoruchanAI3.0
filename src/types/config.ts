@@ -26,12 +26,16 @@ export interface BotConfig {
     /** 因近期B站API增加鉴权，需要配置自己账号的cookie */
     cookie: string;
   },
-  /** openAI */
-  openAi: {
-    /** 是否开启chatGPT回复 */
+  /** AI回复*/
+  aiReply: {
+    /** 是否开启AI回复 */
     enable: boolean;
+    /** 使用deepSeek模型，启用时请配置deepSeek key*/
+    useDeepSeek: boolean;
     /** openAI key */
-    apiKey: string;
+    openAiKey: string;
+    /** deepSeek key */
+    deepSeekKey: string;
   },
   /** 瑟图功能 */
   hPic: {

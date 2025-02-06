@@ -5,20 +5,30 @@ import { printError } from '@/utils/print';
 import yoruStorage from '@/core/yoruStorage';
 import Axios from 'axios';
 import FormData from 'form-data';
-import { systemContent } from './systemText';
+import { newSystemPrompt } from './systemText';
 
-const openai = new OpenAI({
-  apiKey: yorubot.config.openAi.apiKey,
-  baseURL: 'https://api.openai-proxy.com/v1',
-});
+let openai: OpenAI;
+let model: string;
+
+export function generateAiObj(useDeepSeek: boolean) {
+  const baseURL = useDeepSeek ? 'https://api.deepseek.com' : 'https://api.openai-proxy.com/v1';
+  const apiKey = useDeepSeek ? yorubot.config.aiReply.deepSeekKey : yorubot.config.aiReply.openAiKey;
+  model = useDeepSeek ? 'deepseek-reasoner' : 'gpt-4o';
+
+  openai = new OpenAI({
+    apiKey,
+    baseURL,
+  });
+}
+generateAiObj(yorubot.config.aiReply.useDeepSeek);
 
 
-export async function getOpenAiReply(userId: number, text: string, imgUrl?: string) {
+export async function getAiReply(userId: number, text: string, imgUrl?: string) {
 
   const messages = [] as ChatCompletionMessageParam[];
   const systemMsg: ChatCompletionMessageParam = {
     role: 'system',
-    content: systemContent,
+    content: newSystemPrompt,
   };
 
   const temp = yoruStorage.getGroupChatConversations(userId);
@@ -27,9 +37,12 @@ export async function getOpenAiReply(userId: number, text: string, imgUrl?: stri
   }
 
   if (imgUrl) {
+    if (model === 'deepseek-reasoner') {
+      return '现在 deepSeek 不能识别图片，找管理切下 chatgpt';
+    };
     // 图片转存 (QQ -> imgbb)
     const imgBuffer = await Axios.get(imgUrl, { responseType: 'arraybuffer' }).then((r) => r.data).catch((e) => {
-      printError(`[OpenAi Error] Can't fetch QQ img. Error: ${e.message}`);
+      printError(`[AiModule Error] Can't fetch QQ img. Error: ${e.message}`);
       return null;
     });
     if (!imgBuffer) return undefined;
@@ -41,7 +54,7 @@ export async function getOpenAiReply(userId: number, text: string, imgUrl?: stri
         expiration: 86400 * 7
       }
     }).catch((e) => {
-      printError(`[OpenAi Error] Cant't upload file to imgbb. Error: ${e.message}`);
+      printError(`[AiModule Error] Cant't upload file to imgbb. Error: ${e.message}`);
       return null;
     });
     if (!ret || !ret?.data?.success || !ret?.data?.data?.url) return undefined;
@@ -58,27 +71,27 @@ export async function getOpenAiReply(userId: number, text: string, imgUrl?: stri
         }
       ]
     });
+
+
   } else {
     messages.push({
       role: 'user',
       content: text,
     });
-  }
+  };
 
   const commitMessages = [systemMsg, ...messages];
   const chatCompletion = await openai.chat.completions.create({
-    model: 'gpt-4o',
+    model,
     messages: commitMessages,
-    temperature: 0.8, // 每次返回的答案的相似度0-2（0：每次都一样，1：每次都不一样）
-    presence_penalty: 0.7, // 存在惩罚，增加模型谈论新主题可能性
   }, {
-    timeout: 25000,
-  }).catch((e) => printError(`[OpenAi Error] ${e}`));
+    timeout: 22000,
+  }).catch((e) => printError(`[AiModule Error] ${e}`));
 
   if (chatCompletion?.choices?.[0]?.message) {
     const { message } = chatCompletion.choices[0];
     yoruStorage.setGroupChatConversations(userId, [...messages, message]);
-    return message.content?.replace('夜夜酱：', '');
+    return message.content;
   }
   return undefined;
 }

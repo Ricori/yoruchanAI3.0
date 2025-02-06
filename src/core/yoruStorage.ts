@@ -17,7 +17,7 @@ class YoruStorage {
   /** b站up最新动态时间  */
   private biliLastestDynamicTime: Record<string, number> = {};
 
-  /** 群消息对话（每个id最多记录8条）  */
+  /** 群消息对话（每个id最多记录10条）  */
   private groupChatConversations: Record<number, ChatCompletionMessageParam[]> = {};
 
 

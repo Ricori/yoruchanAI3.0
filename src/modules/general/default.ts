@@ -2,7 +2,7 @@ import { GroupMessageData, PrivateMessageData } from "@/types/event";
 import YoruModuleBase from "@/modules/base";
 import yorubot from '@/core/yoruBot';
 import { deleteAtFromMsg, getImgs, getReplyMsgId, hasImage, hasReply } from '@/utils/function';
-import { getOpenAiReply } from "@/service/openai";
+import { getAiReply } from "@/service/ai";
 
 export default class DefaultReplyModule extends YoruModuleBase<PrivateMessageData | GroupMessageData> {
 
@@ -16,9 +16,9 @@ export default class DefaultReplyModule extends YoruModuleBase<PrivateMessageDat
     const { message, user_id: userId, message_type: messageType, message_id: messageId } = this.data;
     const groupId = messageType === 'group' ? this.data.group_id : undefined;
 
-    let replyText = '夜夜酱受到了特殊电波干扰，暂时没法回答主人的问题呢，主人可以过会儿重新询问夜夜酱哦';
+    let replyText = '我炸了';
 
-    if (yorubot.config.openAi.enable) {
+    if (yorubot.config.aiReply.enable) {
       let tempMessage = '';
 
       // 获取引用消息文本
@@ -37,10 +37,10 @@ export default class DefaultReplyModule extends YoruModuleBase<PrivateMessageDat
         const imgsData = getImgs(tempMessage);
         const imgUrl = imgsData[0].url;
         const text = tempMessage.replace(/\[CQ:image,.*\]/g, '');
-        const res = await getOpenAiReply(userId, text, imgUrl);
+        const res = await getAiReply(userId, text, imgUrl);
         if (res) replyText = res;
       } else {
-        const res = await getOpenAiReply(userId, tempMessage);
+        const res = await getAiReply(userId, tempMessage);
         if (res) replyText = res;
       }
     }

@@ -29,9 +29,11 @@
       },
       "cookie": ""
     },
-    "openAi": {
+    "aiReply": {
       "enable": true,
-      "apiKey": ""
+      "useDeepSeek": true,
+      "openAiKey": "",
+      "deepSeekKey": ""
     },
     "hPic": {
       "enable": true,

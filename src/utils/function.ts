@@ -23,15 +23,14 @@ export function hasImage(msg: string) {
   return msg.indexOf('[CQ:image') !== -1;
 }
 
-/** 判断消息是否有询问类文本
+
+/** 判断消息是否有指定搜图文本
  * @param {string} msg 消息
  * @returns 有则返回true
  */
-export function hasQuestionText(msg: string) {
-  for (const str of ['帮', '答', '问题', '看']) {
-    if (msg.indexOf(str) !== -1) {
-      return true;
-    }
+export function hasSerachImageText(msg: string) {
+  if (msg.includes('搜图') || msg.includes('来源')) {
+    return true;
   }
   return false;
 }
