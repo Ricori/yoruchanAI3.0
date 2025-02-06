@@ -1,9 +1,9 @@
-import { PrivateMessageData } from "@/types/event";
+import { GroupMessageData, PrivateMessageData } from "@/types/event";
 import YoruModuleBase from "../base";
 import yorubot from '@/core/yoruBot';
-import yoruStorage from '@/core/yoruStorage';
+import { generateAiObj } from "@/service/ai";
 
-export default class AdminModule extends YoruModuleBase<PrivateMessageData> {
+export default class AdminModule extends YoruModuleBase<PrivateMessageData | GroupMessageData> {
 
   static NAME = 'AdminModule';
 
@@ -14,7 +14,9 @@ export default class AdminModule extends YoruModuleBase<PrivateMessageData> {
     if (adminList.indexOf(userId) > -1) {
       const message = this.data.message;
       // Exec administrator command
-      const exec = /--approve=([0-9]+)/.exec(message);
+
+      // AI model switch
+      const exec = /--switchAI=([0-9])/.exec(message);
       if (exec !== null) {
         return true;
       }
@@ -23,13 +25,21 @@ export default class AdminModule extends YoruModuleBase<PrivateMessageData> {
   }
 
   async run() {
-    const userId = this.data.user_id;
-    const message = this.data.message;
-    const approveId = /--approve=([0-9]+)/.exec(message)?.[1];
-    if (approveId) {
-      yorubot.sendPrivateMsg(userId, `[SystemMessage] 已记录 ${approveId} 至待添加好友名单`);
-      yoruStorage.joinToBeAddedList(parseInt(approveId));
+    const { user_id: userId, message_type: messageType, message } = this.data;
+    const groupId = messageType === 'group' ? this.data.group_id : undefined;
+
+    // AI model switch
+    const switchAIId = /--switchAI=([0-9])/.exec(message)?.[1];
+    if (switchAIId === '1' || switchAIId === '2') {
+      generateAiObj(switchAIId === '1' ? false : true);
+      const reply = `[YoruSystem] The AI model successfully switched to ${switchAIId === '1' ? 'chatgpt' : 'deepseek'}.`;
+      if (groupId) {
+        yorubot.sendGroupMsg(groupId, reply);
+      } else {
+        yorubot.sendPrivateMsg(userId, reply);
+      }
     }
+
     // finish
     this.finished = true;
   }

@@ -2,6 +2,7 @@
 import yorubot from '@/core/yoruBot';
 import yoruSchedule from '@/core/yoruSchedule';
 import BilibiliNewSharedJob from '@/tasks/bilibili';
+import SystemCleanupJob from '@/tasks/clean';
 import RequestFriendModule from '@/modules/request/requestFriend';
 import AdminModule from '@/modules/admin/admin';
 import ImageSearchModule from '@/modules/general/imageSearch';
@@ -22,6 +23,7 @@ yorubot.loadModule('private', [
 
 // 加载群@消息模块
 yorubot.loadModule('groupAt', [
+  AdminModule,
   ImageSearchModule,
   HPicModule,
   DefaultReplyModule,
@@ -35,6 +37,7 @@ yorubot.loadModule('group', [
 
 // 加载定时任务
 yoruSchedule.loadJob([
+  SystemCleanupJob,
   BilibiliNewSharedJob,
 ]);
 

@@ -15,10 +15,6 @@
     "biliDynamicPush": {
       "enable": true,
       "config": {
-        "4549624": [
-          914620769,
-          870677348
-        ],
         "13184888": [
           870677348
         ],
@@ -26,14 +22,18 @@
           870677348
         ],
         "629994228": [
-          870677348
+          914620769,
+          870677348,
+          752797342
         ]
       },
       "cookie": ""
     },
-    "openAi": {
+    "aiReply": {
       "enable": true,
-      "apiKey": ""
+      "useDeepSeek": true,
+      "openAiKey": "",
+      "deepSeekKey": ""
     },
     "hPic": {
       "enable": true,

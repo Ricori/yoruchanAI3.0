@@ -96,6 +96,8 @@ export class YoruCore {
         // check conditions
         const hit = await obj.checkConditions();
         if (hit) {
+          // debug text
+          if (this.debugMode) printLog(`[System Module]`, `Run ${Module.NAME}`);
           // run
           await obj.run();
           // get res
