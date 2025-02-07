@@ -92,13 +92,14 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
   const chatCompletion = await openai.chat.completions.create({
     model,
     messages: commitMessages,
+    temperature: 0.6,
   }, {
     timeout: 45000,
   }).catch((e) => printError(`[AiModule Error] ${e}`));
 
   if (chatCompletion?.choices?.[0]?.message) {
     const { message } = chatCompletion.choices[0];
-    let newContent = trimChar(message.content, "\"")?.replace(/\（.*?\）/g, '');
+    let newContent = trimChar(message.content, "\"")?.replace(/\（.*?\）/g, '').replace(/\(.*?\)/g, '');
     const newMsg = {
       role: message.role,
       content: newContent
