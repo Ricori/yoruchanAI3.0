@@ -20,7 +20,6 @@ class YoruStorage {
   /** 群消息对话（每个id最多记录10条）  */
   private groupChatConversations: Record<number, ChatCompletionMessageParam[]> = {};
 
-
   /** 新增好友到待添加名单 */
   joinToBeAddedList = (userId: number) => { this.toBeAddedList = [...this.toBeAddedList, userId]; };
 

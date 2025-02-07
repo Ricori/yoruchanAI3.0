@@ -6,10 +6,10 @@ import yoruStorage from '@/core/yoruStorage';
 import Axios from 'axios';
 import FormData from 'form-data';
 import { newSystemPrompt } from './systemText';
-import { trimChar } from '@/utils/function';
 
 let openai: OpenAI;
 let model: string;
+let thinkingChain = false;
 
 export function generateAiObj(useDeepSeek: boolean) {
   //const baseURL = useDeepSeek ? 'https://api.deepseek.com' : 'https://api.openai-proxy.com/v1';
@@ -18,11 +18,16 @@ export function generateAiObj(useDeepSeek: boolean) {
   //model = useDeepSeek ? 'deepseek-reasoner' : 'gpt-4o';
   model = useDeepSeek ? 'Pro/deepseek-ai/DeepSeek-R1' : 'gpt-4o';
 
+  yoruStorage.cleanGroupChatConversations();
   openai = new OpenAI({
     apiKey,
     baseURL,
   });
 }
+export function switchThinkingChainDisplay(display: boolean) {
+  thinkingChain = display;
+}
+
 generateAiObj(yorubot.config.aiReply.useDeepSeek);
 
 
@@ -40,8 +45,8 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
   }
 
   if (imgUrl) {
-    if (model === 'deepseek-reasoner') {
-      return '现在 deepSeek 不能识别图片，找管理切下 chatgpt';
+    if (model !== 'gpt-4o') {
+      return '看不得图，找管理切下chatgpt';
     };
     // 图片转存 (QQ -> imgbb)
     const imgBuffer = await Axios.get(imgUrl, { responseType: 'arraybuffer' }).then((r) => r.data).catch((e) => {
@@ -92,12 +97,15 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
 
   if (chatCompletion?.choices?.[0]?.message) {
     const { message } = chatCompletion.choices[0];
-    const newContent = trimChar(message.content, "\"")?.replace(/\（.*?\）/g, '');
+    let newContent = message.content?.replace(/\（.*?\）/g, '');
     const newMsg = {
       role: message.role,
       content: newContent
     };
     yoruStorage.setGroupChatConversations(userId, [...messages, newMsg]);
+    if (thinkingChain) {
+      newContent = `---[夜夜的思考]---\n${(message as any).reasoning_content}\n----------------\n\n${newContent}`;
+    }
     return newContent;
   }
   return undefined;

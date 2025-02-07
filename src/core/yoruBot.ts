@@ -55,6 +55,21 @@ class YoruBot extends YoruCore {
     });
   }
 
+  /** 发送简单消息 (兼容群聊私聊)
+   * @param {number} groupId 群号
+   * @param {number} userId 对方QQ号
+   * @param {string} msg 要发送的内容
+   * @param {string} atUser 可选，要at的qq
+   */
+  async sendMsg(groupId?: number, userId?: number, msg?: string, atUser?: number | string) {
+    if (!msg) return;
+    if (groupId) {
+      this.sendGroupMsg(groupId, msg, atUser);
+    } else if (userId) {
+      this.sendPrivateMsg(userId, msg);
+    }
+  }
+
   /** 发送群回复消息
    * @param {number} groupId 群号
    * @param {string} msg 要发送的内容
