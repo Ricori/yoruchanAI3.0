@@ -24,14 +24,15 @@ export default class DefaultReplyModule extends YoruModuleBase<PrivateMessageDat
 
       // 获取引用消息文本
       if (hasReply(message)) {
+        let myqq;
         if (yoruStorage.getOrSetMyUserId() === 0) {
-          const qq = await yorubot.getLoginQQ();
-          yoruStorage.getOrSetMyUserId(qq);
+          myqq = await yorubot.getLoginQQ();
+          yoruStorage.getOrSetMyUserId(myqq);
         }
         const replyMsgId = getReplyMsgId(message);
         const replyMsgData = await yorubot.getMessageFromId(replyMsgId);
         if (replyMsgData) {
-          if (replyMsgData.user_id === yoruStorage.getOrSetMyUserId()) {
+          if (replyMsgData.user_id === myqq) {
             tempMessage = deleteAtFromMsg(message);
           } else {
             tempMessage = deleteAtFromMsg(`${replyMsgData.message}.${message}`);
