@@ -6,6 +6,7 @@ import yoruStorage from '@/core/yoruStorage';
 import Axios from 'axios';
 import FormData from 'form-data';
 import { newSystemPrompt } from './systemText';
+import { trimChar } from '@/utils/function';
 
 let openai: OpenAI;
 let model: string;
@@ -97,7 +98,7 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
 
   if (chatCompletion?.choices?.[0]?.message) {
     const { message } = chatCompletion.choices[0];
-    let newContent = message.content?.replace(/\（.*?\）/g, '');
+    let newContent = trimChar(message.content, "\"")?.replace(/\（.*?\）/g, '');
     const newMsg = {
       role: message.role,
       content: newContent
