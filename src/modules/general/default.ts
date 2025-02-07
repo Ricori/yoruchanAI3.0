@@ -3,6 +3,7 @@ import YoruModuleBase from "@/modules/base";
 import yorubot from '@/core/yoruBot';
 import { deleteAtFromMsg, getImgs, getReplyMsgId, hasImage, hasReply } from '@/utils/function';
 import { getAiReply } from "@/service/ai";
+import yoruStorage from "@/core/yoruStorage";
 
 export default class DefaultReplyModule extends YoruModuleBase<PrivateMessageData | GroupMessageData> {
 
@@ -23,10 +24,18 @@ export default class DefaultReplyModule extends YoruModuleBase<PrivateMessageDat
 
       // 获取引用消息文本
       if (hasReply(message)) {
+        if (yoruStorage.getOrSetMyUserId() === 0) {
+          const qq = await yorubot.getLoginQQ();
+          yoruStorage.getOrSetMyUserId(qq);
+        }
         const replyMsgId = getReplyMsgId(message);
         const replyMsgData = await yorubot.getMessageFromId(replyMsgId);
         if (replyMsgData) {
-          tempMessage = deleteAtFromMsg(`${replyMsgData.message}.${message}`);
+          if (replyMsgData.user_id === yoruStorage.getOrSetMyUserId()) {
+            tempMessage = deleteAtFromMsg(message);
+          } else {
+            tempMessage = deleteAtFromMsg(`${replyMsgData.message}.${message}`);
+          }
         }
       } else {
         tempMessage = deleteAtFromMsg(message);

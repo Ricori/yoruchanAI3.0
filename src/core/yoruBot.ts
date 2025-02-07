@@ -4,6 +4,15 @@ import { SimpleMessageData } from '@/types/event';
 import { YoruCore } from './yoruCore';
 
 class YoruBot extends YoruCore {
+  /** 获取bot QQ号 */
+  async getLoginQQ() {
+    const res = await this.yoruWS.call('get_login_info', {});
+    if (res.retcode === 0 && res.data) {
+      return res.data.user_id as number ?? 0;
+    }
+    return 0;
+  }
+
   /** 处理好友请求 */
   setFriendAddRequest(flag: string | number, approve: boolean) {
     this.yoruWS.call('set_friend_add_request', { flag: `${flag}`, approve });
