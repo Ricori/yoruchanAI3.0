@@ -46,7 +46,7 @@ export default class AdminModule extends YoruModuleBase<PrivateMessageData | Gro
     const reasoningId = /--ai_reasoning=([0-9])/.exec(message)?.[1];
     if (reasoningId === '0' || reasoningId === '1') {
       switchThinkingChainDisplay(Boolean(+reasoningId));
-      const reply = `[YoruSystem] Successfully ${switchAIId === '1' ? 'opened' : 'closed'} the AI ​​thinking chain display`;
+      const reply = `[YoruSystem] Successfully ${reasoningId === '1' ? 'opened' : 'closed'} the AI ​​thinking chain display`;
       yorubot.sendMsg(groupId, userId, reply);
     }
 
