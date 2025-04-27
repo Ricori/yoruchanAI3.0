@@ -13,11 +13,9 @@ let model: string;
 let thinkingChain = false;
 
 export function generateAiObj(useDeepSeek: boolean) {
-  //const baseURL = useDeepSeek ? 'https://api.deepseek.com' : 'https://api.openai-proxy.com/v1';
-  const baseURL = useDeepSeek ? 'https://api.siliconflow.cn/v1' : 'https://api.openai-proxy.com/v1';
+  const baseURL = useDeepSeek ? 'https://api.deepseek.com' : 'https://api.openai-proxy.com/v1';
   const apiKey = useDeepSeek ? yorubot.config.aiReply.deepSeekKey : yorubot.config.aiReply.openAiKey;
-  //model = useDeepSeek ? 'deepseek-reasoner' : 'gpt-4o';
-  model = useDeepSeek ? 'Pro/deepseek-ai/DeepSeek-R1' : 'gpt-4o';
+  model = useDeepSeek ? 'deepseek-reasoner' : 'gpt-4.1';
 
   yoruStorage.cleanGroupChatConversations();
   openai = new OpenAI({
@@ -46,7 +44,7 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
   }
 
   if (imgUrl) {
-    if (model !== 'gpt-4o') {
+    if (model !== 'gpt-4.1') {
       return '看不得图，找管理切下chatgpt';
     };
     // 图片转存 (QQ -> imgbb)
@@ -92,7 +90,7 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
   const chatCompletion = await openai.chat.completions.create({
     model,
     messages: commitMessages,
-    temperature: 0.6,
+    temperature: 1.3,
   }, {
     timeout: 45000,
   }).catch((e) => printError(`[AiModule Error] ${e}`));
