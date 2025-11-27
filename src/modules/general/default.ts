@@ -32,6 +32,7 @@ export default class DefaultReplyModule extends YoruModuleBase<PrivateMessageDat
         const replyMsgId = getReplyMsgId(message);
         const replyMsgData = await yorubot.getMessageFromId(replyMsgId);
         if (replyMsgData) {
+          // 如果引用回复的是 bot 的消息，则不带上原消息
           if (replyMsgData.user_id === myqq) {
             tempMessage = deleteAtFromMsg(message);
           } else {
