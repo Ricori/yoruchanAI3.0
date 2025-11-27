@@ -22,7 +22,6 @@ async function checkLastestTweet(
 
       // 进一步获取详细信息
       const tweetData = await getTweetPost(username, latestTweet.tweetId);
-      console.log('tweetData', tweetData);
 
       if (!tweetData) return;
 
