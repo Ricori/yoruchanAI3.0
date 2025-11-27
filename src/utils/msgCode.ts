@@ -117,7 +117,7 @@ export function getBigImgCode(file: string, isBase64 = false) {
   });
 }
 
-export function getVideoCode(file: string, cover: string) {
+export function getVideoCode(file: string, cover?: string) {
   return getMessageCode('video', {
     file,
     cover,

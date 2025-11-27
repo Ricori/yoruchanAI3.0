@@ -26,6 +26,15 @@ export interface BotConfig {
     /** 因近期B站API增加鉴权，需要配置自己账号的cookie */
     cookie: string;
   },
+  /** 推特动态推送 */
+  tweetPush: {
+    /** 是否开启功能 */
+    enable: boolean;
+    /** 推送配置 {推特用户名 : 要推送的群号列表 } */
+    config: Record<string, number[]>;
+    /** 夜夜酱API服务key */
+    yoruAPIKey: ''
+  },
   /** AI回复*/
   aiReply: {
     /** 是否开启AI回复 */

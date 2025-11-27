@@ -21,6 +21,9 @@ class YoruStorage {
   /** b站up最新动态时间  */
   private biliLastestDynamicTime: Record<string, number> = {};
 
+  /** 推特用户最新推文时间  */
+  private twitterLastestTweetTime: Record<string, number> = {};
+
   /** 群消息对话（每个id最多记录10条）  */
   private groupChatConversations: Record<number, ChatCompletionMessageParam[]> = {};
 
@@ -86,6 +89,15 @@ class YoruStorage {
   /** 获取某up最新动态时间 */
   getBiliLastestDynamicTime(uid: string) {
     return this.biliLastestDynamicTime[uid] ?? 0;
+  }
+
+  /** 设置某推特用户最新推文时间 */
+  setTwitterLastestTweetTime(username: string, time: number) {
+    this.twitterLastestTweetTime[username] = time;
+  }
+  /** 获取某推特用户最新推文时间 */
+  getTwitterLastestTweetTime(username: string) {
+    return this.twitterLastestTweetTime[username] ?? 0;
   }
 
   /** 设置某qq的群会话 */

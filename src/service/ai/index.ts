@@ -15,7 +15,7 @@ let thinkingChain = false;
 export function generateAiObj(useDeepSeek: boolean) {
   const baseURL = useDeepSeek ? 'https://api.deepseek.com' : 'https://api.openai-proxy.com/v1';
   const apiKey = useDeepSeek ? yorubot.config.aiReply.deepSeekKey : yorubot.config.aiReply.openAiKey;
-  model = useDeepSeek ? 'deepseek-reasoner' : 'gpt-4.1';
+  model = useDeepSeek ? 'deepseek-reasoner' : 'gpt-5.1';
 
   yoruStorage.cleanGroupChatConversations();
   openai = new OpenAI({
@@ -44,7 +44,7 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
   }
 
   if (imgUrl) {
-    if (model !== 'gpt-4.1') {
+    if (model !== 'gpt-5.1') {
       return '看不得图，找管理切下chatgpt';
     };
     // 图片转存 (QQ -> imgbb)
