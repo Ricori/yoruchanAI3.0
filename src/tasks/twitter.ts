@@ -4,8 +4,9 @@ import yoruStorage from '@/core/yoruStorage';
 import { printLog } from '@/utils/print';
 import { getImgCode, getVideoCode } from '@/utils/msgCode';
 import { getLatestTweet, getTweetPost } from '@/service/twitter/tweet';
+import { createScreenshot } from '@/service/twitter/screenshot';
 
-async function checkLastestTweet(
+export async function checkLastestTweet(
   { username, groupIds, yoruAPIKey }: { username: string, groupIds: number[], yoruAPIKey: string }
 ) {
   try {
@@ -21,18 +22,15 @@ async function checkLastestTweet(
       yoruStorage.setTwitterLastestTweetTime(username, newTime);
 
       // 进一步获取详细信息
-      const tweetData = await getTweetPost(username, latestTweet.tweetId);
-
+      const tweetData = await getTweetPost(username, '1994385602788389216');
       if (!tweetData) return;
+      // 生成推文图片
+      const dataUrl = await createScreenshot(tweetData);
+      if (!dataUrl) return;
 
       const msgTextArr = [] as string[];
-      msgTextArr.push(`【${tweetData.username} 发推特了！】\n-----------------------------`);
-      msgTextArr.push(tweetData.tweetText);
-      msgTextArr.push('-----------------------------');
-      if (tweetData.translatedText) {
-        msgTextArr.push(tweetData.translatedText);
-      }
-      msgTextArr.push('---------------------------');
+      msgTextArr.push(getImgCode(dataUrl));
+
       const images = tweetData.imgUrls ?? [];
       for (let i = 0; i < images.length; i += 1) {
         msgTextArr.push(getImgCode(images[i]));
@@ -47,14 +45,12 @@ async function checkLastestTweet(
           break;
         }
       }
-      msgTextArr.push(`推特链接：${tweetData.link}`);
+      msgTextArr.push(`推文链接：${tweetData.link}`);
 
       const msg = msgTextArr.join('\n');
-
       groupIds.forEach((groupId) => {
         yorubot.sendGroupMsg(groupId, msg);
       });
-
     }
 
   } catch (err) {
@@ -81,7 +77,7 @@ const task = new AsyncTask('twitterTask', async () => {
 });
 
 
-const TwitterPushJob = new SimpleIntervalJob({ seconds: 300 }, task, { id: 'twitterPush' });
+const TwitterPushJob = new SimpleIntervalJob({ seconds: 10 }, task, { id: 'twitterPush' });
 
 // 启动bot时将用户推文最新时间设置为现在，防止立即推送
 Object.keys(yorubot.config.tweetPush.config).forEach((username: string) => {

@@ -28,6 +28,7 @@
     "nanoid": "^5.0.7",
     "nhentai-api": "^3.4.3",
     "openai": "^4.83.0",
+    "puppeteer": "2.1.1",
     "toad-scheduler": "^3.0.0",
     "tunnel": "^0.0.6",
     "websocket": "^1.0.35"

@@ -4,6 +4,8 @@ import yorubot from '@/core/yoruBot';
 
 export interface TweetPost {
   username: string;
+  userScreenName: string;
+  userPofile: string;
   time: number;
   link: string;
   tweetText: string;
@@ -42,22 +44,25 @@ export async function getLatestTweet(username: string, apiKey: string) {
   return undefined;
 }
 
-export async function getTweetPost(username: string, tweetId: string) {
+export async function getTweetPost(username: string, tweetId: string, translate = true) {
   const ret2 = await Axios.get(`https://api.vxtwitter.com/${username}/status/${tweetId}`, { timeout: 20000 }).catch((e) => {
     printError(`[Vxtwitter Error] Fetch Error: ${e.message}`);
     return null;
   });
   if (ret2?.data) {
-    const post = await resolveData(ret2.data);
-    return post as TweetPost;
+    const post = await resolveData(ret2.data, translate);
+    return post;
   }
   return undefined;
 }
 
-async function resolveData(apiResponse: Record<any, any>) {
+async function resolveData(apiResponse: Record<any, any>, translate: boolean) {
 
-  const username = apiResponse.user_name || '';
-  const tweetURL = apiResponse.tweetURL || '';
+  const username: string = apiResponse.user_name || '';
+  const tweetURL: string = apiResponse.tweetURL || '';
+  const time: number = new Date(apiResponse.date || '').getTime();
+  const userScreenName: string = apiResponse.user_screen_name || '';
+  const userPofile: string = apiResponse.user_profile_image_url?.replace('pbs.twimg.com', 'pbstwimg_cdn.kvv.me');
   const imgUrls: string[] = [];
   const videoUrls: string[] = [];
 
@@ -66,11 +71,8 @@ async function resolveData(apiResponse: Record<any, any>) {
   if (apiResponse.text) {
     tweetText = apiResponse.text;
   }
-  if (tweetText) {
+  if (tweetText && translate) {
     translatedText = await translateText(tweetText);
-    if (translatedText) {
-      translatedText = `【夜夜酱翻译】:\n${translatedText}`;
-    }
   }
 
   for (const [_i, media] of apiResponse.media_extended.entries()) {
@@ -85,11 +87,14 @@ async function resolveData(apiResponse: Record<any, any>) {
 
   const post = {
     username,
+    userScreenName,
+    time,
     link: tweetURL,
     tweetText,
     translatedText,
     imgUrls,
-    videoUrls
+    videoUrls,
+    userPofile
   };
   return post;
 }
@@ -97,7 +102,7 @@ async function resolveData(apiResponse: Record<any, any>) {
 async function translateText(text: string) {
   const ret = await Axios.post('https://api.openai-proxy.com/v1/responses', {
     model: "gpt-5.1",
-    input: `把以下内容翻译成中文，不要有多余内容：${text}`
+    input: `把以下内容翻译成中文，不要包含tag，不要有多余内容：${text}`
   }, {
     headers: {
       'Content-Type': 'application/json',
