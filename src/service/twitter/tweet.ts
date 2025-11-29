@@ -77,10 +77,11 @@ async function resolveData(apiResponse: Record<any, any>, translate: boolean) {
 
   for (const [_i, media] of apiResponse.media_extended.entries()) {
     let mediaUrl: string = media.url || '';
-    mediaUrl = mediaUrl.replace('pbs.twimg.com', 'pbstwimg_cdn.kvv.me')
     if (media.type === 'image') {
+      mediaUrl = mediaUrl.replace('pbs.twimg.com', 'pbstwimg_cdn.kvv.me')
       imgUrls.push(mediaUrl);
     } else if (media.type === 'video' || media.type === 'gif') {
+      mediaUrl = mediaUrl.replace('video.twimg.com', 'videotwimg_cdn.kvv.me')
       videoUrls.push(mediaUrl)
     }
   }
