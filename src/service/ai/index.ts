@@ -8,28 +8,24 @@ import FormData from 'form-data';
 import { newSystemPrompt } from './systemText';
 import { trimChar } from '@/utils/function';
 
-let openai: OpenAI;
-let model: string;
-let thinkingChain = false;
+// 双模型应对不同场景
+const deepseekObj = new OpenAI({
+  baseURL: 'https://api.deepseek.com',
+  apiKey: yorubot.config.aiReply.deepSeekKey,
+});;
+const chatgptObj = new OpenAI({
+  baseURL: 'https://api.openai-proxy.com/v1',
+  apiKey: yorubot.config.aiReply.openAiKey,
+});;
 
-export function generateAiObj(useDeepSeek: boolean) {
-  const baseURL = useDeepSeek ? 'https://api.deepseek.com' : 'https://api.openai-proxy.com/v1';
-  const apiKey = useDeepSeek ? yorubot.config.aiReply.deepSeekKey : yorubot.config.aiReply.openAiKey;
-  model = useDeepSeek ? 'deepseek-reasoner' : 'gpt-5.1';
-
+// 主回复 model
+let useModel = 'deepseek';  // deepseek, chatgpt
+let modelName = 'deepseek-reasoner';  // deepseek-reasone, gpt-5.1
+const hasOpenAiKey = yorubot.config.aiReply.openAiKey !== '';
+export function changeModel(model: 'deepseek' | 'chatgpt') {
   yoruStorage.cleanGroupChatConversations();
-  openai = new OpenAI({
-    apiKey,
-    baseURL,
-  });
+  useModel = model;
 }
-export function switchThinkingChainDisplay(display: boolean) {
-  thinkingChain = display;
-}
-
-generateAiObj(yorubot.config.aiReply.useDeepSeek);
-
-
 export async function getAiReply(userId: number, text: string, imgUrl?: string) {
 
   const messages = [] as ChatCompletionMessageParam[];
@@ -43,10 +39,17 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
     messages.push(...temp);
   }
 
+  let nowUse = useModel;
+  let nowUseModelName = modelName;
+
   if (imgUrl) {
-    if (model !== 'gpt-5.1') {
-      return '看不得图，找管理切下chatgpt';
-    };
+    // 有图的情况下，临时使用chatgpt model
+    if (hasOpenAiKey) {
+      nowUse = 'chatgpt';
+      nowUseModelName = 'gpt-5.1'
+    } else {
+      return '未配置openai key，无法解析图片';
+    }
     // 图片转存 (QQ -> imgbb)
     const imgBuffer = await Axios.get(imgUrl, { responseType: 'arraybuffer' }).then((r) => r.data).catch((e) => {
       printError(`[AiModule Error] Can't fetch QQ img. Error: ${e.message}`);
@@ -87,13 +90,19 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
 
   const commitMessages = [systemMsg, ...messages];
 
-  const chatCompletion = await openai.chat.completions.create({
-    model,
+  let chatCompletion: OpenAI.Chat.Completions.ChatCompletion | void;
+  const config = {
+    model: nowUseModelName,
     messages: commitMessages,
     temperature: 1.3,
-  }, {
-    timeout: 45000,
-  }).catch((e) => printError(`[AiModule Error] ${e}`));
+  }
+  if (nowUse === 'chatgpt') {
+    chatCompletion = await chatgptObj.chat.completions.create(config, { timeout: 20000 })
+      .catch((e) => printError(`[AiModule Error] ${e}`));
+  } else {
+    chatCompletion = await deepseekObj.chat.completions.create(config, { timeout: 20000 })
+      .catch((e) => printError(`[AiModule Error] ${e}`));
+  }
 
   if (chatCompletion?.choices?.[0]?.message) {
     const { message } = chatCompletion.choices[0];
@@ -103,9 +112,6 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
       content: newContent
     };
     yoruStorage.setGroupChatConversations(userId, [...messages, newMsg]);
-    if (thinkingChain) {
-      newContent = `---[夜夜的思考]---\n${(message as any).reasoning_content}\n----------------\n\n${newContent}`;
-    }
     return newContent;
   }
   return undefined;

@@ -1,7 +1,7 @@
 import { GroupMessageData, PrivateMessageData } from "@/types/event";
 import YoruModuleBase from "../base";
 import yorubot from '@/core/yoruBot';
-import { generateAiObj, switchThinkingChainDisplay } from "@/service/ai";
+import { changeModel } from "@/service/ai";
 
 export default class AdminModule extends YoruModuleBase<PrivateMessageData | GroupMessageData> {
 
@@ -15,17 +15,13 @@ export default class AdminModule extends YoruModuleBase<PrivateMessageData | Gro
       const message = this.data.message;
       // Exec administrator command
 
-      // AI model switch
-      const exec = /--ai_model=([0-9])/.exec(message);
+      // AI model switch (chatgpt or deepseek)
+      const exec = /--ai_model=([^\s]+)/.exec(message);
       if (exec !== null) {
         return true;
       }
 
-      // AI reasoning switch [debug]
-      const exec2 = /--ai_reasoning=([0-9])/.exec(message);
-      if (exec2 !== null) {
-        return true;
-      }
+
     }
     return false;
   }
@@ -35,18 +31,12 @@ export default class AdminModule extends YoruModuleBase<PrivateMessageData | Gro
     const groupId = messageType === 'group' ? this.data.group_id : undefined;
 
     // AI model switch
-    const switchAIId = /--ai_model=([0-9])/.exec(message)?.[1];
-    if (switchAIId === '1' || switchAIId === '2') {
-      generateAiObj(switchAIId === '1' ? false : true);
-      const reply = `[YoruSystem] The AI model successfully switched to ${switchAIId === '1' ? 'chatgpt' : 'deepseek'}.`;
-      yorubot.sendMsg(groupId, userId, reply);
-    }
+    const match = message.match(/--ai_model=([^\s]+)/);
+    const model = match ? match[1] : null;
 
-    // AI reasoning switch [debug]
-    const reasoningId = /--ai_reasoning=([0-9])/.exec(message)?.[1];
-    if (reasoningId === '0' || reasoningId === '1') {
-      switchThinkingChainDisplay(Boolean(+reasoningId));
-      const reply = `[YoruSystem] Successfully ${reasoningId === '1' ? 'opened' : 'closed'} the AI ​​thinking chain display.`;
+    if (model === 'chatgpt' || model === 'deepseek') {
+      changeModel(model);
+      const reply = `[YoruSystem] The AI model successfully switched to ${model}.`;
       yorubot.sendMsg(groupId, userId, reply);
     }
 
