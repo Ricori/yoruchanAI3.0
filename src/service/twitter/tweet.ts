@@ -44,8 +44,8 @@ export async function getLatestTweet(username: string, apiKey: string) {
   return undefined;
 }
 
-export async function getTweetPost(username: string, tweetId: string, translate = true) {
-  const ret2 = await Axios.get(`https://api.vxtwitter.com/${username}/status/${tweetId}`, { timeout: 20000 }).catch((e) => {
+export async function getTweetPost(tweetId: string, translate = true) {
+  const ret2 = await Axios.get(`https://api.vxtwitter.com/tt/status/${tweetId}`, { timeout: 20000 }).catch((e) => {
     printError(`[Vxtwitter Error] Fetch Error: ${e.message}`);
     return null;
   });

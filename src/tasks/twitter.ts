@@ -5,14 +5,42 @@ import { printLog } from '@/utils/print';
 import { getImgCode, getVideoCode } from '@/utils/msgCode';
 import { getLatestTweet, getTweetPost } from '@/service/twitter/tweet';
 import { createScreenshot } from '@/service/twitter/screenshot';
+export async function createMsgFromTweetId(tweetId: string) {
+  // 获取详细信息
+  const tweetData = await getTweetPost(tweetId);
+  if (!tweetData) return;
+  // 生成推文图片
+  const dataUrl = await createScreenshot(tweetData);
+  if (!dataUrl) return;
 
-export async function checkLastestTweet(
+  const msgTextArr = [] as string[];
+  msgTextArr.push(getImgCode(dataUrl));
+  const images = tweetData.imgUrls ?? [];
+  for (let i = 0; i < images.length; i += 1) {
+    msgTextArr.push(getImgCode(images[i]));
+    if (i > 1) {
+      break;
+    }
+  }
+  const videos = tweetData.videoUrls ?? [];
+  for (let i = 0; i < videos.length; i += 1) {
+    msgTextArr.push(getVideoCode(videos[i]));
+    if (i > 1) {
+      break;
+    }
+  }
+
+  msgTextArr.push(`推文链接：${tweetData.link}`);
+  const msg = msgTextArr.join('\n');
+  return msg;
+}
+
+async function checkLastestTweet(
   { username, groupIds, yoruAPIKey }: { username: string, groupIds: number[], yoruAPIKey: string }
 ) {
   try {
     const latestTweet = await getLatestTweet(username, yoruAPIKey);
     if (!latestTweet || !latestTweet.time) return;
-
     const preTime = yoruStorage.getTwitterLastestTweetTime(username);
     const newTime = latestTweet.time;
 
@@ -21,33 +49,9 @@ export async function checkLastestTweet(
       // 设置最新推特时间
       yoruStorage.setTwitterLastestTweetTime(username, newTime);
 
-      // 进一步获取详细信息
-      const tweetData = await getTweetPost(username, latestTweet.tweetId);
-      if (!tweetData) return;
-      // 生成推文图片
-      const dataUrl = await createScreenshot(tweetData);
-      if (!dataUrl) return;
+      const msg = await createMsgFromTweetId(latestTweet.tweetId)
+      if (!msg) return;
 
-      const msgTextArr = [] as string[];
-      msgTextArr.push(getImgCode(dataUrl));
-
-      const images = tweetData.imgUrls ?? [];
-      for (let i = 0; i < images.length; i += 1) {
-        msgTextArr.push(getImgCode(images[i]));
-        if (i > 1) {
-          break;
-        }
-      }
-      const videos = tweetData.videoUrls ?? [];
-      for (let i = 0; i < videos.length; i += 1) {
-        msgTextArr.push(getVideoCode(videos[i]));
-        if (i > 1) {
-          break;
-        }
-      }
-      msgTextArr.push(`推文链接：${tweetData.link}`);
-
-      const msg = msgTextArr.join('\n');
       groupIds.forEach((groupId) => {
         yorubot.sendGroupMsg(groupId, msg);
       });
