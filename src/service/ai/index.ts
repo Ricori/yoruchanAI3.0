@@ -44,11 +44,13 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
 
   if (imgUrl) {
     // 有图的情况下，临时使用chatgpt model
-    if (hasOpenAiKey) {
-      nowUse = 'chatgpt';
-      nowUseModelName = 'gpt-5.1'
-    } else {
-      return '未配置openai key，无法解析图片';
+    if (nowUse === 'deepseek') {
+      if (hasOpenAiKey) {
+        nowUse = 'chatgpt';
+        nowUseModelName = 'gpt-5.1'
+      } else {
+        return '未配置openai key，无法解析图片';
+      }
     }
     // 图片转存 (QQ -> imgbb)
     const imgBuffer = await Axios.get(imgUrl, { responseType: 'arraybuffer' }).then((r) => r.data).catch((e) => {
@@ -111,6 +113,13 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
       role: message.role,
       content: newContent
     };
+    // 临时使用其他 model 的情况下特殊处理
+    if (nowUse !== useModel) {
+      const temp = messages[messages.length - 1].content;
+      if (typeof temp !== 'string') {
+        temp?.pop();
+      }
+    }
     yoruStorage.setGroupChatConversations(userId, [...messages, newMsg]);
     return newContent;
   }
