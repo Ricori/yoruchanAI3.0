@@ -22,7 +22,7 @@ export async function checkLastestTweet(
       yoruStorage.setTwitterLastestTweetTime(username, newTime);
 
       // 进一步获取详细信息
-      const tweetData = await getTweetPost(username, '1994385602788389216');
+      const tweetData = await getTweetPost(username, latestTweet.tweetId);
       if (!tweetData) return;
       // 生成推文图片
       const dataUrl = await createScreenshot(tweetData);
