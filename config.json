@@ -42,7 +42,8 @@
       "enable": true,
       "useDeepSeek": true,
       "openAiKey": "",
-      "deepSeekKey": ""
+      "deepSeekKey": "",
+      "blackList": []
     },
     "hPic": {
       "enable": true,

@@ -10,6 +10,12 @@ export default class DefaultReplyModule extends YoruModuleBase<PrivateMessageDat
   static NAME = 'DefaultReplyModule';
 
   async checkConditions() {
+    const { message_type: messageType } = this.data;
+    const groupId = messageType === 'group' ? this.data.group_id : 0;
+    const { blackList } = yorubot.config.aiReply;
+    if (blackList.includes(groupId)) {
+      return false;
+    }
     return true;
   }
 

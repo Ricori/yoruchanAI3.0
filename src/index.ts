@@ -33,7 +33,7 @@ yorubot.loadModule('groupAt', [
 // 加载群消息默认监听
 yorubot.loadModule('group', [
   HPicModule,
-  RepeaterModule,
+  // RepeaterModule,
 ]);
 
 // 加载定时任务

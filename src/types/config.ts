@@ -45,6 +45,8 @@ export interface BotConfig {
     openAiKey: string;
     /** deepSeek key */
     deepSeekKey: string;
+    /** 黑名单，黑名单内的群不会触发自动回复 */
+    blackList: number[];
   },
   /** 瑟图功能 */
   hPic: {
