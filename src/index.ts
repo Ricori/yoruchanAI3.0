@@ -31,10 +31,10 @@ yorubot.loadModule('groupAt', [
 ]);
 
 // 加载群消息默认监听
-yorubot.loadModule('group', [
-  HPicModule,
-  // RepeaterModule,
-]);
+// yorubot.loadModule('group', [
+//   HPicModule,
+//   RepeaterModule,
+// ]);
 
 // 加载定时任务
 yoruSchedule.loadJob([
