@@ -101,20 +101,22 @@ async function resolveData(apiResponse: Record<any, any>, translate: boolean) {
 }
 
 async function translateText(text: string) {
-  const ret = await Axios.post('https://api.openai-proxy.com/v1/responses', {
-    model: "gpt-5.1",
-    input: `把以下内容翻译成中文，不要包含tag，不要有多余内容：${text}`
+  const ret = await Axios.post('https://api.deepseek.com/chat/completions', {
+    model: "deepseek-chat",
+    messages: [
+      { "role": "user", "content": `把以下内容翻译成中文，不要包含tag，不要有多余内容：${text}` }
+    ]
   }, {
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${yorubot.config.aiReply.openAiKey}`
+      'Authorization': `Bearer ${yorubot.config.aiReply.deepSeekKey}`
     }
   }).catch((e) => {
-    printError(`[OpenAI Error] Fetch Error: ${e.message}`);
+    printError(`[Deepseek Error] Fetch Error: ${e.message}`);
     return null;
   });
-  if (ret?.data?.output?.[0]?.content?.[0]?.text) {
-    return ret.data.output[0].content[0].text
+  if (ret?.data?.choices?.[0]?.message?.content) {
+    return ret?.data?.choices?.[0]?.message?.content
   }
   return null;
 }
