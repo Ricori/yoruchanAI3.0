@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/indent */
 import puppeteer from 'puppeteer';
 import { TweetPost } from './tweet';
 
@@ -13,21 +14,22 @@ interface tweetDisplayData {
 }
 // 把换行转成 <br>
 function nl2br(str: string) {
-  return str.trim().replace(/\r?\n/g, "<br>");
+  return str.trim().replace(/\r?\n/g, '<br>');
 }
 function extractAndRemoveTags(text: string) {
   // 提取所有 tag（#开头，直到遇到空白或换行）
   const regex = /#([^\s#]+)/g;
   const tags: string[] = [];
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(text)) !== null) {
-    tags.push('#' + match[1]);
+  let match: RegExpExecArray | null = regex.exec(text);
+  while (match !== null) {
+    tags.push(`#${match[1]}`);
+    match = regex.exec(text);
   }
   // 删除所有 tag（包括后面可能有的空格）
   const textWithoutTags = text.replace(regex, '');
   return {
     tags,
-    text: textWithoutTags
+    text: textWithoutTags,
   };
 }
 function createHtml(tweetData: tweetDisplayData) {
@@ -158,8 +160,8 @@ function createHtml(tweetData: tweetDisplayData) {
         ${tweetData.hashTags[0] ? `<br><div class="hashtag">${tweetData.hashTags[0]}</div>` : ''}
         ${tweetData.hashTags[1] ? `<div class="hashtag">${tweetData.hashTags[1]}</div>` : ''}
       </div>
-      ${tweetData.transText ?
-      `<div class="card">
+      ${tweetData.transText
+      ? `<div class="card">
       <div class="ltr">
         <span>由 夜夜酱 </span><span class="ltr-blue">翻译自 日语</span>
       </div>
@@ -168,8 +170,7 @@ function createHtml(tweetData: tweetDisplayData) {
       </div>
       ${tweetData.hashTags[0] ? `<br><div class="hashtag">${tweetData.hashTags[0]}</div>` : ''}
       ${tweetData.hashTags[1] ? `<div class="hashtag">${tweetData.hashTags[1]}</div>` : ''}
-    </div>` : ''
-    }
+    </div>` : ''}
       <div class="footer">
         <span>${tweetData.time} · ${tweetData.day}</span>
       </div>
@@ -186,17 +187,16 @@ function formatTime(ts: number) {
   const d = date.getDate();
   const hours = date.getHours();
   const minutes = date.getMinutes().toString().padStart(2, '0');
-  const period = hours < 12 ? "上午" : "下午";
+  const period = hours < 12 ? '上午' : '下午';
   const h12 = hours % 12 === 0 ? 12 : hours % 12;
   return {
     time: `${period}${h12}:${minutes}`,
-    day: `${y}年${m}月${d}日`
+    day: `${y}年${m}月${d}日`,
   };
-};
+}
 
 export async function createScreenshot(data: TweetPost) {
-
-  const { tags, text } = extractAndRemoveTags(data.tweetText)
+  const { tags, text } = extractAndRemoveTags(data.tweetText);
   const { time, day } = formatTime(data.time);
 
   const html = createHtml({
@@ -207,21 +207,21 @@ export async function createScreenshot(data: TweetPost) {
     transText: data.translatedText,
     hashTags: tags,
     time,
-    day
-  })
+    day,
+  });
 
   const browser = await puppeteer.launch({
-    headless: true
+    headless: true,
   });
   const page = await browser.newPage();
 
   await page.setViewport({ width: 598, height: 1000, deviceScaleFactor: 2 });
-  await page.setContent(html, { waitUntil: "networkidle0" });
+  await page.setContent(html, { waitUntil: 'networkidle0' });
 
   try {
-    const tweetElement = await page.$(".tweet");
+    const tweetElement = await page.$('.tweet');
     if (tweetElement) {
-      const base64 = await tweetElement.screenshot({ encoding: "base64" });
+      const base64 = await tweetElement.screenshot({ encoding: 'base64' });
       const dataUrl = `data:image/png;base64,${base64}`;
       return dataUrl;
     }
@@ -231,5 +231,4 @@ export async function createScreenshot(data: TweetPost) {
   } finally {
     await browser.close();
   }
-
 }
