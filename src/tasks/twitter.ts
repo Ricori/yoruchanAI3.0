@@ -5,6 +5,7 @@ import { printLog } from '@/utils/print';
 import { getImgCode, getVideoCode } from '@/utils/msgCode';
 import { getLatestTweet, getTweetPost } from '@/service/twitter/tweet';
 import { createScreenshot } from '@/service/twitter/screenshot';
+
 export async function createMsgFromTweetId(tweetId: string) {
   // 获取详细信息
   const tweetData = await getTweetPost(tweetId);
@@ -36,7 +37,7 @@ export async function createMsgFromTweetId(tweetId: string) {
 }
 
 async function checkLastestTweet(
-  { username, groupIds, yoruAPIKey }: { username: string, groupIds: number[], yoruAPIKey: string }
+  { username, groupIds, yoruAPIKey }: { username: string, groupIds: number[], yoruAPIKey: string },
 ) {
   try {
     const latestTweet = await getLatestTweet(username, yoruAPIKey);
@@ -49,14 +50,13 @@ async function checkLastestTweet(
       // 设置最新推特时间
       yoruStorage.setTwitterLastestTweetTime(username, newTime);
 
-      const msg = await createMsgFromTweetId(latestTweet.tweetId)
+      const msg = await createMsgFromTweetId(latestTweet.tweetId);
       if (!msg) return;
 
       groupIds.forEach((groupId) => {
         yorubot.sendGroupMsg(groupId, msg);
       });
     }
-
   } catch (err) {
     printLog(`[twiiterTask] Error: ${err}`);
   }
@@ -73,8 +73,8 @@ const task = new AsyncTask('twitterTask', async () => {
         setTimeout(() => checkLastestTweet({
           username,
           groupIds: config.config[username],
-          yoruAPIKey: config.yoruAPIKey
-        }), i * 10000)
+          yoruAPIKey: config.yoruAPIKey,
+        }), i * 15000);
       }
     });
   }
