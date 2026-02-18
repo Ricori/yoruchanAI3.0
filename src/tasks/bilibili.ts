@@ -6,7 +6,7 @@ import getBiliDynamic from '@/service/bilibili/dynamic';
 import { getImgCode } from '@/utils/msgCode';
 
 async function checkBiliDynamic(
-  { uid, groupIds, myBiliCookie }: { uid: string, groupIds: number[], myBiliCookie: string }
+  { uid, groupIds, myBiliCookie }: { uid: string, groupIds: number[], myBiliCookie: string },
 ) {
   try {
     const dyData = await getBiliDynamic(uid, myBiliCookie);
@@ -62,8 +62,8 @@ const task = new AsyncTask('biliTask', async () => {
         setTimeout(() => checkBiliDynamic({
           uid,
           groupIds: config.config[uid],
-          myBiliCookie: config.cookie
-        }), i * 2000)
+          myBiliCookie: config.cookie,
+        }), i * 2000);
       }
     });
   }
