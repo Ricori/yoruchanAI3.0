@@ -5,7 +5,7 @@ import { printError } from '@/utils/print';
 import yoruStorage from '@/core/yoruStorage';
 import Axios from 'axios';
 import { trimChar } from '@/utils/function';
-import { systemPrompt } from './systemText';
+import { systemPrompt } from './prompt';
 
 const client = new OpenAI({
   apiKey: yorubot.config.aiReply.moonshotKey,
