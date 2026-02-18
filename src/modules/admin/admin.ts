@@ -1,6 +1,7 @@
 import { GroupMessageData, PrivateMessageData } from '@/types/event';
 import yorubot from '@/core/yoruBot';
 import { createMsgFromTweetId } from '@/tasks/twitter';
+import yoruStorage from '@/core/yoruStorage';
 import YoruModuleBase from '../base';
 
 export default class AdminModule extends YoruModuleBase<PrivateMessageData | GroupMessageData> {
@@ -14,9 +15,8 @@ export default class AdminModule extends YoruModuleBase<PrivateMessageData | Gro
       const { message } = this.data;
       // Exec administrator command
 
-      // AI model switch (chatgpt or deepseek)
-      const modelExec = /--ai_model=([^\s]+)/.exec(message);
-      if (modelExec !== null) {
+      // clean memory
+      if (message === '--clean-memory') {
         return true;
       }
 
@@ -32,6 +32,13 @@ export default class AdminModule extends YoruModuleBase<PrivateMessageData | Gro
   async run() {
     const { user_id: userId, message_type: messageType, message } = this.data;
     const groupId = messageType === 'group' ? this.data.group_id : undefined;
+
+    // clean memory
+    if (message === '--clean-memory') {
+      yoruStorage.cleanGroupChatConversations();
+      yorubot.sendMsg(groupId, userId, '[YoruSystem] Memory cleaned.');
+      return;
+    }
 
     // Push twiiter
     const tweetIdMatch = message.match(/--push-twiiter=(\d+)/);
