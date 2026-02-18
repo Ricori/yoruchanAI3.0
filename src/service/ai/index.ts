@@ -4,7 +4,6 @@ import yorubot from '@/core/yoruBot';
 import { printError } from '@/utils/print';
 import yoruStorage from '@/core/yoruStorage';
 import Axios from 'axios';
-import FormData from 'form-data';
 import { trimChar } from '@/utils/function';
 import { systemPrompt } from './systemText';
 
@@ -26,37 +25,30 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
   }
 
   if (imgUrl) {
-    // 图片转存 (QQ -> imgbb)
-    const imgBuffer = await Axios.get(imgUrl, { responseType: 'arraybuffer' }).then((r) => r.data).catch((e) => {
-      printError(`[AiModule Error] Can't fetch QQ img. Error: ${e.message}`);
-      return null;
-    });
-    if (!imgBuffer) return undefined;
-    const form = new FormData();
-    form.append('image', imgBuffer, 'image');
-    const ret = await Axios.post('https://api.imgbb.com/1/upload', form, {
-      params: {
-        key: 'a8a68ddaf156ea21809cf39d6c7481c8',
-        expiration: 86400 * 7,
-      },
+    const response = await Axios.get(imgUrl, {
+      responseType: 'arraybuffer',
+      timeout: 10000,
     }).catch((e) => {
-      printError(`[AiModule Error] Cant't upload file to imgbb. Error: ${e.message}`);
+      printError(`[AiModule Error] Can't fetch image. Error: ${e.message}`);
       return null;
     });
-    if (!ret || !ret?.data?.success || !ret?.data?.data?.url) return undefined;
-    const convertedImgUrl = ret.data.data.url;
+
+    if (!response) return null;
+    const base64Img = Buffer.from(response.data).toString('base64');
+
     messages.push({
       role: 'user',
       content: [
-        { type: 'text', text },
+        { type: 'text', text: text ?? '这张图里有什么内容？' },
         {
           type: 'image_url',
           image_url: {
-            url: convertedImgUrl,
+            url: `data:image/jpeg;base64,${base64Img}`,
           },
         },
       ],
     });
+    console.log(messages[0].content?.[1]);
   } else {
     messages.push({
       role: 'user',
@@ -71,7 +63,7 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
       model: 'kimi-k2.5',
       messages: commitMessages,
     },
-    { timeout: 20000 },
+    { timeout: 40000 },
   ).catch((e) => printError(`[AiModule Error] ${e}`));
 
   if (completion?.choices?.[0]?.message) {

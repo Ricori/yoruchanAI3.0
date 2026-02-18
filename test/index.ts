@@ -14,4 +14,4 @@ import { createMsgFromTweetId } from '@/tasks/twitter';
 
 // getAiReply(123, '今天吃什么？').then((res) => console.log(res))
 
-console.log(await createMsgFromTweetId('1994433784989761914'));
+console.log(await createMsgFromTweetId('2024011099478122755'));
