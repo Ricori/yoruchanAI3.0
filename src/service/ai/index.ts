@@ -39,7 +39,7 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
     messages.push({
       role: 'user',
       content: [
-        { type: 'text', text: text ?? '这张图里有什么内容？' },
+        { type: 'text', text: text || '这张图里有什么内容？' },
         {
           type: 'image_url',
           image_url: {
@@ -48,7 +48,6 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
         },
       ],
     });
-    console.log(messages[0].content?.[1]);
   } else {
     messages.push({
       role: 'user',
