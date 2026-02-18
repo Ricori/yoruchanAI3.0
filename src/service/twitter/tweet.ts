@@ -100,18 +100,18 @@ async function resolveData(apiResponse: Record<any, any>, translate: boolean) {
 }
 
 async function translateText(text: string) {
-  const ret = await Axios.post('https://api.deepseek.com/chat/completions', {
-    model: 'deepseek-chat',
+  const ret = await Axios.post('https://api.moonshot.cn/v1/chat/completions', {
+    model: 'kimi-k2.5',
     messages: [
       { role: 'user', content: `把以下内容翻译成中文，不要包含tag，不要有多余内容：${text}` },
     ],
   }, {
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${yorubot.config.aiReply.deepSeekKey}`,
+      Authorization: `Bearer ${yorubot.config.aiReply.moonshotKey}`,
     },
   }).catch((e) => {
-    printError(`[Deepseek Error] Fetch Error: ${e.message}`);
+    printError(`[Moonshot Error] Fetch Error: ${e.message}`);
     return null;
   });
   if (ret?.data?.choices?.[0]?.message?.content) {

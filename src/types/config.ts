@@ -35,16 +35,12 @@ export interface BotConfig {
     /** 夜夜酱API服务key */
     yoruAPIKey: ''
   },
-  /** AI回复*/
+  /** AI回复 */
   aiReply: {
     /** 是否开启AI回复 */
     enable: boolean;
-    /** 使用deepSeek模型，启用时请配置deepSeek key*/
-    useDeepSeek: boolean;
-    /** openAI key */
-    openAiKey: string;
-    /** deepSeek key */
-    deepSeekKey: string;
+    /** kimi模型 key */
+    moonshotKey: string;
     /** 黑名单，黑名单内的群不会触发自动回复 */
     blackList: number[];
   },

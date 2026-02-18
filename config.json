@@ -40,9 +40,7 @@
     },
     "aiReply": {
       "enable": true,
-      "useDeepSeek": true,
-      "openAiKey": "",
-      "deepSeekKey": "",
+      "moonshotKey": "",
       "blackList": []
     },
     "hPic": {

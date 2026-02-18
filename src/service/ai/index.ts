@@ -5,33 +5,19 @@ import { printError } from '@/utils/print';
 import yoruStorage from '@/core/yoruStorage';
 import Axios from 'axios';
 import FormData from 'form-data';
-import { newSystemPrompt } from './systemText';
 import { trimChar } from '@/utils/function';
+import { systemPrompt } from './systemText';
 
-// 双模型应对不同场景
-const deepseekObj = new OpenAI({
-  baseURL: 'https://api.deepseek.com',
-  apiKey: yorubot.config.aiReply.deepSeekKey,
-});;
-const chatgptObj = new OpenAI({
-  baseURL: 'https://api.openai-proxy.com/v1',
-  apiKey: yorubot.config.aiReply.openAiKey,
-});;
+const client = new OpenAI({
+  apiKey: yorubot.config.aiReply.moonshotKey,
+  baseURL: 'https://api.moonshot.cn/v1',
+});
 
-// 主回复 model
-let useModel = 'deepseek';  // deepseek, chatgpt
-let modelName = 'deepseek-reasoner';  // deepseek-reasone, gpt-5.1
-const hasOpenAiKey = yorubot.config.aiReply.openAiKey !== '';
-export function changeModel(model: 'deepseek' | 'chatgpt') {
-  yoruStorage.cleanGroupChatConversations();
-  useModel = model;
-}
 export async function getAiReply(userId: number, text: string, imgUrl?: string) {
-
   const messages = [] as ChatCompletionMessageParam[];
   const systemMsg: ChatCompletionMessageParam = {
     role: 'system',
-    content: newSystemPrompt,
+    content: systemPrompt,
   };
 
   const temp = yoruStorage.getGroupChatConversations(userId);
@@ -39,19 +25,7 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
     messages.push(...temp);
   }
 
-  let nowUse = useModel;
-  let nowUseModelName = modelName;
-
   if (imgUrl) {
-    // 有图的情况下，临时使用chatgpt model
-    if (nowUse === 'deepseek') {
-      if (hasOpenAiKey) {
-        nowUse = 'chatgpt';
-        nowUseModelName = 'gpt-5.1'
-      } else {
-        return '未配置openai key，无法解析图片';
-      }
-    }
     // 图片转存 (QQ -> imgbb)
     const imgBuffer = await Axios.get(imgUrl, { responseType: 'arraybuffer' }).then((r) => r.data).catch((e) => {
       printError(`[AiModule Error] Can't fetch QQ img. Error: ${e.message}`);
@@ -63,8 +37,8 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
     const ret = await Axios.post('https://api.imgbb.com/1/upload', form, {
       params: {
         key: 'a8a68ddaf156ea21809cf39d6c7481c8',
-        expiration: 86400 * 7
-      }
+        expiration: 86400 * 7,
+      },
     }).catch((e) => {
       printError(`[AiModule Error] Cant't upload file to imgbb. Error: ${e.message}`);
       return null;
@@ -74,53 +48,46 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
     messages.push({
       role: 'user',
       content: [
-        { type: "text", text },
+        { type: 'text', text },
         {
-          type: "image_url",
+          type: 'image_url',
           image_url: {
-            "url": convertedImgUrl,
+            url: convertedImgUrl,
           },
-        }
-      ]
+        },
+      ],
     });
   } else {
     messages.push({
       role: 'user',
       content: text,
     });
-  };
+  }
 
   const commitMessages = [systemMsg, ...messages];
 
-  let chatCompletion: OpenAI.Chat.Completions.ChatCompletion | void;
-  const config = {
-    model: nowUseModelName,
-    messages: commitMessages,
-    temperature: 1.3,
-  }
-  if (nowUse === 'chatgpt') {
-    chatCompletion = await chatgptObj.chat.completions.create(config, { timeout: 20000 })
-      .catch((e) => printError(`[AiModule Error] ${e}`));
-  } else {
-    chatCompletion = await deepseekObj.chat.completions.create(config, { timeout: 20000 })
-      .catch((e) => printError(`[AiModule Error] ${e}`));
-  }
+  const completion = await client.chat.completions.create(
+    {
+      model: 'kimi-k2.5',
+      messages: commitMessages,
+    },
+    { timeout: 20000 },
+  ).catch((e) => printError(`[AiModule Error] ${e}`));
 
-  if (chatCompletion?.choices?.[0]?.message) {
-    const { message } = chatCompletion.choices[0];
-    let newContent = trimChar(message.content, "\"")?.replace(/\（.*?\）/g, '').replace(/\(.*?\)/g, '');
-    const newMsg = {
-      role: message.role,
-      content: newContent
-    };
-    // 临时使用其他 model 的情况下特殊处理
-    if (nowUse !== useModel) {
-      const temp = messages[messages.length - 1].content;
-      if (typeof temp !== 'string') {
-        temp?.pop();
-      }
-    }
-    yoruStorage.setGroupChatConversations(userId, [...messages, newMsg]);
+  if (completion?.choices?.[0]?.message) {
+    const { message } = completion.choices[0];
+    const newContent = trimChar(message.content, '"')?.replace(/（.*?）/g, '').replace(/\(.*?\)/g, '');
+
+    yoruStorage.setGroupChatConversations(
+      userId,
+      [
+        ...messages,
+        {
+          role: message.role,
+          content: newContent,
+        },
+      ],
+    );
     return newContent;
   }
   return undefined;

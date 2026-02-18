@@ -15,6 +15,7 @@ export async function createMsgFromTweetId(tweetId: string) {
   if (!dataUrl) return;
 
   const msgTextArr = [] as string[];
+  const videoTextArr = [] as string[];
   msgTextArr.push(getImgCode(dataUrl));
   const images = tweetData.imgUrls ?? [];
   for (let i = 0; i < images.length; i += 1) {
@@ -25,15 +26,19 @@ export async function createMsgFromTweetId(tweetId: string) {
   }
   const videos = tweetData.videoUrls ?? [];
   for (let i = 0; i < videos.length; i += 1) {
-    msgTextArr.push(getVideoCode(videos[i]));
+    videoTextArr.push(getVideoCode(videos[i]));
     if (i > 1) {
       break;
     }
   }
 
   msgTextArr.push(`推文链接：${tweetData.link}`);
-  const msg = msgTextArr.join('\n');
-  return msg;
+  const textMsg = msgTextArr.join('\n');
+  const videoMsg = videoTextArr.join('\n');
+  if (videoTextArr.length > 0) {
+    return [textMsg, videoMsg];
+  }
+  return [textMsg];
 }
 
 async function checkLastestTweet(
@@ -50,11 +55,13 @@ async function checkLastestTweet(
       // 设置最新推特时间
       yoruStorage.setTwitterLastestTweetTime(username, newTime);
 
-      const msg = await createMsgFromTweetId(latestTweet.tweetId);
-      if (!msg) return;
+      const msgArr = await createMsgFromTweetId(latestTweet.tweetId);
+      if (!msgArr || msgArr.length === 0) return;
 
       groupIds.forEach((groupId) => {
-        yorubot.sendGroupMsg(groupId, msg);
+        for (const msg of msgArr) {
+          yorubot.sendGroupMsg(groupId, msg);
+        }
       });
     }
   } catch (err) {

@@ -140,13 +140,12 @@ class YoruBot extends YoruCore {
   async getImageInfo(file: string) {
     const res = await this.yoruWS.call('get_image', {
       file,
-    })
+    });
     if (res.retcode === 0 && res.data) {
       return res.data as { size: number; filename: string; url: string };
     }
     return undefined;
   }
-
 }
 
 export default new YoruBot();
