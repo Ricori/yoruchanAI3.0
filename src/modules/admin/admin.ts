@@ -16,13 +16,14 @@ export default class AdminModule extends YoruModuleBase<PrivateMessageData | Gro
       // Exec administrator command
 
       // clean memory
-      if (message === '--clean-memory') {
+      if (message === '/clean-memory') {
         return true;
       }
 
       // Push twiiter
-      const pushTwiiterExec = /--push-twiiter=(\d+)/.exec(message);
-      if (pushTwiiterExec !== null) {
+      const pushTwiiterRegex = /\/push-twitter\s+(\d+).*(?:status\/|\s+)(\d+)/;
+      const pushTwiiterMatch = message.match(pushTwiiterRegex);
+      if (pushTwiiterMatch) {
         return true;
       }
     }
@@ -34,18 +35,18 @@ export default class AdminModule extends YoruModuleBase<PrivateMessageData | Gro
     const groupId = messageType === 'group' ? this.data.group_id : undefined;
 
     // clean memory
-    if (message === '--clean-memory') {
+    if (message === '/clean-memory') {
       yoruStorage.cleanGroupChatConversations();
       yorubot.sendMsg(groupId, userId, '[YoruSystem] Memory cleaned.');
       return;
     }
 
     // Push twiiter
-    const tweetIdMatch = message.match(/--push-twiiter=(\d+)/);
-    const groupMatch = message.match(/--group=(\d+)/);
-    const tweetId = tweetIdMatch ? tweetIdMatch[1] : null;
-    const targetGroupId = groupMatch ? groupMatch[1] : null;
-    if (tweetId && targetGroupId) {
+    const pushTwiiterRegex = /\/push-twitter\s+(\d+).*(?:status\/|\s+)(\d+)/;
+    const pushTwiiterMatch = message.match(pushTwiiterRegex);
+
+    if (pushTwiiterMatch) {
+      const [, targetGroupId, tweetId] = pushTwiiterMatch;
       const msgArr = await createMsgFromTweetId(tweetId);
       if (!msgArr || msgArr.length === 0) return;
       for (const msg of msgArr) {
