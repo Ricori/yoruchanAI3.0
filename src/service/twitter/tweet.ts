@@ -103,7 +103,7 @@ async function translateText(text: string) {
   const ret = await Axios.post('https://api.moonshot.cn/v1/chat/completions', {
     model: 'kimi-k2.5',
     messages: [
-      { role: 'user', content: `把以下内容翻译成中文，不要包含tag，不要有多余内容：${text}` },
+      { role: 'user', content: `把以下内容翻译成中文，不要包含tag，不要有多余内容，まのさば翻译为"魔裁"：${text}` },
     ],
   }, {
     headers: {
