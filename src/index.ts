@@ -40,7 +40,7 @@ yorubot.loadModule('groupAt', [
 yoruSchedule.loadJob([
   SystemCleanupJob,
   BilibiliNewSharedJob,
-  TwitterPushJob
+  TwitterPushJob,
 ]);
 
 // 夜夜酱，启 —— 动 ！！

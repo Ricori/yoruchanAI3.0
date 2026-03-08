@@ -100,7 +100,7 @@ async function resolveData(apiResponse: Record<any, any>, translate: boolean) {
 }
 
 async function translateText(text: string) {
-  const ret = await Axios.post('https://api.moonshot.cn/v1/chat/completions', {
+  const ret = await Axios.post(`${yorubot.config.aiReply.baseUrl}/chat/completions`, {
     model: 'kimi-k2.5',
     messages: [
       { role: 'user', content: `把以下内容翻译成中文，不要包含tag，不要有多余内容，まのさば翻译为"魔裁"：${text}` },
@@ -108,10 +108,10 @@ async function translateText(text: string) {
   }, {
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${yorubot.config.aiReply.moonshotKey}`,
+      Authorization: `Bearer ${yorubot.config.aiReply.apiKey}`,
     },
   }).catch((e) => {
-    printError(`[Moonshot Error] Fetch Error: ${e.message}`);
+    printError(`[Aliyun Error] Fetch Error: ${e.message}`);
     return null;
   });
   if (ret?.data?.choices?.[0]?.message?.content) {

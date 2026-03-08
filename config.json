@@ -40,7 +40,8 @@
     },
     "aiReply": {
       "enable": true,
-      "moonshotKey": "",
+      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "apiKey": "",
       "blackList": []
     },
     "hPic": {

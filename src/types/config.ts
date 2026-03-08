@@ -39,8 +39,10 @@ export interface BotConfig {
   aiReply: {
     /** 是否开启AI回复 */
     enable: boolean;
-    /** kimi模型 key */
-    moonshotKey: string;
+    /** 模型平台 baseUrl */
+    baseUrl: string;
+    /** 模型平台 key */
+    apiKey: string;
     /** 黑名单，黑名单内的群不会触发自动回复 */
     blackList: number[];
   },

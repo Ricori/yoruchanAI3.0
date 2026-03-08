@@ -5,11 +5,12 @@ import { printError } from '@/utils/print';
 import yoruStorage from '@/core/yoruStorage';
 import Axios from 'axios';
 import { trimChar } from '@/utils/function';
+import FormData from 'form-data';
 import { systemPrompt } from './prompt';
 
 const client = new OpenAI({
-  apiKey: yorubot.config.aiReply.moonshotKey,
-  baseURL: 'https://api.moonshot.cn/v1',
+  apiKey: yorubot.config.aiReply.apiKey,
+  baseURL: yorubot.config.aiReply.baseUrl,
 });
 
 export async function getAiReply(userId: number, text: string, imgUrl?: string) {
@@ -25,16 +26,25 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
   }
 
   if (imgUrl) {
-    const response = await Axios.get(imgUrl, {
-      responseType: 'arraybuffer',
-      timeout: 10000,
-    }).catch((e) => {
-      printError(`[AiModule Error] Can't fetch image. Error: ${e.message}`);
+    // 图片转存 (QQ -> imgbb)
+    const imgBuffer = await Axios.get(imgUrl, { responseType: 'arraybuffer' }).then((r) => r.data).catch((e) => {
+      printError(`[AiModule Error] Can't fetch QQ img. Error: ${e.message}`);
       return null;
     });
-
-    if (!response) return null;
-    const base64Img = Buffer.from(response.data).toString('base64');
+    if (!imgBuffer) return undefined;
+    const form = new FormData();
+    form.append('image', imgBuffer, 'image');
+    const ret = await Axios.post('https://api.imgbb.com/1/upload', form, {
+      params: {
+        key: 'a8a68ddaf156ea21809cf39d6c7481c8',
+        expiration: 86400 * 7,
+      },
+    }).catch((e) => {
+      printError(`[AiModule Error] Cant't upload file to imgbb. Error: ${e.message}`);
+      return null;
+    });
+    if (!ret || !ret?.data?.success || !ret?.data?.data?.url) return undefined;
+    const convertedImgUrl = ret.data.data.url;
 
     messages.push({
       role: 'user',
@@ -43,7 +53,7 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
         {
           type: 'image_url',
           image_url: {
-            url: `data:image/jpeg;base64,${base64Img}`,
+            url: convertedImgUrl,
           },
         },
       ],
