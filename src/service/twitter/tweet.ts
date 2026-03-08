@@ -34,9 +34,6 @@ export async function getLatestTweet(username: string) {
     try {
       const url = attempts[i];
       const ret = await Axios.get(url, { timeout: 15000 });
-
-      console.log(ret?.data);
-
       if (ret?.data?.success === false) {
         throw new Error('API returned success: false');
       }
