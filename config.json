@@ -8,6 +8,10 @@
       515302066
     ],
     "autoAddFriend": false,
+    "yoruService": {
+      "baseUrl": "",
+      "apiKey": ""
+    },
     "repeater": {
       "enable": true,
       "times": 3
@@ -35,8 +39,7 @@
           914620769,
           473794729
         ]
-      },
-      "yoruAPIKey": ""
+      }
     },
     "aiReply": {
       "enable": true,

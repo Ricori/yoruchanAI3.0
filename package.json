@@ -1,6 +1,6 @@
 {
   "name": "yoruchan-ai",
-  "version": "3.0.1",
+  "version": "3.1.0",
   "description": "Is my dear Yoruchan online ? (.jpg",
   "main": "index.ts",
   "scripts": {
@@ -22,8 +22,6 @@
     "axios": "^1.6.0",
     "cheerio": "^1.0.0-rc.11",
     "form-data": "^4.0.5",
-    "koa": "2.13.1",
-    "koa-router": "10.0.0",
     "lodash": "^4.17.21",
     "nanoid": "^5.0.7",
     "nhentai-api": "^3.4.3",
@@ -34,8 +32,6 @@
     "websocket": "^1.0.35"
   },
   "devDependencies": {
-    "@types/koa": "^2.13.3",
-    "@types/koa-router": "^7.4.2",
     "@types/lodash": "^4.14.170",
     "@types/node": "^14.17.1",
     "@types/tunnel": "^0.0.3",

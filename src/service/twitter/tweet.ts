@@ -24,28 +24,51 @@ function getTimestampFromTweetId(id: string) {
   return parseInt(temp, 2) + 1288834974657;
 }
 
-export async function getLatestTweet(username: string, apiKey: string) {
-  const ret = await Axios.get(`https://1251418210-h2kvrryyrj.ap-tokyo.tencentscf.com?username=${username}&apikey=${apiKey}`, { timeout: 20000 }).catch((e) => {
-    printError(`[YoruService Error] Fetch Error: ${e.message}`);
-    return null;
-  });
-  if (ret?.data && ret.data.list?.length > 0) {
-    const urlList = ret.data.list;
+export async function getLatestTweet(username: string) {
+  const yoruServiceConfig = yorubot.config.yoruService;
+  const yoruURL = `${yoruServiceConfig.baseUrl}/tweets/top/${username}?apikey=${yoruServiceConfig.apiKey}`;
+  const backupURL = `https://1251418210-h2kvrryyrj.ap-tokyo.tencentscf.com?username=${username}&apikey=${yoruServiceConfig.apiKey}`;
+  const attempts = [yoruURL, yoruURL, backupURL];
 
-    const tweetId = getTweetId(urlList[0]);
-    if (!tweetId) return undefined;
-    const time = getTimestampFromTweetId(tweetId);
+  for (let i = 0; i < attempts.length; i++) {
+    try {
+      const url = attempts[i];
+      const ret = await Axios.get(url, { timeout: 15000 });
 
-    return {
-      tweetId,
-      time,
-    };
+      console.log(ret?.data);
+
+      if (ret?.data?.success === false) {
+        throw new Error('API returned success: false');
+      }
+
+      if (ret?.data && ret.data.list?.length > 0) {
+        const urlList = ret.data.list;
+        const tweetId = getTweetId(urlList[0]);
+        if (!tweetId) return undefined;
+        const time = getTimestampFromTweetId(tweetId);
+        return {
+          tweetId,
+          time,
+        };
+      }
+
+      return undefined;
+    } catch (e: any) {
+      const isLastAttempt = i === attempts.length - 1;
+      const errorMsg = `[GetLatestTweet Warn] Attempt ${i + 1} ${e.message}`;
+      printError(isLastAttempt ? `${errorMsg} - All attempts failed.` : `${errorMsg} - Retrying...`);
+      if (isLastAttempt) return undefined;
+      await new Promise((resolve) => {
+        setTimeout(resolve, 1000);
+      });
+    }
   }
+
   return undefined;
 }
 
 export async function getTweetPost(tweetId: string, translate = true) {
-  const ret2 = await Axios.get(`https://api.vxtwitter.com/tt/status/${tweetId}`, { timeout: 20000 }).catch((e) => {
+  const ret2 = await Axios.get(`https://api.vxtwitter.com/tt/status/${tweetId}`, { timeout: 15000 }).catch((e) => {
     printError(`[Vxtwitter Error] Fetch Error: ${e.message}`);
     return null;
   });
