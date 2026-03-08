@@ -103,7 +103,7 @@ async function translateText(text: string) {
   const ret = await Axios.post(`${yorubot.config.aiReply.baseUrl}/chat/completions`, {
     model: 'kimi-k2.5',
     messages: [
-      { role: 'user', content: `把以下内容翻译成中文，不要包含tag，不要有多余内容，まのさば翻译为"魔裁"：${text}` },
+      { role: 'user', content: `【日语专有名词】まのさば:魔裁。\n把以下内容翻译成中文，不要包含tag，不要有多余内容。${text}` },
     ],
   }, {
     headers: {

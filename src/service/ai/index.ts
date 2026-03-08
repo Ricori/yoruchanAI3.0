@@ -46,8 +46,6 @@ export async function getAiReply(userId: number, text: string, imgUrl?: string) 
     if (!ret || !ret?.data?.success || !ret?.data?.data?.url) return undefined;
     const convertedImgUrl = ret.data.data.url;
 
-    console.log('c', convertedImgUrl);
-
     messages.push({
       role: 'user',
       content: [
