@@ -8,6 +8,10 @@ interface RepeaterLog {
 }
 
 class YoruStorage {
+
+  /** bot QQ号  */
+  private myUserId: number = 0;
+
   /** 自动同意好友请求的名单  */
   private toBeAddedList: number[] = [];
 
@@ -17,9 +21,20 @@ class YoruStorage {
   /** b站up最新动态时间  */
   private biliLastestDynamicTime: Record<string, number> = {};
 
+  /** 推特用户最新推文时间  */
+  private twitterLastestTweetTime: Record<string, number> = {};
+
   /** 群消息对话（每个id最多记录10条）  */
   private groupChatConversations: Record<number, ChatCompletionMessageParam[]> = {};
 
+  /** 获取 bot QQ号  */
+  getOrSetMyUserId = (id?: number) => {
+    if (id) {
+      this.myUserId === id;
+      return id
+    }
+    return this.myUserId;
+  }
 
   /** 新增好友到待添加名单 */
   joinToBeAddedList = (userId: number) => { this.toBeAddedList = [...this.toBeAddedList, userId]; };
@@ -74,6 +89,15 @@ class YoruStorage {
   /** 获取某up最新动态时间 */
   getBiliLastestDynamicTime(uid: string) {
     return this.biliLastestDynamicTime[uid] ?? 0;
+  }
+
+  /** 设置某推特用户最新推文时间 */
+  setTwitterLastestTweetTime(username: string, time: number) {
+    this.twitterLastestTweetTime[username] = time;
+  }
+  /** 获取某推特用户最新推文时间 */
+  getTwitterLastestTweetTime(username: string) {
+    return this.twitterLastestTweetTime[username] ?? 0;
   }
 
   /** 设置某qq的群会话 */

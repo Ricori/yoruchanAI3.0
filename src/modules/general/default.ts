@@ -3,12 +3,19 @@ import YoruModuleBase from "@/modules/base";
 import yorubot from '@/core/yoruBot';
 import { deleteAtFromMsg, getImgs, getReplyMsgId, hasImage, hasReply } from '@/utils/function';
 import { getAiReply } from "@/service/ai";
+import yoruStorage from "@/core/yoruStorage";
 
 export default class DefaultReplyModule extends YoruModuleBase<PrivateMessageData | GroupMessageData> {
 
   static NAME = 'DefaultReplyModule';
 
   async checkConditions() {
+    const { message_type: messageType } = this.data;
+    const groupId = messageType === 'group' ? this.data.group_id : 0;
+    const { blackList } = yorubot.config.aiReply;
+    if (blackList.includes(groupId)) {
+      return false;
+    }
     return true;
   }
 
@@ -23,10 +30,20 @@ export default class DefaultReplyModule extends YoruModuleBase<PrivateMessageDat
 
       // 获取引用消息文本
       if (hasReply(message)) {
+        let myqq;
+        if (yoruStorage.getOrSetMyUserId() === 0) {
+          myqq = await yorubot.getLoginQQ();
+          yoruStorage.getOrSetMyUserId(myqq);
+        }
         const replyMsgId = getReplyMsgId(message);
         const replyMsgData = await yorubot.getMessageFromId(replyMsgId);
         if (replyMsgData) {
-          tempMessage = deleteAtFromMsg(`${replyMsgData.message}.${message}`);
+          // 如果引用回复的是 bot 的消息，则不带上原消息
+          if (replyMsgData.user_id === myqq) {
+            tempMessage = deleteAtFromMsg(message);
+          } else {
+            tempMessage = deleteAtFromMsg(`${replyMsgData.message}.${message}`);
+          }
         }
       } else {
         tempMessage = deleteAtFromMsg(message);

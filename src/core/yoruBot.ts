@@ -4,6 +4,15 @@ import { SimpleMessageData } from '@/types/event';
 import { YoruCore } from './yoruCore';
 
 class YoruBot extends YoruCore {
+  /** 获取bot QQ号 */
+  async getLoginQQ() {
+    const res = await this.yoruWS.call('get_login_info', {});
+    if (res.retcode === 0 && res.data) {
+      return res.data.user_id as number ?? 0;
+    }
+    return 0;
+  }
+
   /** 处理好友请求 */
   setFriendAddRequest(flag: string | number, approve: boolean) {
     this.yoruWS.call('set_friend_add_request', { flag: `${flag}`, approve });
@@ -53,6 +62,21 @@ class YoruBot extends YoruCore {
       message: `${prefix}${msg}`,
       auto_escape: !!plainText,
     });
+  }
+
+  /** 发送简单消息 (兼容群聊私聊)
+   * @param {number} groupId 群号
+   * @param {number} userId 对方QQ号
+   * @param {string} msg 要发送的内容
+   * @param {string} atUser 可选，要at的qq
+   */
+  async sendMsg(groupId?: number, userId?: number, msg?: string, atUser?: number | string) {
+    if (!msg) return;
+    if (groupId) {
+      this.sendGroupMsg(groupId, msg, atUser);
+    } else if (userId) {
+      this.sendPrivateMsg(userId, msg);
+    }
   }
 
   /** 发送群回复消息
@@ -116,13 +140,12 @@ class YoruBot extends YoruCore {
   async getImageInfo(file: string) {
     const res = await this.yoruWS.call('get_image', {
       file,
-    })
+    });
     if (res.retcode === 0 && res.data) {
       return res.data as { size: number; filename: string; url: string };
     }
     return undefined;
   }
-
 }
 
 export default new YoruBot();

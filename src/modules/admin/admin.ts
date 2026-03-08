@@ -1,10 +1,10 @@
-import { GroupMessageData, PrivateMessageData } from "@/types/event";
-import YoruModuleBase from "../base";
+import { GroupMessageData, PrivateMessageData } from '@/types/event';
 import yorubot from '@/core/yoruBot';
-import { generateAiObj } from "@/service/ai";
+import { createMsgFromTweetId } from '@/tasks/twitter';
+import yoruStorage from '@/core/yoruStorage';
+import YoruModuleBase from '../base';
 
 export default class AdminModule extends YoruModuleBase<PrivateMessageData | GroupMessageData> {
-
   static NAME = 'AdminModule';
 
   async checkConditions() {
@@ -12,12 +12,18 @@ export default class AdminModule extends YoruModuleBase<PrivateMessageData | Gro
     const userId = this.data.user_id;
     // Check if in the list
     if (adminList.indexOf(userId) > -1) {
-      const message = this.data.message;
+      const { message } = this.data;
       // Exec administrator command
 
-      // AI model switch
-      const exec = /--switchAI=([0-9])/.exec(message);
-      if (exec !== null) {
+      // clean memory
+      if (message === '/clean-memory') {
+        return true;
+      }
+
+      // Push twiiter
+      const pushTwiiterRegex = /\/push-twitter\s+(\d+).*(?:status\/|\s+)(\d+)/;
+      const pushTwiiterMatch = message.match(pushTwiiterRegex);
+      if (pushTwiiterMatch) {
         return true;
       }
     }
@@ -28,20 +34,30 @@ export default class AdminModule extends YoruModuleBase<PrivateMessageData | Gro
     const { user_id: userId, message_type: messageType, message } = this.data;
     const groupId = messageType === 'group' ? this.data.group_id : undefined;
 
-    // AI model switch
-    const switchAIId = /--switchAI=([0-9])/.exec(message)?.[1];
-    if (switchAIId === '1' || switchAIId === '2') {
-      generateAiObj(switchAIId === '1' ? false : true);
-      const reply = `[YoruSystem] The AI model successfully switched to ${switchAIId === '1' ? 'chatgpt' : 'deepseek'}.`;
-      if (groupId) {
-        yorubot.sendGroupMsg(groupId, reply);
-      } else {
-        yorubot.sendPrivateMsg(userId, reply);
+    // clean memory
+    if (message === '/clean-memory') {
+      yoruStorage.cleanGroupChatConversations();
+      yorubot.sendMsg(groupId, userId, '[YoruSystem] Memory cleaned.');
+      return;
+    }
+
+    // Push twiiter
+    const pushTwiiterRegex = /\/push-twitter\s+(\d+).*(?:status\/|\s+)(\d+)/;
+    const pushTwiiterMatch = message.match(pushTwiiterRegex);
+
+    if (pushTwiiterMatch) {
+      const [, targetGroupId, tweetId] = pushTwiiterMatch;
+      const msgArr = await createMsgFromTweetId(tweetId);
+      if (!msgArr || msgArr.length === 0) return;
+      for (const msg of msgArr) {
+        yorubot.sendMsg(Number(targetGroupId), undefined, msg);
       }
+      yorubot.sendMsg(groupId, userId, `[YoruSystem] Push ${tweetId} to ${targetGroupId} successed.`);
+    } else {
+      yorubot.sendMsg(groupId, userId, '[YoruSystem] Push failed. Missing parameters.');
     }
 
     // finish
     this.finished = true;
   }
-
 }

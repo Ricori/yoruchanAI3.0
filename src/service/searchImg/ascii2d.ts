@@ -59,7 +59,7 @@ export async function getAscii2dResult(url: string) {
   });
   const form = new FormData();
   form.append('file', imgBuffer, 'image');
-  const ret = await Axios.post('https://b5f94086-ttt.ccttt.workers.dev/https://ascii2d.net/search/file', form, {
+  const ret = await Axios.post('https://ascii2d.obfs.dev/search/file', form, {
     headers:
     {
       ...form.getHeaders(),

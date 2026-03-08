@@ -26,16 +26,25 @@ export interface BotConfig {
     /** 因近期B站API增加鉴权，需要配置自己账号的cookie */
     cookie: string;
   },
-  /** AI回复*/
+  /** 推特动态推送 */
+  tweetPush: {
+    /** 是否开启功能 */
+    enable: boolean;
+    /** 推送配置 {推特用户名 : 要推送的群号列表 } */
+    config: Record<string, number[]>;
+    /** 夜夜酱API服务key */
+    yoruAPIKey: ''
+  },
+  /** AI回复 */
   aiReply: {
     /** 是否开启AI回复 */
     enable: boolean;
-    /** 使用deepSeek模型，启用时请配置deepSeek key*/
-    useDeepSeek: boolean;
-    /** openAI key */
-    openAiKey: string;
-    /** deepSeek key */
-    deepSeekKey: string;
+    /** 模型平台 baseUrl */
+    baseUrl: string;
+    /** 模型平台 key */
+    apiKey: string;
+    /** 黑名单，黑名单内的群不会触发自动回复 */
+    blackList: number[];
   },
   /** 瑟图功能 */
   hPic: {
