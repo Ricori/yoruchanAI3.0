@@ -27,17 +27,13 @@ function getTimestampFromTweetId(id: string) {
 export async function getLatestTweet(username: string) {
   const yoruServiceConfig = yorubot.config.yoruService;
   const yoruURL = `${yoruServiceConfig.baseUrl}/tweets/top/${username}?apikey=${yoruServiceConfig.apiKey}`;
-  const backupURL = `https://1251418210-h2kvrryyrj.ap-tokyo.tencentscf.com?username=${username}&apikey=${yoruServiceConfig.apiKey}`;
-  const attempts = [yoruURL, yoruURL, backupURL];
 
-  for (let i = 0; i < attempts.length; i++) {
+  for (let i = 0; i < 3; i++) {
     try {
-      const url = attempts[i];
-      const ret = await Axios.get(url, { timeout: 15000 });
+      const ret = await Axios.get(yoruURL, { timeout: 15000 });
       if (ret?.data?.success === false) {
         throw new Error('API returned success: false');
       }
-
       if (ret?.data && ret.data.list?.length > 0) {
         const urlList = ret.data.list;
         const tweetId = getTweetId(urlList[0]);
@@ -48,13 +44,14 @@ export async function getLatestTweet(username: string) {
           time,
         };
       }
-
       return undefined;
     } catch (e: any) {
-      const isLastAttempt = i === attempts.length - 1;
       const errorMsg = `[GetLatestTweet Warn] Attempt ${i + 1} ${e.message}`;
-      printError(isLastAttempt ? `${errorMsg} - All attempts failed.` : `${errorMsg} - Retrying...`);
-      if (isLastAttempt) return undefined;
+      if (i === 2) {
+        printError(`${errorMsg} - All attempts failed.`);
+        yorubot.sendPrivateMsg(yorubot.config.admin[0], `GetLatestTweet All attempts failed. reason: ${e.message}`);
+        return undefined;
+      }
       await new Promise((resolve) => {
         setTimeout(resolve, 1000);
       });
