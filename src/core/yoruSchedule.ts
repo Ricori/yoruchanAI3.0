@@ -2,7 +2,6 @@ import { ToadScheduler, SimpleIntervalJob } from 'toad-scheduler';
 import { printLog } from '../utils/print';
 
 class YoruSchedule {
-
   private scheduler = new ToadScheduler();
 
   loadJob(list: SimpleIntervalJob[]) {

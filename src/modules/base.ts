@@ -1,8 +1,7 @@
-import { MessageType } from "@/types/event";
+import { MessageType } from '@/types/event';
 
 
 export default class YoruModuleBase<T extends MessageType> {
-
   /** 模块唯一名称 */
   static NAME = '';
 
@@ -23,18 +22,19 @@ export default class YoruModuleBase<T extends MessageType> {
   /** 检查是否命中条件，如命中返回true */
   async checkConditions() {
     return false;
-  };
+  }
 
   /** 命中条件后具体操作方法
    * 如有需要传递给后续Module的信息，请修改 this.extraData;
    * 如需要运行完后中止调用链，请设定结束标志 this.finished = true;
    */
-  async run() { };
+  async run(): Promise<void> {
+    return undefined;
+  }
 
   /** 处理后续数据 */
   processingNextData() {
-    return { finished: this.finished, extraData: this.extraData }
+    return { finished: this.finished, extraData: this.extraData };
   }
-
 }
 
