@@ -6,19 +6,9 @@ import YoruModuleBase from '@/modules/base';
 import yorubot from '@/core/yoruBot';
 import { getCQCodesFromStr } from '@/utils/msgCode';
 import { downloadFile } from '@/utils/io';
-import { printError } from '@/utils/print';
-import { OneDriveAuthManager, uploadLargeFileToOneDrive } from '@/utils/oneDrive';
-
-
-let ykhrOneDriveAuth: OneDriveAuthManager;
-function startOneDriveAuthApp() {
-  try {
-    ykhrOneDriveAuth = new OneDriveAuthManager('./ykhr_onedrive.json');
-  } catch (err) {
-    printError('[OneDrive Error] Failed to start app: ', err.message);
-  }
-}
-startOneDriveAuthApp();
+import { printError, printLog } from '@/utils/print';
+import { getJobProgress, startTransfer } from '@/utils/githubTransfer';
+import { sleep } from '@/utils/function';
 
 
 export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData> {
@@ -56,45 +46,64 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
         return;
       }
 
-      yorubot.sendGroupMsg(groupId, `检测到文件 ${file} (${(Number(fileSize) / (1024 * 1024)).toFixed(2)} MB)，正在处理...`, userId);
+      yorubot.sendGroupMsg(groupId, `[Yoru Service] 开始处理 ${file} (${(Number(fileSize) / (1024 * 1024)).toFixed(2)} MB)...`, userId);
 
-      const localPath = await downloadFile(
-        url,
-        path.resolve('./temp'),
-        file,
-      ).catch((err) => {
-        printError(`[Download] Error downloading ${file}:`, err);
-      });
+      console.log('url', url);
 
-      if (!localPath) {
-        yorubot.sendGroupMsg(groupId, `下载文件 ${file} 失败，请联系管理员。`, userId);
+      const parentPath = file.includes('待轴') ? '/剪辑' : '/全熟已压';
+      const inputs = {
+        file_url: url,
+        file_name: file,
+        target_folder: parentPath,
+      };
+
+      const runId = await startTransfer(inputs);
+      if (!runId) {
+        yorubot.sendGroupMsg(groupId, `[Yoru Service] ${file} 任务创建失败，请联系管理员。`, userId);
         return;
       }
 
-      try {
-        const token = await ykhrOneDriveAuth.getAccessToken();
-        if (!token) {
-          yorubot.sendGroupMsg(groupId, 'Onedrive 授权失败，请联系管理员。', userId);
-          return;
+      printLog(`[Github Transfer] Start monitoring task execution progress (Run ID: ${runId})...`);
+
+      let isCompleted = false;
+      let isSuccess = false;
+      let retryCount = 0;
+      while (!isCompleted && retryCount < 20) {
+        const progress = await getJobProgress(runId);
+        switch (progress.status) {
+          case 'completed':
+            isCompleted = true;
+            if (progress.conclusion === 'success') {
+              isSuccess = true;
+            } else {
+              isSuccess = false;
+              printError(`[Github Transfer] Task execution failed. ${progress.conclusion}.`);
+            }
+            break;
+          case 'in_progress':
+            printLog(`[Github Transfer] Current execution progress: [${progress.stepName}] (Time elapsed ${retryCount * 20} seconds)...`);
+            break;
+          case 'queued':
+            printLog('[Github Transfer] Current status: GitHub is queuing to allocate servers...');
+            break;
+          default:
+            printLog(`[Github Transfer] Current status: ${progress.status}`);
+            break;
         }
-
-        const parentPath = file.includes('待轴') ? '/剪辑' : '/全熟已压';
-
-        const progressCallback = (text: string) => {
-          yorubot.sendGroupMsg(groupId, `${file} 上传进度：${text}`, userId);
-        };
-        const item = await uploadLargeFileToOneDrive(token, localPath, parentPath, progressCallback);
-        if (!item) {
-          yorubot.sendGroupMsg(groupId, `[OneDrive] 上传 ${file} 到 OneDrive 失败。`, userId);
-          return;
+        if (!isCompleted) {
+          retryCount++;
+          await sleep(20000);
         }
-
-        yorubot.sendGroupMsg(groupId, `已上传 ${file} 至 OneDrive\nURL: ${item.webUrl}`, userId);
-      } finally {
-        await unlink(localPath).catch((err) => {
-          printError(`[Cleanup] Error deleting ${localPath}:`, err);
-        });
       }
+
+      if (!isCompleted) {
+        yorubot.sendGroupMsg(groupId, `[Yoru Service] ${file} 任务超时，请联系管理员。`, userId);
+      }
+      if (!isSuccess) {
+        yorubot.sendGroupMsg(groupId, `[OneDrive] 上传 ${file} 到 OneDrive 失败。`, userId);
+      }
+
+      yorubot.sendGroupMsg(groupId, `[Yoru Service] 已上传 ${file} 至 OneDrive。`, userId);
     }
   }
 }

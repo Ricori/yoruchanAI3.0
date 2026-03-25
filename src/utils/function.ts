@@ -102,14 +102,15 @@ export function deleteAtFromMsg(msg: string) {
  */
 export function trimChar(str: string | null, char: string) {
   if (!str) return undefined;
+  let newStr;
   if (str.charAt(0) === char) {
-    str = str.substring(1);
+    newStr = str.substring(1);
   }
   if (str.charAt(str.length - 1) === char) {
-    str = str.substring(0, str.length - 1);
+    newStr = str.substring(0, str.length - 1);
   }
-  return str;
+  return newStr;
 }
 
 /** sleep */
-export const sleep = (seconds: number) => new Promise((resolve) => setTimeout(resolve, seconds));
+export const sleep = (ms: number) => new Promise((resolve) => { setTimeout(resolve, ms); });

@@ -5,7 +5,9 @@ import axios from 'axios';
 import qs from 'qs';
 import { printError, printLog } from './print';
 
-export interface OneDriveConfig {
+// 本文件已弃用
+
+interface OneDriveConfig {
   client_id: string;
   client_secret: string;
   access_token: string;
@@ -13,7 +15,7 @@ export interface OneDriveConfig {
   updated_at: number;
 }
 
-export class OneDriveAuthManager {
+class OneDriveAuthManager {
   private configPath: string;
 
   public config: OneDriveConfig;
@@ -91,7 +93,7 @@ export class OneDriveAuthManager {
 }
 
 
-export async function uploadLargeFileToOneDrive(token: string, localFilePath: string, parentPath: string, progressCallback?: (text: string) => void) {
+async function uploadLargeFileToOneDrive(token: string, localFilePath: string, parentPath: string, progressCallback?: (text: string) => void) {
   if (!token) {
     printError('[OneDrive Error] No access token available.');
     return undefined;
@@ -127,7 +129,7 @@ export async function uploadLargeFileToOneDrive(token: string, localFilePath: st
           const percentageLabel = Math.round(nextThreshold * 100);
           const mb = (bytesUploaded / 1024 / 1024).toFixed(2);
           printLog(`[OneDrive] ${filename} Upload Progress: ${percentageLabel}% (${mb} MB)`);
-          progressCallback?.(`${percentageLabel}% (${mb} MB)`);
+          // progressCallback?.(`${percentageLabel}% (${mb} MB)`);
           nextThreshold += 0.2;
         }
       },

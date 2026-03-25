@@ -4,9 +4,6 @@ build
 # Debug
 config_debug.json
 
-# OneDrive Tokens
-*onedrive.json
-
 # Logs
 logs
 *.log
@@ -26,5 +23,5 @@ node_modules/
 # Yarn Integrity file
 .yarn-integrity
 
-# temp
-temp
+# Github config
+config_github.json
