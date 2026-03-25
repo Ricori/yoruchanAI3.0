@@ -82,7 +82,6 @@ async function triggerWorkflow(config: GithubConfig, inputs: TransferInputs, bra
         target_folder: inputs.target_folder || '/test',
       },
     });
-    printLog('[Github Transfer] Successfully sent request! ');
   } catch (error) {
     const err = error as AxiosError;
     printError('[Github Transfer] Error:', err.response?.data || err.message);
@@ -135,7 +134,7 @@ export async function getJobProgress(runId: number): Promise<ProgressInfo> {
       const jobsRes = await client.get(jobsUrl);
       const { jobs } = jobsRes.data;
 
-      let stepName = '准备环境/切换步骤中';
+      let stepName = 'unknown';
       if (jobs && jobs.length > 0) {
         const currentStep = jobs[0].steps.find((step: any) => step.status === 'in_progress');
         if (currentStep) {
@@ -148,7 +147,6 @@ export async function getJobProgress(runId: number): Promise<ProgressInfo> {
     // 其他状态通常是 queued (排队中) 或 waiting
     return { status: status || 'queued', html_url };
   } catch (error) {
-    // 捕获网络异常，防止整体流程因为一次偶尔的网络断开而崩溃
     return { status: 'unknown' };
   }
 }
@@ -160,7 +158,7 @@ export async function startTransfer(inputs: TransferInputs) {
   const triggerTime = new Date();
   try {
     await triggerWorkflow(githubConfig, inputs);
-    printLog('[Github Transfer] Trigger request sent successfully!');
+    printLog(`[Github Transfer][${inputs.file_name}]Transter trigger request sent successfully!`);
     await sleep(5000);
     let runId = await getLatestRunId(githubConfig, triggerTime);
     let findRetries = 3;
@@ -170,7 +168,7 @@ export async function startTransfer(inputs: TransferInputs) {
       findRetries--;
     }
     if (!runId) {
-      printError('[Github Transfer] Error: Unable to find the latest instance RunID. Please check.');
+      printError(`[Github Transfer][${inputs.file_name}] Error: Unable to find the latest instance RunID. Please check.`);
       return null;
     }
     return runId;

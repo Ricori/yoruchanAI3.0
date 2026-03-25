@@ -15,7 +15,7 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
     const { message, group_id: groupId } = this.data;
 
     // 只在 YKHR 群和测试群生效
-    if (groupId !== 829349264) return false;
+    if (groupId !== 930639183 && groupId !== 829349264) return false;
 
     // 检查文件消息
     if (message.includes('[CQ:file,file=')) {
@@ -45,8 +45,6 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
 
       yorubot.sendGroupMsg(groupId, `[Yoru Service] 开始处理 ${file} (${(Number(fileSize) / (1024 * 1024)).toFixed(2)} MB)...`, userId);
 
-      console.log('url', url);
-
       const parentPath = file.includes('待轴') ? '/剪辑' : '/全熟已压';
       const inputs = {
         file_url: url,
@@ -60,7 +58,7 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
         return;
       }
 
-      printLog(`[Github Transfer] Start monitoring task execution progress (Run ID: ${runId})...`);
+      printLog(`[Github Transfer][${file}] Start monitoring task execution progress (Run ID: ${runId})...`);
 
       let isCompleted = false;
       let isSuccess = false;
@@ -74,17 +72,17 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
               isSuccess = true;
             } else {
               isSuccess = false;
-              printError(`[Github Transfer] Task execution failed. ${progress.conclusion}.`);
+              printError(`[Github Transfer][${file}] Task execution failed. ${progress.conclusion}.`);
             }
             break;
           case 'in_progress':
-            printLog(`[Github Transfer] Current execution progress: [${progress.stepName}] (Time elapsed ${retryCount * 20} seconds)...`);
+            printLog(`[Github Transfer][${file}] Current execution progress: [${progress.stepName}] (Time elapsed ${retryCount * 20} seconds)...`);
             break;
           case 'queued':
-            printLog('[Github Transfer] Current status: GitHub is queuing to allocate servers...');
+            printLog(`[Github Transfer][${file}] Current status: GitHub is queuing to allocate servers...`);
             break;
           default:
-            printLog(`[Github Transfer] Current status: ${progress.status}`);
+            printLog(`[Github Transfer][${file}] Current status: ${progress.status}`);
             break;
         }
         if (!isCompleted) {
