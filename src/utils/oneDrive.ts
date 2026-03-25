@@ -107,7 +107,7 @@ export async function uploadLargeFileToOneDrive(token: string, localFilePath: st
 
   printLog(`[OneDrive] Start Upload: ${filename} (${(fileSize / 1024 / 1024).toFixed(2)} MB)`);
 
-  let nextThreshold = 0.3;
+  let nextThreshold = 0.2;
 
   try {
     const item = await oneDriveAPI.items.uploadSession(
@@ -118,7 +118,7 @@ export async function uploadLargeFileToOneDrive(token: string, localFilePath: st
         readableStream,
         parentPath,
         drive: 'me',
-        chunksToUpload: 40, // 每次请求上传的块数，增加此值可提速但增加内存占用
+        chunksToUpload: 50, // 每次请求上传的块数，增加此值可提速但增加内存占用
       },
       (bytesUploaded: number) => {
         const currentProgress = bytesUploaded / fileSize;
@@ -128,7 +128,7 @@ export async function uploadLargeFileToOneDrive(token: string, localFilePath: st
           const mb = (bytesUploaded / 1024 / 1024).toFixed(2);
           printLog(`[OneDrive] ${filename} Upload Progress: ${percentageLabel}% (${mb} MB)`);
           progressCallback?.(`${percentageLabel}% (${mb} MB)`);
-          nextThreshold += 0.3;
+          nextThreshold += 0.2;
         }
       },
     );

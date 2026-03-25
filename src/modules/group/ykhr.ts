@@ -1,11 +1,12 @@
 
 import path from 'path';
+import { unlink } from 'fs/promises';
 import { GroupMessageData } from '@/types/event';
 import YoruModuleBase from '@/modules/base';
 import yorubot from '@/core/yoruBot';
 import { getCQCodesFromStr } from '@/utils/msgCode';
 import { downloadFile } from '@/utils/io';
-import { printError, printLog } from '@/utils/print';
+import { printError } from '@/utils/print';
 import { OneDriveAuthManager, uploadLargeFileToOneDrive } from '@/utils/oneDrive';
 
 
@@ -24,19 +25,20 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
   static NAME = 'YkhrOnedriveModule';
 
   async checkConditions() {
-    const { message, user_id: userId, group_id: groupId } = this.data;
+    const { message, group_id: groupId } = this.data;
 
-    // 只在特定群生效
+    // 只在 YKHR 群和测试群生效
     if (groupId !== 829349264) return false;
 
     // 检查文件消息
     if (message.includes('[CQ:file,file=')) {
-      return true;
+      if (message.includes('待轴') || message.includes('熟肉')) {
+        return true;
+      }
     }
 
     return false;
   }
-
 
 
   async run() {
@@ -56,8 +58,6 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
 
       yorubot.sendGroupMsg(groupId, `检测到文件 ${file} (${(Number(fileSize) / (1024 * 1024)).toFixed(2)} MB)，正在处理...`, userId);
 
-      console.log('url:', url);
-
       const localPath = await downloadFile(
         url,
         path.resolve('./temp'),
@@ -71,22 +71,30 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
         return;
       }
 
-      const token = await ykhrOneDriveAuth.getAccessToken();
-      if (!token) {
-        yorubot.sendGroupMsg(groupId, 'Onedrive 授权失败，请联系管理员。', userId);
-        return;
-      }
+      try {
+        const token = await ykhrOneDriveAuth.getAccessToken();
+        if (!token) {
+          yorubot.sendGroupMsg(groupId, 'Onedrive 授权失败，请联系管理员。', userId);
+          return;
+        }
 
-      const progressCallback = (text: string) => {
-        yorubot.sendGroupMsg(groupId, `${file} 上传进度：${text}`, userId);
-      };
-      const item = await uploadLargeFileToOneDrive(token, localPath, '/test', progressCallback);
-      if (!item) {
-        yorubot.sendGroupMsg(groupId, `[OneDrive] 上传 ${file} 到 OneDrive 失败。`, userId);
-        return;
-      }
+        const parentPath = file.includes('待轴') ? '/剪辑' : '/全熟已压';
 
-      yorubot.sendGroupMsg(groupId, `上传 ${file} 成功。\n URL: ${item.webUrl}`, userId);
+        const progressCallback = (text: string) => {
+          yorubot.sendGroupMsg(groupId, `${file} 上传进度：${text}`, userId);
+        };
+        const item = await uploadLargeFileToOneDrive(token, localPath, parentPath, progressCallback);
+        if (!item) {
+          yorubot.sendGroupMsg(groupId, `[OneDrive] 上传 ${file} 到 OneDrive 失败。`, userId);
+          return;
+        }
+
+        yorubot.sendGroupMsg(groupId, `已上传 ${file} 至 OneDrive\nURL: ${item.webUrl}`, userId);
+      } finally {
+        await unlink(localPath).catch((err) => {
+          printError(`[Cleanup] Error deleting ${localPath}:`, err);
+        });
+      }
     }
   }
 }
