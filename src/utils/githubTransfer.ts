@@ -29,7 +29,7 @@ const CONFIG_PATH = path.join(process.cwd(), CONFIG_FILE_NAME);
 
 let githubConfig: GithubConfig;
 
-function initGithubConfig() {
+export function initGithubConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
     const defaultConfig: GithubConfig = {
       owner: 'YOUR_GITHUB_USERNAME',

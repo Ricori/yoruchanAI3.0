@@ -1,15 +1,12 @@
-
-import path from 'path';
-import { unlink } from 'fs/promises';
 import { GroupMessageData } from '@/types/event';
 import YoruModuleBase from '@/modules/base';
 import yorubot from '@/core/yoruBot';
 import { getCQCodesFromStr } from '@/utils/msgCode';
-import { downloadFile } from '@/utils/io';
 import { printError, printLog } from '@/utils/print';
-import { getJobProgress, startTransfer } from '@/utils/githubTransfer';
+import { getJobProgress, initGithubConfig, startTransfer } from '@/utils/githubTransfer';
 import { sleep } from '@/utils/function';
 
+initGithubConfig();
 
 export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData> {
   static NAME = 'YkhrOnedriveModule';
