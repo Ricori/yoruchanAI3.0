@@ -43,7 +43,7 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
         return;
       }
 
-      yorubot.sendGroupMsg(groupId, `[Yoru Service] 开始处理 ${file} (${(Number(fileSize) / (1024 * 1024)).toFixed(2)} MB)...`, userId);
+      yorubot.sendGroupMsg(groupId, `开始处理 ${file} (${(Number(fileSize) / (1024 * 1024)).toFixed(2)} MB)...`, userId);
 
       const parentPath = file.includes('待轴') ? '/剪辑' : '/全熟已压';
       const inputs = {
@@ -54,7 +54,7 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
 
       const runId = await startTransfer(inputs);
       if (!runId) {
-        yorubot.sendGroupMsg(groupId, `[Yoru Service] ${file} 任务创建失败，请联系管理员。`, userId);
+        yorubot.sendGroupMsg(groupId, `${file} 任务创建失败，请联系管理员。`, userId);
         return;
       }
 
@@ -92,13 +92,15 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
       }
 
       if (!isCompleted) {
-        yorubot.sendGroupMsg(groupId, `[Yoru Service] ${file} 任务超时，请联系管理员。`, userId);
+        printError(`[Github Transfer][${file}] Task timeout.`);
+        yorubot.sendGroupMsg(groupId, `${file} 任务超时，请联系管理员。`, userId);
       }
       if (!isSuccess) {
-        yorubot.sendGroupMsg(groupId, `[OneDrive] 上传 ${file} 到 OneDrive 失败。`, userId);
+        printError(`[Github Transfer][${file}] Task failed.`);
+        yorubot.sendGroupMsg(groupId, `上传 ${file} 到 OneDrive 失败。`, userId);
       }
 
-      yorubot.sendGroupMsg(groupId, `[Yoru Service] 已上传 ${file} 至 OneDrive。`, userId);
+      yorubot.sendGroupMsg(groupId, `${file} 已成功上传至 OneDrive ${parentPath}目录。`, userId);
     }
   }
 }
