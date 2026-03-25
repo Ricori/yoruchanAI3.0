@@ -18,26 +18,35 @@ export const escape = (str: string, insideCQ = false) => {
  */
 const unescape = (str: string) => str.replace(/&#44;/g, ',').replace(/&#91;/g, '[').replace(/&#93;/g, ']').replace(/&amp;/g, '&');
 
+// https://docs.go-cqhttp.org/cqcode
+type CQType =
+  'face' | 'record' | 'video' | 'at' | 'file' | 'shake' |
+  'share' | 'music' | 'image' | 'reply' | 'redbag' |
+  'poke' | 'forward' | 'node' | 'xml' | 'json' |
+  'cardimage' | 'tts';
+
 class CQCode {
   type: string;
 
-  data: Map<string, any>;
+  data: Map<string, string | number | undefined>;
 
-  constructor(type: string, obj: any) {
+  constructor(type: string, obj?: Record<string, string | number | undefined>) {
     this.type = type;
     this.data = new Map();
     if (obj) this.mset(obj);
   }
 
-  set(key: string, value: any) {
+  set(key: string, value: string | number | undefined) {
     if (value) {
       this.data.set(key, value);
     }
     return this;
   }
 
-  mset(obj: any) {
-    Object.entries(obj).forEach((kv) => this.set(...kv));
+  mset(obj: Record<string, string | number | undefined>) {
+    Object.entries(obj).forEach(([k, v]) => {
+      if (v != null) this.set(k, String(v));
+    });
     return this;
   }
 
@@ -48,36 +57,25 @@ class CQCode {
   toString() {
     const list = Array.from(this.data.entries())
       .filter(([, v]) => !_.isNil(v))
-      .map((kv) => kv.map((str: string) => escape(String(str), true)).join('='));
+      .map((kv) => kv.map((str: string | number | undefined) => escape(String(str), true)).join('='));
     list.unshift(`CQ:${this.type}`);
     return `[${list.join(',')}]`;
   }
 }
 
-// https://docs.go-cqhttp.org/cqcode
-type CQType =
-  'face' | 'record' | 'video' | 'at' | 'shake' |
-  'share' | 'music' | 'image' | 'reply' | 'redbag' |
-  'poke' | 'forward' | 'node' | 'xml' | 'json' |
-  'cardimage' | 'tts';
 
-
-/** string转CQ类 */
+/** string转CQ类数组 */
 export function getCQCodesFromStr(str: string) {
   const reg = /\[CQ:([^,[\]]+)((?:,[^,=[\]]+=[^,[\]]*)*)\]/g;
-  const result = [] as CQCode[];
+  const result: CQCode[] = [];
   // eslint-disable-next-line no-cond-assign
   for (let match; (match = reg.exec(str));) {
     const [, type, dataStr] = match;
-    const data = _.transform(
-      _.filter(dataStr.split(',')),
-      (obj: any, kv: any) => {
-        const [key, ...value] = kv.split('=');
-        // eslint-disable-next-line no-param-reassign
-        obj[unescape(key)] = unescape(value.join('='));
-      },
-      {},
-    );
+    const data: Record<string, string> = {};
+    for (const kv of _.filter(dataStr.split(','))) {
+      const [key, ...value] = kv.split('=');
+      data[unescape(key)] = unescape(value.join('='));
+    }
     result.push(new CQCode(type, data));
   }
   return result;
@@ -89,7 +87,7 @@ export function getCQCodesFromStr(str: string) {
  * @param {string} type
  * @param {object} params 参数,参照 https://docs.go-cqhttp.org/cqcode
  */
-export default function getMessageCode(type: CQType, params: Record<string, any>) {
+export default function getMessageCode(type: CQType, params: Record<string, string | number | undefined>) {
   return new CQCode(type, params).toString();
 }
 

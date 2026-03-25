@@ -1,11 +1,10 @@
 
-import { GroupMessageData } from "@/types/event";
-import YoruModuleBase from "@/modules/base";
+import { GroupMessageData } from '@/types/event';
+import YoruModuleBase from '@/modules/base';
 import yorubot from '@/core/yoruBot';
-import yoruStorage from "@/core/yoruStorage";
+import yoruStorage from '@/core/yoruStorage';
 
 export default class RepeaterModule extends YoruModuleBase<GroupMessageData> {
-
   static NAME = 'RepeaterModule';
 
   async checkConditions() {
