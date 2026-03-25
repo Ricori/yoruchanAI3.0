@@ -54,7 +54,7 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
 
       const runId = await startTransfer(inputs);
       if (!runId) {
-        yorubot.sendGroupMsg(groupId, `${file} 任务创建失败，请联系管理员。`, userId);
+        yorubot.sendGroupMsg(groupId, `${file} 上传 OneDrive 任务创建失败，请联系管理员。`, userId);
         return;
       }
 
@@ -97,7 +97,7 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
       }
       if (!isSuccess) {
         printError(`[Github Transfer][${file}] Task failed.`);
-        yorubot.sendGroupMsg(groupId, `上传 ${file} 到 OneDrive 失败。`, userId);
+        yorubot.sendGroupMsg(groupId, `上传 ${file} 到 OneDrive 失败，请联系管理员。`, userId);
       }
 
       yorubot.sendGroupMsg(groupId, `${file} 已成功上传至 OneDrive ${parentPath}目录。`, userId);
