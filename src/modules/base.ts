@@ -8,8 +8,8 @@ export default class YoruModuleBase<T extends MessageType> {
   /** 消息数据 */
   protected data: T;
 
-  /** 结束标志，如设定为true，将中止调用链（下个Module不会调用） */
-  protected finished = false;
+  /** 结束标志，为true时将中止调用链（下个Module不会调用） */
+  protected finished = true;
 
   /** 调用链上共享的额外数据 */
   protected extraData: Record<string, string>;
@@ -25,8 +25,8 @@ export default class YoruModuleBase<T extends MessageType> {
   }
 
   /** 命中条件后具体操作方法
+   * 如需要运行完后继续调用链，请设定 this.finished = false;
    * 如有需要传递给后续Module的信息，请修改 this.extraData;
-   * 如需要运行完后中止调用链，请设定结束标志 this.finished = true;
    */
   async run(): Promise<void> {
     return undefined;

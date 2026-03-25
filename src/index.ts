@@ -9,7 +9,7 @@ import AdminModule from '@/modules/admin/admin';
 import ImageSearchModule from '@/modules/general/imageSearch';
 import HPicModule from '@/modules/general/hPic';
 import DefaultReplyModule from '@/modules/general/default';
-import RepeaterModule from '@/modules/group/repeater';
+import ykhrOnedriveModule from '@/modules/group/ykhr';
 
 // 加载好友请求模块
 yorubot.loadModule('request', [RequestFriendModule]);
@@ -31,10 +31,11 @@ yorubot.loadModule('groupAt', [
 ]);
 
 // 加载群消息默认监听
-// yorubot.loadModule('group', [
-//   HPicModule,
-//   RepeaterModule,
-// ]);
+yorubot.loadModule('group', [
+  ykhrOnedriveModule,
+  // HPicModule,
+  // RepeaterModule,
+]);
 
 // 加载定时任务
 yoruSchedule.loadJob([
