@@ -1,12 +1,13 @@
-import { GroupMessageData, PrivateMessageData } from "@/types/event";
-import YoruModuleBase from "@/modules/base";
+import { GroupMessageData, PrivateMessageData } from '@/types/event';
+import YoruModuleBase from '@/modules/base';
 import yorubot from '@/core/yoruBot';
-import { deleteAtFromMsg, getImgs, getReplyMsgId, hasImage, hasReply } from '@/utils/function';
-import { getAiReply } from "@/service/ai";
-import yoruStorage from "@/core/yoruStorage";
+import {
+  deleteAtFromMsg, getImgs, getReplyMsgId, hasImage, hasReply,
+} from '@/utils/function';
+import { getAiReply } from '@/service/ai';
+import yoruStorage from '@/core/yoruStorage';
 
 export default class DefaultReplyModule extends YoruModuleBase<PrivateMessageData | GroupMessageData> {
-
   static NAME = 'DefaultReplyModule';
 
   async checkConditions() {
@@ -20,7 +21,9 @@ export default class DefaultReplyModule extends YoruModuleBase<PrivateMessageDat
   }
 
   async run() {
-    const { message, user_id: userId, message_type: messageType, message_id: messageId } = this.data;
+    const {
+      message, user_id: userId, message_type: messageType, message_id: messageId,
+    } = this.data;
     const groupId = messageType === 'group' ? this.data.group_id : undefined;
 
     let replyText = '我炸了';

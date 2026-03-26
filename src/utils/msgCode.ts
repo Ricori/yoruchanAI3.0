@@ -28,15 +28,15 @@ type CQType =
 class CQCode {
   type: string;
 
-  data: Map<string, string | number | undefined>;
+  data: Map<string, string>;
 
-  constructor(type: string, obj?: Record<string, string | number | undefined>) {
+  constructor(type: string, obj?: Record<string, string>) {
     this.type = type;
     this.data = new Map();
     if (obj) this.mset(obj);
   }
 
-  set(key: string, value: string | number | undefined) {
+  set(key: string, value: string) {
     if (value) {
       this.data.set(key, value);
     }
@@ -57,7 +57,7 @@ class CQCode {
   toString() {
     const list = Array.from(this.data.entries())
       .filter(([, v]) => !_.isNil(v))
-      .map((kv) => kv.map((str: string | number | undefined) => escape(String(str), true)).join('='));
+      .map((kv) => kv.map((str: string) => escape(String(str), true)).join('='));
     list.unshift(`CQ:${this.type}`);
     return `[${list.join(',')}]`;
   }
@@ -65,7 +65,7 @@ class CQCode {
 
 
 /** string转CQ类数组 */
-export function getCQCodesFromStr(str: string) {
+export function extractCQCodes(str: string) {
   const reg = /\[CQ:([^,[\]]+)((?:,[^,=[\]]+=[^,[\]]*)*)\]/g;
   const result: CQCode[] = [];
   // eslint-disable-next-line no-cond-assign
@@ -88,7 +88,10 @@ export function getCQCodesFromStr(str: string) {
  * @param {object} params 参数,参照 https://docs.go-cqhttp.org/cqcode
  */
 export default function getMessageCode(type: CQType, params: Record<string, string | number | undefined>) {
-  return new CQCode(type, params).toString();
+  const normalized = Object.fromEntries(
+    Object.entries(params).map(([k, v]) => [k, v === undefined ? '' : String(v)]),
+  );
+  return new CQCode(type, normalized).toString();
 }
 
 export function getAtCode(qq: string) {

@@ -1,7 +1,7 @@
 import { GroupMessageData } from '@/types/event';
 import YoruModuleBase from '@/modules/base';
 import yorubot from '@/core/yoruBot';
-import { getCQCodesFromStr } from '@/utils/msgCode';
+import { extractCQCodes } from '@/utils/msgCode';
 import { printError, printLog } from '@/utils/print';
 import { getJobProgress, initGithubConfig, startTransfer } from '@/utils/githubTransfer';
 import { sleep } from '@/utils/function';
@@ -31,7 +31,7 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
   async run() {
     const { message, group_id: groupId, user_id: userId } = this.data;
 
-    const cqObjs = getCQCodesFromStr(message);
+    const cqObjs = extractCQCodes(message);
     const fileObj = cqObjs.find((cq) => cq.type === 'file');
     if (fileObj) {
       const file = fileObj.data.get('file') as string;

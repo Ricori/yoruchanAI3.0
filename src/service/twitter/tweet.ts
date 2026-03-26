@@ -24,15 +24,17 @@ function getTimestampFromTweetId(id: string) {
   return parseInt(temp, 2) + 1288834974657;
 }
 
+let consecutiveFailCount = 0;
+
 export async function getLatestTweet(username: string) {
   const yoruServiceConfig = yorubot.config.yoruService;
   const yoruURL = `${yoruServiceConfig.baseUrl}/tweets/top/${username}?apikey=${yoruServiceConfig.apiKey}`;
 
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 2; i++) {
     try {
       const ret = await Axios.get(yoruURL, { timeout: 15000 });
       if (ret?.data?.success === false) {
-        throw new Error('API returned success: false');
+        throw new Error('[yoru-service] getLatestTweet API Error.');
       }
       if (ret?.data && ret.data.list?.length > 0) {
         const urlList = ret.data.list;
@@ -46,10 +48,13 @@ export async function getLatestTweet(username: string) {
       }
       return undefined;
     } catch (e: any) {
-      const errorMsg = `[GetLatestTweet Warn] Attempt ${i + 1} ${e.message}`;
-      if (i === 2) {
-        printError(`${errorMsg} - All attempts failed.`);
-        yorubot.sendPrivateMsg(yorubot.config.admin[0], `GetLatestTweet All attempts failed. reason: ${e.message}`);
+      const errorMsg = `[GetLatestTweet Warn] ${e.message}`;
+      if (i === 1) {
+        consecutiveFailCount++;
+        if (consecutiveFailCount % 5 === 0) {
+          printError(`${errorMsg} - All attempts failed x${consecutiveFailCount}.`);
+          yorubot.sendPrivateMsg(yorubot.config.admin[0], `GetLatestTweet All attempts failed x${consecutiveFailCount}. reason: ${e.message}`);
+        }
         return undefined;
       }
       await new Promise((resolve) => {
@@ -120,7 +125,7 @@ async function translateText(text: string) {
   const ret = await Axios.post(`${yorubot.config.aiReply.baseUrl}/chat/completions`, {
     model: 'kimi-k2.5',
     messages: [
-      { role: 'user', content: `【日语专有名词】まのさば:魔裁。\n把以下内容翻译成中文，不要包含tag，不要有多余内容。${text}` },
+      { role: 'user', content: `【日语专有名词名单】まのさば:魔裁。\n把以下内容翻译成中文，不要包含tag，不要有多余内容：\n${text}` },
     ],
   }, {
     headers: {

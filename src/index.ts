@@ -33,7 +33,8 @@ yorubot.loadModule('groupAt', [
 // 加载群消息默认监听
 yorubot.loadModule('group', [
   ykhrOnedriveModule,
-  // HPicModule,
+  HPicModule,
+
   // RepeaterModule,
 ]);
 

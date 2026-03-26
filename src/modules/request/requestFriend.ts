@@ -1,10 +1,9 @@
-import { RequestFirendMessageData } from "@/types/event";
-import YoruModuleBase from "../base";
+import { RequestFirendMessageData } from '@/types/event';
 import yorubot from '@/core/yoruBot';
 import yoruStorage from '@/core/yoruStorage';
+import YoruModuleBase from '../base';
 
 export default class RequestFriendModule extends YoruModuleBase<RequestFirendMessageData> {
-
   static NAME = 'RequestFriendModule';
 
   async checkConditions() {
@@ -13,7 +12,7 @@ export default class RequestFriendModule extends YoruModuleBase<RequestFirendMes
 
   async run() {
     const userId = this.data.user_id;
-    const flag = this.data.flag;
+    const { flag } = this.data;
     if (yorubot.config.autoAddFriend || yoruStorage.getIsInToBeAddedList(userId)) {
       // Agree to be added as a friend
       yorubot.setFriendAddRequest(flag, true);
@@ -33,5 +32,4 @@ export default class RequestFriendModule extends YoruModuleBase<RequestFirendMes
     // finish
     this.finished = true;
   }
-
 }
