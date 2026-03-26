@@ -65,7 +65,7 @@ class CQCode {
 
 
 /** string转CQ类数组 */
-export function getCQCodesFromStr(str: string) {
+export function extractCQCodes(str: string) {
   const reg = /\[CQ:([^,[\]]+)((?:,[^,=[\]]+=[^,[\]]*)*)\]/g;
   const result: CQCode[] = [];
   // eslint-disable-next-line no-cond-assign

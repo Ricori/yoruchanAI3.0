@@ -1,11 +1,12 @@
-import { GroupMessageData, PrivateMessageData } from "@/types/event";
-import YoruModuleBase from "../base";
+import { GroupMessageData, PrivateMessageData } from '@/types/event';
 import yorubot from '@/core/yoruBot';
-import { hasImage, hasReply, getReplyMsgId, getImgs, hasSerachImageText } from '@/utils/function';
-import searchImage from "@/service/searchImg";
+import {
+  hasImage, hasReply, getReplyMsgId, getImgs, hasSerachImageText,
+} from '@/utils/function';
+import searchImage from '@/service/searchImg';
+import YoruModuleBase from '../base';
 
 export default class ImageSearchModule extends YoruModuleBase<PrivateMessageData | GroupMessageData> {
-
   static NAME = 'ImageSearchModule';
 
   tempMessage = '';
@@ -18,7 +19,7 @@ export default class ImageSearchModule extends YoruModuleBase<PrivateMessageData
       const replyMsgData = await yorubot.getMessageFromId(replyMsgId);
       if (replyMsgData) {
         const rMsg = replyMsgData.message;
-        // The image search logic is executed only when both the message contains an image 
+        // The image search logic is executed only when both the message contains an image
         // and the message contains a specified image search text.
         if (hasImage(rMsg) && hasSerachImageText(message)) {
           this.tempMessage = rMsg;
@@ -41,13 +42,9 @@ export default class ImageSearchModule extends YoruModuleBase<PrivateMessageData
     const resultMsgs = await searchImage(urls);
 
     if (groupId) {
-      resultMsgs.forEach(msg => yorubot.sendGroupMsg(groupId, msg));
+      resultMsgs.forEach((msg) => yorubot.sendGroupMsg(groupId, msg));
     } else {
-      resultMsgs.forEach(msg => yorubot.sendPrivateMsg(userId, msg));
+      resultMsgs.forEach((msg) => yorubot.sendPrivateMsg(userId, msg));
     }
-
-    // finish
-    this.finished = true;
   }
-
 }

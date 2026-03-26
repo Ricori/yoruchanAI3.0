@@ -19,26 +19,16 @@
     "biliDynamicPush": {
       "enable": true,
       "config": {
-        "13184888": [
-          473794729
-        ],
-        "565597249": [
-          473794729
-        ],
-        "629994228": [
-          914620769,
-          473794729
-        ]
+        "13184888": [],
+        "565597249": [],
+        "629994228": []
       },
       "cookie": ""
     },
     "tweetPush": {
       "enable": true,
       "config": {
-        "hiiragi_yuka530": [
-          914620769,
-          473794729
-        ]
+        "hiiragi_yuka530": []
       }
     },
     "aiReply": {
@@ -48,12 +38,9 @@
       "blackList": []
     },
     "hPic": {
-      "enable": true,
-      "whiteGroupOnly": false,
-      "whiteGroupIds": [
-        829349264
-      ],
-      "whiteGroupCustomLimit": 1
+      "enable": false,
+      "whiteGroupIds": [],
+      "enableR18": true
     }
   }
 }

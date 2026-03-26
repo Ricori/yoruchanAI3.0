@@ -44,9 +44,9 @@ export interface BotConfig {
   aiReply: {
     /** 是否开启AI回复 */
     enable: boolean;
-    /** 模型平台 baseUrl */
+    /** 大模型平台 baseUrl */
     baseUrl: string;
-    /** 模型平台 key */
+    /** 大模型平台 key */
     apiKey: string;
     /** 黑名单，黑名单内的群不会触发自动回复 */
     blackList: number[];
@@ -55,12 +55,10 @@ export interface BotConfig {
   hPic: {
     /** 是否开启瑟图功能 */
     enable: boolean;
-    /** 是否只允许白名单群发图 */
-    whiteGroupOnly: boolean;
-    /** 白名单群号 */
+    /** 白名单群号，非空时启动白名单机制（只允许在白名单群发图） */
     whiteGroupIds: number[];
-    /** 白名单群色图定制等级, 0=全年龄,1=r18Only,2=混合 */
-    whiteGroupCustomLimit: number,
+    /** 是否允许发送 R18 图片 */
+    enableR18: number,
   },
 }
 
