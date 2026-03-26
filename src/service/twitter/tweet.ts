@@ -24,15 +24,17 @@ function getTimestampFromTweetId(id: string) {
   return parseInt(temp, 2) + 1288834974657;
 }
 
+let consecutiveFailCount = 0;
+
 export async function getLatestTweet(username: string) {
   const yoruServiceConfig = yorubot.config.yoruService;
   const yoruURL = `${yoruServiceConfig.baseUrl}/tweets/top/${username}?apikey=${yoruServiceConfig.apiKey}`;
 
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 2; i++) {
     try {
       const ret = await Axios.get(yoruURL, { timeout: 15000 });
       if (ret?.data?.success === false) {
-        throw new Error('API returned success: false');
+        throw new Error('[yoru-service] API returned success: false');
       }
       if (ret?.data && ret.data.list?.length > 0) {
         const urlList = ret.data.list;
@@ -47,9 +49,12 @@ export async function getLatestTweet(username: string) {
       return undefined;
     } catch (e: any) {
       const errorMsg = `[GetLatestTweet Warn] Attempt ${i + 1} ${e.message}`;
-      if (i === 2) {
+      if (i === 1) {
         printError(`${errorMsg} - All attempts failed.`);
-        yorubot.sendPrivateMsg(yorubot.config.admin[0], `GetLatestTweet All attempts failed. reason: ${e.message}`);
+        consecutiveFailCount++;
+        if (consecutiveFailCount % 5 === 0) {
+          yorubot.sendPrivateMsg(yorubot.config.admin[0], `GetLatestTweet All attempts failed x${consecutiveFailCount}. reason: ${e.message}`);
+        }
         return undefined;
       }
       await new Promise((resolve) => {
