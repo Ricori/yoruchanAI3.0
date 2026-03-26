@@ -10,6 +10,13 @@ export interface BotConfig {
   admin: number[];
   /** 是否同意自动添加好友 */
   autoAddFriend: boolean;
+  /** yoru API服务 */
+  yoruService: {
+    /** API服务地址 */
+    baseUrl: string;
+    /** API服务密钥 */
+    apiKey: string;
+  };
   /** 复读机功能 */
   repeater: {
     /** 打开复读机 */
@@ -32,8 +39,6 @@ export interface BotConfig {
     enable: boolean;
     /** 推送配置 {推特用户名 : 要推送的群号列表 } */
     config: Record<string, number[]>;
-    /** 夜夜酱API服务key */
-    yoruAPIKey: ''
   },
   /** AI回复 */
   aiReply: {

@@ -8,7 +8,6 @@ interface RepeaterLog {
 }
 
 class YoruStorage {
-
   /** bot QQ号  */
   private myUserId: number = 0;
 
@@ -30,11 +29,11 @@ class YoruStorage {
   /** 获取 bot QQ号  */
   getOrSetMyUserId = (id?: number) => {
     if (id) {
-      this.myUserId === id;
-      return id
+      this.myUserId = id;
+      return id;
     }
     return this.myUserId;
-  }
+  };
 
   /** 新增好友到待添加名单 */
   joinToBeAddedList = (userId: number) => { this.toBeAddedList = [...this.toBeAddedList, userId]; };
@@ -95,6 +94,7 @@ class YoruStorage {
   setTwitterLastestTweetTime(username: string, time: number) {
     this.twitterLastestTweetTime[username] = time;
   }
+
   /** 获取某推特用户最新推文时间 */
   getTwitterLastestTweetTime(username: string) {
     return this.twitterLastestTweetTime[username] ?? 0;

@@ -42,10 +42,10 @@ export async function createMsgFromTweetId(tweetId: string) {
 }
 
 async function checkLastestTweet(
-  { username, groupIds, yoruAPIKey }: { username: string, groupIds: number[], yoruAPIKey: string },
+  { username, groupIds }: { username: string, groupIds: number[] },
 ) {
   try {
-    const latestTweet = await getLatestTweet(username, yoruAPIKey);
+    const latestTweet = await getLatestTweet(username);
     if (!latestTweet || !latestTweet.time) return;
     const preTime = yoruStorage.getTwitterLastestTweetTime(username);
     const newTime = latestTweet.time;
@@ -73,22 +73,21 @@ async function checkLastestTweet(
 const task = new AsyncTask('twitterTask', async () => {
   const botIsConnect = yorubot.getIsBotConnecting();
   const config = yorubot.config.tweetPush;
-  if (!config.enable || !config.yoruAPIKey) return;
+  if (!config.enable || !yorubot.config.yoruService.apiKey) return;
   if (botIsConnect) {
     Object.keys(config.config).forEach((username: string, i: number) => {
       if (Array.isArray(config.config[username])) {
         setTimeout(() => checkLastestTweet({
           username,
           groupIds: config.config[username],
-          yoruAPIKey: config.yoruAPIKey,
-        }), i * 15000);
+        }), i * 10000);
       }
     });
   }
 });
 
 
-const TwitterPushJob = new SimpleIntervalJob({ seconds: 480 }, task, { id: 'twitterPush' });
+const TwitterPushJob = new SimpleIntervalJob({ seconds: 180 }, task, { id: 'twitterPush' });
 
 // 启动bot时将用户推文最新时间设置为现在，防止立即推送
 Object.keys(yorubot.config.tweetPush.config).forEach((username: string) => {

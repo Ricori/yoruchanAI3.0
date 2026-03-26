@@ -13,7 +13,6 @@ type Module = typeof YoruModuleBase<RequestFirendMessageData> |
 
 
 export class YoruCore {
-
   /** YoruWebSocket Object */
   protected yoruWS: YoruWebsocket;
 
@@ -47,22 +46,22 @@ export class YoruCore {
     // event listeners
     const eventFC = {
       friend: async (data: RequestFirendMessageData) => {
-        if (this.debugMode) printLog(`[Recive friend event]`, data);
+        if (this.debugMode) printLog('[Recive friend event]', data);
         this.flow(this.requestMessageModuleList, data);
       },
       private: async (data: PrivateMessageData) => {
-        if (this.debugMode) printLog(`[Recive private msg]`, data);
+        if (this.debugMode) printLog('[Recive private msg]', data);
         this.flow(this.privateMessageModuleList, data);
       },
       groupAtMe: async (data: GroupMessageData) => {
-        if (this.debugMode) printLog(`[Recive group at msg]`, data);
+        if (this.debugMode) printLog('[Recive group at msg]', data);
         this.flow(this.groupAtMessageModuleList, data);
       },
       group: async (data: GroupMessageData) => {
-        if (this.debugMode) printLog(`[Recive group msg]`, data);
+        // if (this.debugMode) printLog('[Recive group msg]', data);
         this.flow(this.groupMessageModuleList, data);
       },
-    }
+    };
 
     // create yoruWS object
     this.yoruWS = new YoruWebsocket(config.wsConfig, eventFC);
@@ -97,7 +96,7 @@ export class YoruCore {
         const hit = await obj.checkConditions();
         if (hit) {
           // debug text
-          if (this.debugMode) printLog(`[System Module]`, `Run ${Module.NAME}`);
+          if (this.debugMode) printLog('[System Module]', `Run ${Module.NAME}`);
           // run
           await obj.run();
           // get res
@@ -115,7 +114,7 @@ export class YoruCore {
 
   /** Start bot */
   start() {
-    this.yoruWS.connect()
+    this.yoruWS.connect();
   }
 
   /** Get bot connecting status */

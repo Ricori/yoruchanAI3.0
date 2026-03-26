@@ -1,0 +1,106 @@
+import { GroupMessageData } from '@/types/event';
+import YoruModuleBase from '@/modules/base';
+import yorubot from '@/core/yoruBot';
+import { getCQCodesFromStr } from '@/utils/msgCode';
+import { printError, printLog } from '@/utils/print';
+import { getJobProgress, initGithubConfig, startTransfer } from '@/utils/githubTransfer';
+import { sleep } from '@/utils/function';
+
+initGithubConfig();
+
+export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData> {
+  static NAME = 'YkhrOnedriveModule';
+
+  async checkConditions() {
+    const { message, group_id: groupId } = this.data;
+
+    // 只在 YKHR 群和测试群生效
+    if (groupId !== 930639183 && groupId !== 829349264) return false;
+
+    // 检查文件消息
+    if (message.includes('[CQ:file,file=')) {
+      if (message.includes('待轴') || message.includes('熟肉')) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+
+  async run() {
+    const { message, group_id: groupId, user_id: userId } = this.data;
+
+    const cqObjs = getCQCodesFromStr(message);
+    const fileObj = cqObjs.find((cq) => cq.type === 'file');
+    if (fileObj) {
+      const file = fileObj.data.get('file') as string;
+      const fileSize = fileObj.data.get('file_size');
+      const url = fileObj.data.get('url') as string;
+
+      if (fileSize && (Number(fileSize) > 1024 * 1024 * 1024)) {
+        yorubot.sendGroupMsg(groupId, `文件 ${file}(${(Number(fileSize) / (1024 * 1024)).toFixed(2)} MB) 过大，无法处理`, userId);
+        return;
+      }
+
+      yorubot.sendGroupMsg(groupId, `开始处理 ${file} (${(Number(fileSize) / (1024 * 1024)).toFixed(2)} MB)...`, userId);
+
+      const parentPath = file.includes('待轴') ? '/剪辑' : '/全熟已压';
+      const inputs = {
+        file_url: url,
+        file_name: file,
+        target_folder: parentPath,
+      };
+
+      const runId = await startTransfer(inputs);
+      if (!runId) {
+        yorubot.sendGroupMsg(groupId, `${file} 上传 OneDrive 任务创建失败，请联系管理员。`, userId);
+        return;
+      }
+
+      printLog(`[Github Transfer][${file}] Start monitoring task execution progress (Run ID: ${runId})...`);
+
+      let isCompleted = false;
+      let isSuccess = false;
+      let retryCount = 0;
+      while (!isCompleted && retryCount < 20) {
+        const progress = await getJobProgress(runId);
+        switch (progress.status) {
+          case 'completed':
+            isCompleted = true;
+            if (progress.conclusion === 'success') {
+              isSuccess = true;
+            } else {
+              isSuccess = false;
+              printError(`[Github Transfer][${file}] Task execution failed. ${progress.conclusion}.`);
+            }
+            break;
+          case 'in_progress':
+            printLog(`[Github Transfer][${file}] Current execution progress: [${progress.stepName}] (Time elapsed ${retryCount * 20} seconds)...`);
+            break;
+          case 'queued':
+            printLog(`[Github Transfer][${file}] Current status: GitHub is queuing to allocate servers...`);
+            break;
+          default:
+            printLog(`[Github Transfer][${file}] Current status: ${progress.status}`);
+            break;
+        }
+        if (!isCompleted) {
+          retryCount++;
+          await sleep(20000);
+        }
+      }
+
+      if (!isCompleted) {
+        printError(`[Github Transfer][${file}] Task timeout.`);
+        yorubot.sendGroupMsg(groupId, `${file} 任务超时，请联系管理员。`, userId);
+      }
+      if (!isSuccess) {
+        printError(`[Github Transfer][${file}] Task failed.`);
+        yorubot.sendGroupMsg(groupId, `上传 ${file} 到 OneDrive 失败，请联系管理员。`, userId);
+      }
+
+      yorubot.sendGroupMsg(groupId, `${file} 已成功上传至 OneDrive ${parentPath}目录。`, userId);
+    }
+  }
+}

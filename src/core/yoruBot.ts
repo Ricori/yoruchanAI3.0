@@ -55,11 +55,11 @@ class YoruBot extends YoruCore {
     if (msg.length === 0) return;
     const prefix = atUser ? getAtCode(`${atUser}`) : '';
     if (this.debugMode) {
-      printLog(`[Send Group Msg] ${prefix}${msg}`);
+      printLog(`[Send Group Msg] ${prefix} ${msg}`);
     }
     this.yoruWS.call('send_group_msg', {
       group_id: groupId,
-      message: `${prefix}${msg}`,
+      message: `${prefix} ${msg}`,
       auto_escape: !!plainText,
     });
   }

@@ -24,28 +24,45 @@ function getTimestampFromTweetId(id: string) {
   return parseInt(temp, 2) + 1288834974657;
 }
 
-export async function getLatestTweet(username: string, apiKey: string) {
-  const ret = await Axios.get(`https://1251418210-h2kvrryyrj.ap-tokyo.tencentscf.com?username=${username}&apikey=${apiKey}`, { timeout: 20000 }).catch((e) => {
-    printError(`[YoruService Error] Fetch Error: ${e.message}`);
-    return null;
-  });
-  if (ret?.data && ret.data.list?.length > 0) {
-    const urlList = ret.data.list;
+export async function getLatestTweet(username: string) {
+  const yoruServiceConfig = yorubot.config.yoruService;
+  const yoruURL = `${yoruServiceConfig.baseUrl}/tweets/top/${username}?apikey=${yoruServiceConfig.apiKey}`;
 
-    const tweetId = getTweetId(urlList[0]);
-    if (!tweetId) return undefined;
-    const time = getTimestampFromTweetId(tweetId);
-
-    return {
-      tweetId,
-      time,
-    };
+  for (let i = 0; i < 3; i++) {
+    try {
+      const ret = await Axios.get(yoruURL, { timeout: 15000 });
+      if (ret?.data?.success === false) {
+        throw new Error('API returned success: false');
+      }
+      if (ret?.data && ret.data.list?.length > 0) {
+        const urlList = ret.data.list;
+        const tweetId = getTweetId(urlList[0]);
+        if (!tweetId) return undefined;
+        const time = getTimestampFromTweetId(tweetId);
+        return {
+          tweetId,
+          time,
+        };
+      }
+      return undefined;
+    } catch (e: any) {
+      const errorMsg = `[GetLatestTweet Warn] Attempt ${i + 1} ${e.message}`;
+      if (i === 2) {
+        printError(`${errorMsg} - All attempts failed.`);
+        yorubot.sendPrivateMsg(yorubot.config.admin[0], `GetLatestTweet All attempts failed. reason: ${e.message}`);
+        return undefined;
+      }
+      await new Promise((resolve) => {
+        setTimeout(resolve, 1000);
+      });
+    }
   }
+
   return undefined;
 }
 
 export async function getTweetPost(tweetId: string, translate = true) {
-  const ret2 = await Axios.get(`https://api.vxtwitter.com/tt/status/${tweetId}`, { timeout: 20000 }).catch((e) => {
+  const ret2 = await Axios.get(`https://api.vxtwitter.com/tt/status/${tweetId}`, { timeout: 15000 }).catch((e) => {
     printError(`[Vxtwitter Error] Fetch Error: ${e.message}`);
     return null;
   });
@@ -103,7 +120,7 @@ async function translateText(text: string) {
   const ret = await Axios.post(`${yorubot.config.aiReply.baseUrl}/chat/completions`, {
     model: 'kimi-k2.5',
     messages: [
-      { role: 'user', content: `把以下内容翻译成中文，不要包含tag，不要有多余内容，まのさば翻译为"魔裁"：${text}` },
+      { role: 'user', content: `【日语专有名词】まのさば:魔裁。\n把以下内容翻译成中文，不要包含tag，不要有多余内容。${text}` },
     ],
   }, {
     headers: {

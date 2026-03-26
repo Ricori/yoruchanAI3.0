@@ -8,10 +8,13 @@ import { printError } from '@/utils/print';
 import { getAiReply } from '@/service/ai';
 import { getAscii2dResult } from '@/service/searchImg/ascii2d';
 import { createScreenshot } from '@/service/twitter/screenshot';
-import { getTweetPost } from '@/service/twitter/tweet';
+import { getLatestTweet, getTweetPost } from '@/service/twitter/tweet';
 import { createMsgFromTweetId } from '@/tasks/twitter';
-//import './axiosProxy.ts';
+import getMessageCode, { getCQCodesFromStr } from '@/utils/msgCode';
+import { startTransfer } from '@/utils/githubTransfer';
 
 // getAiReply(123, '今天吃什么？').then((res) => console.log(res))
 
-console.log(await createMsgFromTweetId('2024011099478122755'));
+// console.log(await createMsgFromTweetId('2024011099478122755'));
+
+// getLatestTweet('Cho_KaguyaHime').then((res) => console.log(res));
