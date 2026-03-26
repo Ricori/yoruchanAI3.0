@@ -158,7 +158,7 @@ export async function startTransfer(inputs: TransferInputs) {
   const triggerTime = new Date();
   try {
     await triggerWorkflow(githubConfig, inputs);
-    printLog(`[Github Transfer][${inputs.file_name}]Transter trigger request sent successfully!`);
+    printLog(`[Github Transfer][${inputs.file_name}] Transfer trigger request sent successfully!`);
     await sleep(5000);
     let runId = await getLatestRunId(githubConfig, triggerTime);
     let findRetries = 3;

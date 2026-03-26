@@ -5,11 +5,12 @@ import BilibiliNewSharedJob from '@/tasks/bilibili';
 import SystemCleanupJob from '@/tasks/clean';
 import TwitterPushJob from '@/tasks/twitter';
 import RequestFriendModule from '@/modules/request/requestFriend';
-import AdminModule from '@/modules/admin/admin';
-import ImageSearchModule from '@/modules/general/imageSearch';
-import HPicModule from '@/modules/general/hPic';
-import DefaultReplyModule from '@/modules/general/default';
+import AdminModule from '@/modules/private/admin';
+import ImageSearchModule from '@/modules/common/imageSearch';
+import HPicModule from '@/modules/common/hPic';
 import ykhrOnedriveModule from '@/modules/group/ykhr';
+import PrivateAIReplyModule from '@/modules/private/privateReply';
+import GroupAIReplyModule from '@/modules/group/groupReply';
 
 // 加载好友请求模块
 yorubot.loadModule('request', [RequestFriendModule]);
@@ -19,22 +20,21 @@ yorubot.loadModule('private', [
   AdminModule,
   ImageSearchModule,
   HPicModule,
-  DefaultReplyModule,
+  PrivateAIReplyModule,
 ]);
 
 // 加载群@消息模块
 yorubot.loadModule('groupAt', [
-  AdminModule,
   ImageSearchModule,
   HPicModule,
-  DefaultReplyModule,
+  GroupAIReplyModule,
 ]);
 
 // 加载群消息默认监听
 yorubot.loadModule('group', [
   ykhrOnedriveModule,
   HPicModule,
-
+  GroupAIReplyModule,
   // RepeaterModule,
 ]);
 

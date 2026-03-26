@@ -4,15 +4,6 @@ import { SimpleMessageData } from '@/types/event';
 import { YoruCore } from './yoruCore';
 
 class YoruBot extends YoruCore {
-  /** 获取bot QQ号 */
-  async getLoginQQ() {
-    const res = await this.yoruWS.call('get_login_info', {});
-    if (res.retcode === 0 && res.data) {
-      return res.data.user_id as number ?? 0;
-    }
-    return 0;
-  }
-
   /** 处理好友请求 */
   setFriendAddRequest(flag: string | number, approve: boolean) {
     this.yoruWS.call('set_friend_add_request', { flag: `${flag}`, approve });
@@ -53,7 +44,7 @@ class YoruBot extends YoruCore {
    */
   async sendGroupMsg(groupId: number, msg: string, atUser?: number | string, plainText?: boolean) {
     if (msg.length === 0) return;
-    const prefix = atUser ? getAtCode(`${atUser}`) : '';
+    const prefix = atUser ? `${getAtCode(`${atUser}`)} ` : '';
     if (this.debugMode) {
       printLog(`[Send Group Msg] ${prefix}${msg}`);
     }
@@ -86,7 +77,7 @@ class YoruBot extends YoruCore {
    */
   async sendGroupReplyMsg(groupId: number, msg: string, replyMsgId: number | string) {
     if (msg.length === 0) return;
-    const prefix = getReplyCode(replyMsgId);
+    const prefix = `${getReplyCode(replyMsgId)} `;
     if (this.debugMode) {
       printLog(`[Send Group Msg] ${prefix}${msg}`);
     }

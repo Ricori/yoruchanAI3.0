@@ -1,11 +1,11 @@
-import { GroupMessageData, PrivateMessageData } from '@/types/event';
+import { PrivateMessageData } from '@/types/event';
 import yorubot from '@/core/yoruBot';
 import { createMsgFromTweetId } from '@/tasks/twitter';
 import yoruStorage from '@/core/yoruStorage';
 import yoruSchedule from '@/core/yoruSchedule';
 import YoruModuleBase from '../base';
 
-export default class AdminModule extends YoruModuleBase<PrivateMessageData | GroupMessageData> {
+export default class AdminModule extends YoruModuleBase<PrivateMessageData> {
   static NAME = 'AdminModule';
 
   private taskControlMatch: RegExpMatchArray | null = null;
@@ -46,13 +46,12 @@ export default class AdminModule extends YoruModuleBase<PrivateMessageData | Gro
     // Prevent call chain
     this.finished = true;
 
-    const { user_id: userId, message_type: messageType, message } = this.data;
-    const groupId = messageType === 'group' ? this.data.group_id : undefined;
+    const { user_id: userId, message } = this.data;
 
     // 1. clean memory
     if (message === '/clean-memory') {
-      yoruStorage.cleanGroupChatConversations();
-      yorubot.sendMsg(groupId, userId, '[YoruSystem] Memory cleaned.');
+      yoruStorage.cleanChatConversations();
+      yorubot.sendPrivateMsg(userId, '[YoruSystem] Memory cleaned.');
       return;
     }
 
@@ -63,23 +62,23 @@ export default class AdminModule extends YoruModuleBase<PrivateMessageData | Gro
         case 'twitter':
           if (action === 'on') {
             yoruSchedule.startById('twitterPush');
-            yorubot.sendMsg(groupId, userId, '[YoruSystem] Twitter task enabled.');
+            yorubot.sendPrivateMsg(userId, '[YoruSystem] Twitter task enabled.');
           } else {
             yoruSchedule.stopById('twitterPush');
-            yorubot.sendMsg(groupId, userId, '[YoruSystem] Twitter task disabled.');
+            yorubot.sendPrivateMsg(userId, '[YoruSystem] Twitter task disabled.');
           }
           return;
         case 'bilibili':
           if (action === 'on') {
             yoruSchedule.startById('bilibiliNewShared');
-            yorubot.sendMsg(groupId, userId, '[YoruSystem] Bilibili task enabled.');
+            yorubot.sendPrivateMsg(userId, '[YoruSystem] Bilibili task enabled.');
           } else {
             yoruSchedule.stopById('bilibiliNewShared');
-            yorubot.sendMsg(groupId, userId, '[YoruSystem] Bilibili task disabled.');
+            yorubot.sendPrivateMsg(userId, '[YoruSystem] Bilibili task disabled.');
           }
           return;
         default:
-          yorubot.sendMsg(groupId, userId, '[YoruSystem] Unsupported task.');
+          yorubot.sendPrivateMsg(userId, '[YoruSystem] Unsupported task.');
           return;
       }
     }
@@ -90,9 +89,9 @@ export default class AdminModule extends YoruModuleBase<PrivateMessageData | Gro
       const msgArr = await createMsgFromTweetId(tweetId);
       if (!msgArr || msgArr.length === 0) return;
       for (const msg of msgArr) {
-        yorubot.sendMsg(Number(targetGroupId), undefined, msg);
+        yorubot.sendGroupMsg(Number(targetGroupId), msg);
       }
-      yorubot.sendMsg(groupId, userId, `[YoruSystem] Push ${tweetId} to ${targetGroupId} successed.`);
+      yorubot.sendPrivateMsg(userId, `[YoruSystem] Push ${tweetId} to ${targetGroupId} successed.`);
     }
   }
 }

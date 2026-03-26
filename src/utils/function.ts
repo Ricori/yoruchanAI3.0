@@ -82,7 +82,7 @@ export function getForwardMessageId(msg: string) {
 /** 从消息中去除@和replay文本
  * @param {string} msg
  */
-export function deleteAtFromMsg(msg: string) {
+export function cleanAt(msg: string) {
   const reg = /\[CQ:at,qq=([^,]+)\]/g;
   const reg2 = /\[CQ:reply,id=([^,]+)\]/;
   return msg.replace(reg, '').replace(reg2, '').trimStart();
@@ -92,16 +92,24 @@ export function deleteAtFromMsg(msg: string) {
 /** 去除首尾指定字符
  */
 export function trimChar(str: string | null, char: string) {
-  if (!str) return undefined;
-  let newStr;
-  if (str.charAt(0) === char) {
-    newStr = str.substring(1);
-  }
-  if (str.charAt(str.length - 1) === char) {
-    newStr = str.substring(0, str.length - 1);
-  }
-  return newStr;
+  if (!str) return '';
+  // 转义特殊字符
+  const escapedChar = char.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const reg = new RegExp(`^${escapedChar}+|${escapedChar}+$`, 'g');
+  return str.replace(reg, '');
 }
 
 /** sleep */
-export const sleep = (ms: number) => new Promise((resolve) => { setTimeout(resolve, ms); });
+export function sleep(ms: number) { return new Promise((resolve) => { setTimeout(resolve, ms); }); }
+
+/**
+ * 根据字数计算人类打字时间
+ * @param text 要发送的文本
+ * @returns 延迟毫秒数
+ */
+export function calculateTypingDelay(text: string): number {
+  const baseDelay = 500; // 基础延迟
+  const timePerChar = 120; // 假设人类每打一个字需要 120ms
+  const jitter = Math.floor(Math.random() * 600) - 300; // 随机波动
+  return Math.max(baseDelay + (text.length * timePerChar) + jitter, 500);
+}

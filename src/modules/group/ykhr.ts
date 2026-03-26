@@ -69,6 +69,7 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
           case 'completed':
             isCompleted = true;
             if (progress.conclusion === 'success') {
+              printLog(`[Github Transfer][${file}] Task successful.`);
               isSuccess = true;
             } else {
               isSuccess = false;
@@ -76,7 +77,7 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
             }
             break;
           case 'in_progress':
-            printLog(`[Github Transfer][${file}] Current execution progress: [${progress.stepName}] (Time elapsed ${retryCount * 20} seconds)...`);
+            printLog(`[Github Transfer][${file}] Current execution progress: [${progress.stepName}] (Time elapsed ${retryCount * 30} seconds)...`);
             break;
           case 'queued':
             printLog(`[Github Transfer][${file}] Current status: GitHub is queuing to allocate servers...`);
@@ -87,7 +88,7 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
         }
         if (!isCompleted) {
           retryCount++;
-          await sleep(20000);
+          await sleep(30000);
         }
       }
 
