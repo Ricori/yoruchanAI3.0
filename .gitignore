@@ -4,8 +4,9 @@ build
 # Data
 data/picture
 
-# Debug
-config_debug.json
+# Config
+config.json
+config_github.json
 
 # Logs
 logs
@@ -25,6 +26,3 @@ node_modules/
 
 # Yarn Integrity file
 .yarn-integrity
-
-# Github config
-config_github.json

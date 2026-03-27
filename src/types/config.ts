@@ -21,8 +21,6 @@ export interface BotConfig {
   repeater: {
     /** 打开复读机 */
     enable: boolean;
-    /** 几次重复后复读 (可能随机+-1) */
-    times: number;
   },
   /** B站动态推送 */
   biliDynamicPush: {

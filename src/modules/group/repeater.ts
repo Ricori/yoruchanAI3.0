@@ -11,8 +11,8 @@ export default class RepeaterModule extends YoruModuleBase<GroupMessageData> {
     if (!yorubot.config.repeater.enable) return false;
     const { message, group_id: groupId } = this.data;
     const times = yoruStorage.saveRepeaterLog(groupId, message);
-    const randomValue = Math.floor(Math.random() * 3) - 1;
-    return times >= 3 + randomValue;
+    const randomValue = Math.floor(Math.random() * 2);
+    return times >= 2 + randomValue;
   }
 
   async run() {

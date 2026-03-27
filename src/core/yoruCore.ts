@@ -35,9 +35,7 @@ export class YoruCore {
   groupMessageModuleList: typeof YoruModuleBase<GroupMessageData>[] = [];
 
   constructor() {
-    // If you use debug mode, you need to create the `config_debug.json` manually
-    const configFileName = debugMode ? 'config_debug.json' : 'config.json';
-    const config = loadConfigFile(configFileName) as YoruConfig;
+    const config = loadConfigFile('config.json') as YoruConfig;
 
     // config
     this.debugMode = debugMode;

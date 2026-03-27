@@ -1,0 +1,45 @@
+{
+  "wsConfig": {
+    "host": "127.0.0.1",
+    "port": 6700
+  },
+  "botConfig": {
+    "admin": [
+      515302066
+    ],
+    "autoAddFriend": false,
+    "yoruService": {
+      "baseUrl": "",
+      "apiKey": ""
+    },
+    "repeater": {
+      "enable": true
+    },
+    "biliDynamicPush": {
+      "enable": true,
+      "config": {
+        "13184888": [],
+        "565597249": [],
+        "629994228": []
+      },
+      "cookie": ""
+    },
+    "tweetPush": {
+      "enable": true,
+      "config": {
+        "hiiragi_yuka530": []
+      }
+    },
+    "aiReply": {
+      "enable": true,
+      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "apiKey": "",
+      "blackList": []
+    },
+    "hPic": {
+      "enable": false,
+      "whiteGroupIds": [],
+      "enableR18": true
+    }
+  }
+}
