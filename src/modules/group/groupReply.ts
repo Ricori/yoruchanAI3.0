@@ -8,7 +8,7 @@ import { generateAssistantMessageParam, generateUserMessageParam, getAiReply } f
 import yoruStorage from '@/core/yoruStorage';
 
 const sessionTimers = new Map<number, NodeJS.Timeout | null>();
-const processingLocks = new Set<number>(); // 锁住正在回复的群
+const processingLocks = new Set<number>(); // 正在回复的群的锁
 
 async function processReplyQueue(groupId: number, autonomousReply = false) {
   // 需要下次回复时，如果还在发送上一条，等2秒后再看看锁解开没
@@ -58,6 +58,7 @@ async function processReplyQueue(groupId: number, autonomousReply = false) {
 }
 
 
+
 export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData> {
   static NAME = 'GroupAIReplyModule';
 
@@ -73,6 +74,7 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
 
     return true;
   }
+
 
   async run() {
     const {

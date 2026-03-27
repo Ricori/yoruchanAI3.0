@@ -11,6 +11,7 @@ import HPicModule from '@/modules/common/hPic';
 import ykhrOnedriveModule from '@/modules/group/ykhr';
 import PrivateAIReplyModule from '@/modules/private/privateReply';
 import GroupAIReplyModule from '@/modules/group/groupReply';
+import RepeaterModule from '@/modules/group/repeater';
 
 // 加载好友请求模块
 yorubot.loadModule('request', [RequestFriendModule]);
@@ -34,8 +35,8 @@ yorubot.loadModule('groupAt', [
 yorubot.loadModule('group', [
   ykhrOnedriveModule,
   HPicModule,
+  RepeaterModule,
   GroupAIReplyModule,
-  // RepeaterModule,
 ]);
 
 // 加载定时任务

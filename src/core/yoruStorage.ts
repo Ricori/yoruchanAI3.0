@@ -1,9 +1,8 @@
 import { ChatCompletionMessageParam } from 'openai/resources';
 
-const MAX_CHAT_HISTORY_COUNT = 25;
+const MAX_CHAT_HISTORY_COUNT = 22;
 
 interface RepeaterLog {
-  userId: number | string,
   msg: string,
   times: number,
   done: boolean,
@@ -36,23 +35,21 @@ class YoruStorage {
 
   /** 记录某群复读情况
    * @param {number} groupId 群号
-   * @param {number} userId QQ号
    * @param {string} msg 消息
    * @returns 如果已经复读则返回0，否则返回当前复读次数
    */
-  saveLogAndGetRepeaterTimes(groupId: number, userId: number, msg: string) {
+  saveRepeaterLog(groupId: number, msg: string) {
     const logObj = this.repeaterData.get(groupId);
     // 没有记录或另起复读则新建记录
     if (!logObj || logObj.msg !== msg) {
-      this.repeaterData.set(groupId, {
-        userId, msg, times: 1, done: false,
-      });
-    } else if (logObj.userId !== userId) {
-      // 不同人复读则次数加1
-      logObj.userId = userId;
-      logObj.times += 1;
+      const newLog: RepeaterLog = { msg, times: 1, done: false };
+      this.repeaterData.set(groupId, newLog);
+      return 1;
     }
-    return logObj ? (logObj.done ? 0 : logObj.times) : 0;
+    // 已经复读过则跳过
+    if (logObj.done) return 0;
+    logObj.times += 1;
+    return logObj.times;
   }
 
   /** 标记某群已复读

@@ -9,13 +9,10 @@ export default class RepeaterModule extends YoruModuleBase<GroupMessageData> {
 
   async checkConditions() {
     if (!yorubot.config.repeater.enable) return false;
-    const { message, user_id: userId, group_id: groupId } = this.data;
-    const times = yoruStorage.saveLogAndGetRepeaterTimes(groupId, userId, message);
-    if (times >= yorubot.config.repeater.times) {
-      return true;
-    }
-
-    return false;
+    const { message, group_id: groupId } = this.data;
+    const times = yoruStorage.saveRepeaterLog(groupId, message);
+    const randomValue = Math.floor(Math.random() * 3) - 1;
+    return times >= 3 + randomValue;
   }
 
   async run() {
@@ -24,9 +21,6 @@ export default class RepeaterModule extends YoruModuleBase<GroupMessageData> {
 
     setTimeout(() => {
       yorubot.sendGroupMsg(groupId, message);
-    }, 1000);
-
-    // finish
-    this.finished = true;
+    }, 1200);
   }
 }
