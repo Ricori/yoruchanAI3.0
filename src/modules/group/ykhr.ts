@@ -39,11 +39,11 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
       const url = fileObj.data.get('url') as string;
 
       if (fileSize && (Number(fileSize) > 1024 * 1024 * 1024)) {
-        yorubot.sendGroupMsg(groupId, `文件 ${file}(${(Number(fileSize) / (1024 * 1024)).toFixed(2)} MB) 过大，无法处理`, userId);
+        yorubot.sendGroupMsg(groupId, `文件“${file}”(${(Number(fileSize) / (1024 * 1024)).toFixed(2)} MB) 过大，无法处理`, userId);
         return;
       }
 
-      yorubot.sendGroupMsg(groupId, `开始处理 ${file} (${(Number(fileSize) / (1024 * 1024)).toFixed(2)} MB)...`, userId);
+      yorubot.sendGroupMsg(groupId, `开始处理“${file}”(${(Number(fileSize) / (1024 * 1024)).toFixed(2)} MB)...`, userId);
 
       const parentPath = file.includes('待轴') ? '/剪辑' : '/全熟已压';
       const inputs = {
@@ -54,7 +54,7 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
 
       const runId = await startTransfer(inputs);
       if (!runId) {
-        yorubot.sendGroupMsg(groupId, `${file} 上传 OneDrive 任务创建失败，请联系管理员。`, userId);
+        yorubot.sendGroupMsg(groupId, `“${file}”上传 OneDrive 任务创建失败，请联系管理员。`, userId);
         return;
       }
 
@@ -94,14 +94,14 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
 
       if (!isCompleted) {
         printError(`[Github Transfer][${file}] Task timeout.`);
-        yorubot.sendGroupMsg(groupId, `${file} 任务超时，请联系管理员。`, userId);
+        yorubot.sendGroupMsg(groupId, `“${file}”任务超时，请联系管理员。`, userId);
       }
       if (!isSuccess) {
         printError(`[Github Transfer][${file}] Task failed.`);
-        yorubot.sendGroupMsg(groupId, `上传 ${file} 到 OneDrive 失败，请联系管理员。`, userId);
+        yorubot.sendGroupMsg(groupId, `上传 “${file}”到 OneDrive 失败，请联系管理员。`, userId);
       }
 
-      yorubot.sendGroupMsg(groupId, `${file} 已成功上传至 OneDrive ${parentPath}目录。`, userId);
+      yorubot.sendGroupMsg(groupId, `“${file}”已成功上传至 OneDrive ${parentPath}目录。`, userId);
     }
   }
 }
