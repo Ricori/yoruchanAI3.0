@@ -102,9 +102,9 @@ export function getReplyCode(msgId: number | string) {
   return getMessageCode('reply', { id: `${msgId}` });
 }
 
-export function getImgCode(file: string, summary?: string) {
-  if (summary) {
-    return getMessageCode('image', { file, summary });
+export function getImgCode(file: string, isSticker = false) {
+  if (isSticker) {
+    return getMessageCode('image', { file, summary: '[动画表情]', sub_type: 1 });
   }
   return getMessageCode('image', { file });
 }

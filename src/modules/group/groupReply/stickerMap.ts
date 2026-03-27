@@ -34,7 +34,7 @@ export function processStickerTag(text: string): string {
     if (imgName) {
       const picPath = path.resolve(STICKER_DIR, imgName);
       const fileUri = `file:///${picPath.replace(/\\/g, '/')}`;
-      return getImgCode(fileUri, '[动画表情]');
+      return getImgCode(fileUri, true);
     }
     // 如果没找到对应的图就返回或空
     return '';
