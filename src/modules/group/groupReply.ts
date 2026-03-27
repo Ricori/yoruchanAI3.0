@@ -6,6 +6,7 @@ import {
 } from '@/utils/function';
 import { generateAssistantMessageParam, generateUserMessageParam, getAiReply } from '@/service/ai';
 import yoruStorage from '@/core/yoruStorage';
+import { printLog } from '@/utils/print';
 
 const sessionTimers = new Map<number, NodeJS.Timeout | null>();
 const processingLocks = new Set<number>(); // 正在回复的群的锁
@@ -21,7 +22,6 @@ async function processReplyQueue(groupId: number, autonomousReply = false) {
   try {
     yoruStorage.trimGroupChatConversations(groupId);
     const history = yoruStorage.getGroupChatConversations(groupId);
-    console.log('history', history);
 
     // 调用 LLM 回复
     let aiReplyText: string | null = null;
@@ -29,6 +29,9 @@ async function processReplyQueue(groupId: number, autonomousReply = false) {
       // 主动发起会话的提示词
       const autoPrompt = generateUserMessageParam('（System：群友并没有@你，请根据上面的对话自然地随机插一句嘴，刷一下存在感）');
       aiReplyText = await getAiReply([...history, autoPrompt]);
+
+      printLog(`[GroupAIReplyModule] Auto Reply: ${aiReplyText}`);
+      console.log(history);
     } else {
       aiReplyText = await getAiReply(history);
     }
