@@ -19,8 +19,9 @@ async function processReplyQueue(groupId: number, autonomousReply = false) {
   processingLocks.add(groupId); // 上锁
 
   try {
+    yoruStorage.trimGroupChatConversations(groupId);
     const history = yoruStorage.getGroupChatConversations(groupId);
-    console.info(history);
+    console.log('history', history);
 
     // 调用 LLM 回复
     let aiReplyText: string | null = null;
@@ -89,7 +90,9 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
       const replyMsgData = await yorubot.getMessageFromId(replyMsgId);
       if (replyMsgData) {
         const isBot = replyMsgData.sender.user_id === selfId;
-        processedMessage = cleanAt(`[${nickName}]回复了${isBot ? '我' : replyMsgData.sender.nickname || ''}的消息(${replyMsgData.message.slice(0, 80)})，说：${message}`);
+        const cleanText = cleanAt(replyMsgData.message).replace(/\[CQ:image,[^\]]+\]/g, '[之前的图片]').trim();
+        processedMessage = `[${nickName}]回复了${isBot ? '我' : replyMsgData.sender.nickname || ''}的消息(${cleanText.slice(0, 90)})，说：${cleanAt(message)}`;
+        shouldReply = true;
       }
     } else {
       processedMessage = `[${nickName}]说：${cleanAt(message).trim()}`;
@@ -97,9 +100,14 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
 
     // 记录群对话记录
     const messageParam = generateUserMessageParam(processedMessage, false);
+
+    console.log(messageParam);
+
     if (messageParam) {
       yoruStorage.addGroupChatConversations(groupId, messageParam);
     }
+
+
 
     if (message.indexOf(`[CQ:at,qq=${selfId}]`) > -1) {
       // 在群里被@了
@@ -107,7 +115,7 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
     }
     if (groupId === 914620769) {
       // 主动插话的白名单测试群
-      const triggerChance = 0.03;
+      const triggerChance = 0.1;
       if (Math.random() < triggerChance) {
         shouldReply = true;
         autonomousReply = true;

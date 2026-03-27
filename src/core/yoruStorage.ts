@@ -1,6 +1,6 @@
 import { ChatCompletionMessageParam } from 'openai/resources';
 
-const MAX_CHAT_HISTORY_COUNT = 30;
+const MAX_CHAT_HISTORY_COUNT = 25;
 
 interface RepeaterLog {
   userId: number | string,
@@ -113,6 +113,29 @@ class YoruStorage {
     history.push(messageParam);
     if (history.length > MAX_CHAT_HISTORY_COUNT) {
       history.splice(0, history.length - MAX_CHAT_HISTORY_COUNT);
+    }
+  }
+
+  /** 修剪某群会话记录 */
+  trimGroupChatConversations(groupId: number) {
+    let imageCount = 0;
+    const history = this.groupChatConversations.get(groupId)!;
+    // 倒序遍历消息
+    for (let i = history.length - 1; i >= 0; i--) {
+      const msg = history[i];
+      // 判断消息 content 是不是多模态数组
+      if (Array.isArray(msg.content)) {
+        imageCount++;
+        // 如果超过 3 张图
+        if (imageCount > 2) {
+          const downgradedText = (msg.content[0] as { text: string }).text;
+          // 多模态消息改为纯文本消息
+          history[i] = {
+            ...msg,
+            content: downgradedText,
+          };
+        }
+      }
     }
   }
 

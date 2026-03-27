@@ -3,8 +3,6 @@ import { ChatCompletionMessageParam } from 'openai/resources';
 import yorubot from '@/core/yoruBot';
 import { printError } from '@/utils/print';
 import { getImgs, hasImage } from '@/utils/function';
-
-import { imgTransferToImgbb } from '@/utils/imgbb';
 import { GROUP_SYSTEM_PROMPT, PRIVATE_SYSTEM_PROMPT } from './prompt';
 
 const client = new OpenAI({
@@ -13,25 +11,35 @@ const client = new OpenAI({
 });
 
 
-export function generateUserMessageParam(rawText: string, imgClean = false): ChatCompletionMessageParam {
+export function generateUserMessageParam(rawText: string, shouldCleanImg = false): ChatCompletionMessageParam {
   const text = rawText.replace(/\[CQ:face,.*\]/g, '[表情]')
     .replace(/\[CQ:json,data=\{[\s\S]*?"title":"([^"]+)"[\s\S]*?\}\]/, '分享了文章《$1》')
     .replace(/\[CQ:forward,.*\]/g, '[聊天记录]');
   if (hasImage(text)) {
-    if (imgClean) {
-      const cqImageRegex = /\[CQ:image,[^\]]+\]/g;
-      const cleanText = text.replace(cqImageRegex, '[图片]').trim();
+    if (shouldCleanImg) {
+      // 需要清理图片
+      const cleanText = text.replace(/\[CQ:image,[^\]]+\]/g, '[图片]').trim();
       return {
         role: 'user',
         content: cleanText,
       };
     }
-    const imgUrl = getImgs(text)[0].url || '';
-    const plainText = text.replace(/\[CQ:image,.*\]/g, '').replace(/\[CQ:face,.*\]/g, '');
+    const img = getImgs(text, true)[0];
+    const imgUrl = img.url || '';
+    const imgSize = Number(img.file_size || 0);
+    if (img.summary === '[动画表情]' || imgSize < 120 * 1024) {
+      // 包含表情标签，或者图片小于120kb认为是表情，降成纯文本
+      const cleanText = text.replace(/\[CQ:image,[^\]]+\]/g, '[表情]').trim();
+      return {
+        role: 'user',
+        content: cleanText,
+      };
+    }
+    const plainText = text.replace(/\[CQ:image,.*\]/g, '[图片]');
     return {
       role: 'user',
       content: [
-        { type: 'text', text: plainText || '看看这张图' },
+        { type: 'text', text: plainText || '[图片]' },
         {
           type: 'image_url',
           image_url: {
@@ -44,32 +52,6 @@ export function generateUserMessageParam(rawText: string, imgClean = false): Cha
   return {
     role: 'user',
     content: text,
-  };
-}
-
-
-async function generateUserMessageParamWithTransfer(rawText: string): Promise<ChatCompletionMessageParam | null> {
-  if (hasImage(rawText)) {
-    let imgUrl: string | null = getImgs(rawText)[0].url;
-    const plainText = rawText.replace(/\[CQ:image,.*\]/g, '');
-    imgUrl = await imgTransferToImgbb(imgUrl);
-    if (!imgUrl) return null;
-    return {
-      role: 'user',
-      content: [
-        { type: 'text', text: plainText || '看看这张图' },
-        {
-          type: 'image_url',
-          image_url: {
-            url: imgUrl,
-          },
-        },
-      ],
-    };
-  }
-  return {
-    role: 'user',
-    content: rawText,
   };
 }
 

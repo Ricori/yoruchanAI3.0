@@ -11,7 +11,7 @@ export function randomText(textArr: string[]) {
  * @returns 有则返回true
  */
 export function hasImage(msg: string) {
-  return msg.indexOf('[CQ:image') !== -1;
+  return /\[CQ:image,[^\]]+\]/.test(msg);
 }
 
 
@@ -28,13 +28,14 @@ export function hasSerachImageText(msg: string) {
 
 
 /** 从消息中提取图片
- * @param {string} msg
+ * @param {string} msg cqtext
+ * @param {boolean} extra 是否提取额外信息
  * @returns 图片URL数组
  */
-export function getImgs(msg: string) {
+export function getImgs(msg: string, extra = false) {
   const cqimgs = extractCQCodes(msg).filter((cq) => cq.type === 'image');
   return cqimgs.map((cq) => {
-    const data = cq.pickData(['file', 'url']);
+    const data = cq.pickData(extra ? ['file', 'url', 'file_size', 'summary'] : ['file', 'url']);
     return data;
   });
 }

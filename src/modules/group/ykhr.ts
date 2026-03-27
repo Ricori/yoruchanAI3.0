@@ -101,7 +101,7 @@ export default class ykhrOnedriveModule extends YoruModuleBase<GroupMessageData>
         yorubot.sendGroupMsg(groupId, `上传 “${file}”到 OneDrive 失败，请联系管理员。`, userId);
       }
 
-      yorubot.sendGroupMsg(groupId, `“${file}”已成功上传至 OneDrive ${parentPath}目录。`, userId);
+      yorubot.sendGroupMsg(groupId, `“${file}”已成功上传至 OneDrive${parentPath} 目录。`, userId);
     }
   }
 }
