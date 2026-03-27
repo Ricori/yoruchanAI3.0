@@ -101,8 +101,6 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
     // 记录群对话记录
     const messageParam = generateUserMessageParam(processedMessage, false);
 
-    console.log(messageParam);
-
     if (messageParam) {
       yoruStorage.addGroupChatConversations(groupId, messageParam);
     }
