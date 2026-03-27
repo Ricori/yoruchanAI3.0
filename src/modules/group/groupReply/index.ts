@@ -120,9 +120,9 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
       shouldReply = true;
     }
 
-    if (groupId === 829349264) {
+    if (groupId === 914620769 || groupId === 473794729) {
       // 主动插话的白名单测试群
-      const triggerChance = 0.3;
+      const triggerChance = 0.06;
       if (Math.random() < triggerChance) {
         shouldReply = true;
         autonomousReply = true;
