@@ -5,7 +5,7 @@ import Axios from 'axios';
 import BilibiliNewSharedJob from '@/tasks/bilibili';
 import getBiliDynamic from '@/service/bilibili/dynamic';
 import { printError } from '@/utils/print';
-import { getAiReply } from '@/service/ai';
+import { getAiReply, translateText } from '@/service/ai';
 import { getAscii2dResult } from '@/service/searchImg/ascii2d';
 import { createScreenshot } from '@/service/twitter/screenshot';
 import { getLatestTweet, getTweetPost } from '@/service/twitter/tweet';
@@ -18,3 +18,4 @@ import { startTransfer } from '@/modules/group/ykhr/transfer';
 // console.log(await createMsgFromTweetId('2024011099478122755'));
 
 // getLatestTweet('Cho_KaguyaHime').then((res) => console.log(res));
+

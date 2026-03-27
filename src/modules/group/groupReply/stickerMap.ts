@@ -25,8 +25,8 @@ const regex = /\[表情:\s*(.*?)\]/g;
  */
 export function processStickerTag(text: string): string {
   return text.replace(regex, (match, keyword) => {
-    // 60%概率直接删除表情
-    if (Math.random() < 0.6) {
+    // 65%概率直接删除表情
+    if (Math.random() < 1) {
       return '';
     }
 
@@ -34,7 +34,7 @@ export function processStickerTag(text: string): string {
     if (imgName) {
       const picPath = path.resolve(STICKER_DIR, imgName);
       const fileUri = `file:///${picPath.replace(/\\/g, '/')}`;
-      return getImgCode(fileUri);
+      return getImgCode(fileUri, '[动画表情]');
     }
     // 如果没找到对应的图就返回或空
     return '';

@@ -1,6 +1,7 @@
 import Axios from 'axios';
 import { printError } from '@/utils/print';
 import yorubot from '@/core/yoruBot';
+import { translateText } from '@/service/ai';
 
 export interface TweetPost {
   username: string;
@@ -121,23 +122,3 @@ async function resolveData(apiResponse: Record<any, any>, translate: boolean) {
   return post;
 }
 
-async function translateText(text: string) {
-  const ret = await Axios.post(`${yorubot.config.aiReply.baseUrl}/chat/completions`, {
-    model: 'kimi-k2.5',
-    messages: [
-      { role: 'user', content: `【日语专有名词名单】まのさば:魔裁。\n把以下内容翻译成中文，不要包含tag，不要有多余内容：\n${text}` },
-    ],
-  }, {
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${yorubot.config.aiReply.apiKey}`,
-    },
-  }).catch((e) => {
-    printError(`[Aliyun Error] Fetch Error: ${e.message}`);
-    return null;
-  });
-  if (ret?.data?.choices?.[0]?.message?.content) {
-    return ret?.data?.choices?.[0]?.message?.content;
-  }
-  return null;
-}

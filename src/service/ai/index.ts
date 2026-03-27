@@ -3,7 +3,8 @@ import { ChatCompletionMessageParam } from 'openai/resources';
 import yorubot from '@/core/yoruBot';
 import { printError } from '@/utils/print';
 import { getImgs, hasImage } from '@/utils/function';
-import { SYSTEM_PROMPT } from './prompt';
+import Axios from 'axios';
+import { SYSTEM_PROMPT, TRANSLATE_PROMPT } from './prompt';
 
 const client = new OpenAI({
   apiKey: yorubot.config.aiReply.apiKey,
@@ -76,7 +77,7 @@ export async function getAiReply(messageParam: ChatCompletionMessageParam[]) {
       model: 'kimi-k2.5',
       messages: messagesToAPI,
       temperature: 0.8,
-      max_tokens: 100,
+      max_tokens: 150,
     },
     { timeout: 30000 },
   ).catch((e) => printError(`[AiReply Error] ${e}`));
@@ -85,5 +86,28 @@ export async function getAiReply(messageParam: ChatCompletionMessageParam[]) {
     return response.choices[0].message.content as string;
   }
 
+  return null;
+}
+
+
+export async function translateText(text: string) {
+  const ret = await Axios.post(`${yorubot.config.aiReply.baseUrl}/chat/completions`, {
+    model: 'deepseek-v3.2-exp',
+    messages: [
+      { role: 'user', content: TRANSLATE_PROMPT + text },
+    ],
+  }, {
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${yorubot.config.aiReply.apiKey}`,
+    },
+  }).catch((e) => {
+    printError(`[Aliyun Error] Fetch Error: ${e.message}`);
+    return null;
+  });
+  if (ret?.data?.choices?.[0]?.message?.content) {
+    console.log(ret.data.choices[0].message);
+    return ret.data.choices[0].message.content;
+  }
   return null;
 }

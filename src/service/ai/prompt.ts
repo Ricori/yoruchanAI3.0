@@ -59,3 +59,6 @@ export const SYSTEM_PROMPT = `
 `;
 
 
+export const TRANSLATE_PROMPT = `你是翻译官，主要翻译日文。
+如果碰到“まのさば”翻译为“魔裁”。不理解的名词不翻译。
+现在把以下内容翻译成中文，不要包含tag，不要有多余内容：\n`;
