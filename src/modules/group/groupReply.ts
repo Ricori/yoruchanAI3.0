@@ -97,7 +97,9 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
         const isBot = replyMsgData.sender.user_id === selfId;
         const cleanText = cleanAt(replyMsgData.message).replace(/\[CQ:image,[^\]]+\]/g, '[之前的图片]').trim();
         processedMessage = `[${nickName}]回复了${isBot ? '我' : replyMsgData.sender.nickname || ''}的消息(${cleanText.slice(0, 90)})，说：${cleanAt(message)}`;
-        shouldReply = true;
+        if (isBot) {
+          shouldReply = true;
+        }
       }
     } else {
       processedMessage = `[${nickName}]说：${cleanAt(message).trim()}`;
@@ -111,12 +113,12 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
     }
 
 
-
     if (message.indexOf(`[CQ:at,qq=${selfId}]`) > -1) {
       // 在群里被@了
       shouldReply = true;
     }
-    if (groupId === 914620769) {
+
+    if (groupId === 914620769 || groupId === 473794729) {
       // 主动插话的白名单测试群
       const triggerChance = 0.1;
       if (Math.random() < triggerChance) {
