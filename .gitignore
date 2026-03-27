@@ -1,6 +1,9 @@
 # Myself
 build
 
+# Data
+data
+
 # Debug
 config_debug.json
 
