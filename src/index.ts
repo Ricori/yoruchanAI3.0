@@ -28,6 +28,7 @@ yorubot.loadModule('private', [
 // 加载群@消息模块
 yorubot.loadModule('groupAt', [
   ImageSearchModule,
+  LocalPictureModule,
   HPicModule,
   GroupAIReplyModule,
 ]);
@@ -36,8 +37,8 @@ yorubot.loadModule('groupAt', [
 yorubot.loadModule('group', [
   ykhrOnedriveModule,
   LocalPictureModule,
-  RepeaterModule,
   HPicModule,
+  RepeaterModule,
   GroupAIReplyModule,
 ]);
 

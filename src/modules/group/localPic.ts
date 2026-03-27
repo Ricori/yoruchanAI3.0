@@ -66,13 +66,10 @@ export default class LocalPictureModule extends YoruModuleBase<GroupMessageData>
       return true;
     }
 
-    // 检查消息是否包含已注册的关键词
-    const plainText = message.replace(/\[CQ:[^\]]+\]/g, '').trim();
-    if (!plainText) return false;
-
+    // 检查消息是否是已注册的关键词
     const keywords = getKeywords();
     for (const keyword of keywords) {
-      if (plainText === keyword) {
+      if (message === keyword) {
         this.matchedKeyword = keyword;
         return true;
       }
@@ -104,7 +101,7 @@ export default class LocalPictureModule extends YoruModuleBase<GroupMessageData>
 
     const imgs = [] as { file: string, url: string }[];
     if (hasReply(message)) {
-      // 从回复消息中提取图片
+      // 从引用的消息中提取图片
       const replyMsgId = getReplyMsgId(message);
       const replyMsgData = await yorubot.getMessageFromId(replyMsgId);
       if (replyMsgData && hasImage(replyMsgData.message)) {
