@@ -23,6 +23,9 @@ async function processReplyQueue(groupId: number, autonomousReply = false) {
     yoruStorage.trimGroupChatConversations(groupId);
     const history = yoruStorage.getGroupChatConversations(groupId);
 
+    console.log('history', history);
+
+
     // 调用 LLM 回复
     let aiReplyText: string | null = null;
     if (autonomousReply) {
@@ -30,12 +33,13 @@ async function processReplyQueue(groupId: number, autonomousReply = false) {
       const autoPrompt = generateUserMessageParam('（System：群友并没有@你，请根据上面的对话自然地随机插一句嘴，刷一下存在感）');
       aiReplyText = await getAiReply([...history, autoPrompt]);
 
-      printLog(`[GroupAIReplyModule] Auto Reply: ${aiReplyText}`);
+      // printLog(`[GroupAIReplyModule] Auto Reply: ${aiReplyText}`);
       console.log(history);
     } else {
       aiReplyText = await getAiReply(history);
     }
 
+    printLog(`[GroupAIReplyModule] Auto Reply: ${aiReplyText}`);
     if (aiReplyText) {
       const aiReplyMessageParam = generateAssistantMessageParam(aiReplyText);
       yoruStorage.addGroupChatConversations(groupId, aiReplyMessageParam);
@@ -94,7 +98,7 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
       const replyMsgId = getReplyMsgId(message);
       const replyMsgData = await yorubot.getMessageFromId(replyMsgId);
       if (replyMsgData) {
-        const isBot = replyMsgData.sender.user_id === selfId;
+        const isBot = replyMsgData.sender.user_id === selfId; // 是否引用自己的消息
         const cleanText = cleanAt(replyMsgData.message).replace(/\[CQ:image,[^\]]+\]/g, '[之前的图片]').trim();
         processedMessage = `[${nickName}]回复了${isBot ? '我' : replyMsgData.sender.nickname || ''}的消息(${cleanText.slice(0, 90)})，说：${cleanAt(message)}`;
         if (isBot) {
@@ -120,7 +124,7 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
 
     if (groupId === 914620769 || groupId === 473794729) {
       // 主动插话的白名单测试群
-      const triggerChance = 0.1;
+      const triggerChance = 0.03;
       if (Math.random() < triggerChance) {
         shouldReply = true;
         autonomousReply = true;
@@ -138,7 +142,7 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
     const timer = setTimeout(() => {
       sessionTimers.set(groupId, null);
       processReplyQueue(groupId, autonomousReply);
-    }, 3000);
+    }, 4000);
     sessionTimers.set(groupId, timer);
   }
 }

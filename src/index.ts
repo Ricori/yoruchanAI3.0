@@ -12,6 +12,7 @@ import ykhrOnedriveModule from '@/modules/group/ykhr';
 import PrivateAIReplyModule from '@/modules/private/privateReply';
 import GroupAIReplyModule from '@/modules/group/groupReply';
 import RepeaterModule from '@/modules/group/repeater';
+import LocalPictureModule from '@/modules/group/localPic';
 
 // 加载好友请求模块
 yorubot.loadModule('request', [RequestFriendModule]);
@@ -34,8 +35,9 @@ yorubot.loadModule('groupAt', [
 // 加载群消息默认监听
 yorubot.loadModule('group', [
   ykhrOnedriveModule,
-  HPicModule,
+  LocalPictureModule,
   RepeaterModule,
+  HPicModule,
   GroupAIReplyModule,
 ]);
 
