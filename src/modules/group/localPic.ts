@@ -104,6 +104,7 @@ export default class LocalPictureModule extends YoruModuleBase<GroupMessageData>
 
     const imgs = [] as { file: string, url: string }[];
     if (hasReply(message)) {
+      // 从回复消息中提取图片
       const replyMsgId = getReplyMsgId(message);
       const replyMsgData = await yorubot.getMessageFromId(replyMsgId);
       if (replyMsgData && hasImage(replyMsgData.message)) {
@@ -130,7 +131,7 @@ export default class LocalPictureModule extends YoruModuleBase<GroupMessageData>
 
     if (successCount > 0) {
       refreshKeywords();
-      yorubot.sendGroupMsg(groupId, `已添加 ${successCount} 张图片到「${keyword}」`);
+      yorubot.sendGroupMsg(groupId, `已存储 ${successCount} 张图片到「${keyword}」`);
       printLog(`[LocalPic] ${userId} 添加了 ${successCount} 张图片到 ${keyword}`);
     } else {
       yorubot.sendGroupMsg(groupId, '图片保存失败，请重试', userId);
