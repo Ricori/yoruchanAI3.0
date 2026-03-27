@@ -3,7 +3,7 @@ import YoruModuleBase from '@/modules/base';
 import yorubot from '@/core/yoruBot';
 import { generateAssistantMessageParam, generateUserMessageParam, getAiReply } from '@/service/ai';
 import yoruStorage from '@/core/yoruStorage';
-import { calculateTypingDelay, sleep, trimChar } from '@/utils/function';
+import { calculateTypingDelay, sleep } from '@/utils/function';
 
 export default class PrivateAIReplyModule extends YoruModuleBase<PrivateMessageData> {
   static NAME = 'PrivateAIReplyModule';
@@ -19,7 +19,7 @@ export default class PrivateAIReplyModule extends YoruModuleBase<PrivateMessageD
 
     yoruStorage.addPrivateChatMessage(userId, messageParam);
     const history = yoruStorage.getPrivateChatMessage(userId);
-    const aiReplyText = await getAiReply(history, false);
+    const aiReplyText = await getAiReply(history);
 
     if (aiReplyText) {
       const aiReplyMessageParam = generateAssistantMessageParam(aiReplyText);

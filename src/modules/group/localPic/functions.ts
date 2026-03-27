@@ -25,7 +25,7 @@ export function refreshKeywords(): void {
 export function getRandomPicture(keyword: string): string | null {
   const dir = path.join(PICTURE_DIR, keyword);
   if (!fs.existsSync(dir)) return null;
-  const files = fs.readdirSync(dir).filter((f) => /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(f));
+  const files = fs.readdirSync(dir);
   if (files.length === 0) return null;
   const file = files[Math.floor(Math.random() * files.length)];
   return path.resolve(dir, file);

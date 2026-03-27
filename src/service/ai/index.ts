@@ -3,7 +3,7 @@ import { ChatCompletionMessageParam } from 'openai/resources';
 import yorubot from '@/core/yoruBot';
 import { printError } from '@/utils/print';
 import { getImgs, hasImage } from '@/utils/function';
-import { GROUP_SYSTEM_PROMPT, PRIVATE_SYSTEM_PROMPT } from './prompt';
+import { SYSTEM_PROMPT } from './prompt';
 
 const client = new OpenAI({
   apiKey: yorubot.config.aiReply.apiKey,
@@ -63,10 +63,10 @@ export function generateAssistantMessageParam(text: string): ChatCompletionMessa
   };
 }
 
-export async function getAiReply(messageParam: ChatCompletionMessageParam[], isGroup = true) {
+export async function getAiReply(messageParam: ChatCompletionMessageParam[]) {
   const systemMsg: ChatCompletionMessageParam = {
     role: 'system',
-    content: isGroup ? GROUP_SYSTEM_PROMPT : PRIVATE_SYSTEM_PROMPT,
+    content: SYSTEM_PROMPT,
   };
 
   const messagesToAPI: ChatCompletionMessageParam[] = [systemMsg, ...messageParam];

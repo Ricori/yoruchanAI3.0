@@ -2,7 +2,7 @@
 build
 
 # Data
-data
+data/picture
 
 # Debug
 config_debug.json

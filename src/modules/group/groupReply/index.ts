@@ -7,6 +7,7 @@ import {
 import { generateAssistantMessageParam, generateUserMessageParam, getAiReply } from '@/service/ai';
 import yoruStorage from '@/core/yoruStorage';
 import { printLog } from '@/utils/print';
+import { processStickerTag } from './stickerMap';
 
 const sessionTimers = new Map<number, NodeJS.Timeout | null>();
 const processingLocks = new Set<number>(); // 正在回复的群的锁
@@ -23,32 +24,29 @@ async function processReplyQueue(groupId: number, autonomousReply = false) {
     yoruStorage.trimGroupChatConversations(groupId);
     const history = yoruStorage.getGroupChatConversations(groupId);
 
-    console.log('history', history);
-
-
     // 调用 LLM 回复
     let aiReplyText: string | null = null;
     if (autonomousReply) {
       // 主动发起会话的提示词
       const autoPrompt = generateUserMessageParam('（System：群友并没有@你，请根据上面的对话自然地随机插一句嘴，刷一下存在感）');
       aiReplyText = await getAiReply([...history, autoPrompt]);
-
-      // printLog(`[GroupAIReplyModule] Auto Reply: ${aiReplyText}`);
-      console.log(history);
     } else {
       aiReplyText = await getAiReply(history);
     }
 
     printLog(`[GroupAIReplyModule] Auto Reply: ${aiReplyText}`);
     if (aiReplyText) {
+      // 记忆自己的回复
       const aiReplyMessageParam = generateAssistantMessageParam(aiReplyText);
       yoruStorage.addGroupChatConversations(groupId, aiReplyMessageParam);
 
-      const messages = aiReplyText
+      // 回复消息处理
+      const messages = processStickerTag(aiReplyText)
         .split('||')
         .map((msg) => msg.trim())
         .filter((msg) => msg.length > 0);
 
+      // 分段发送
       for (let i = 0; i < messages.length; i++) {
         const msg = messages[i].trim();
         if (i > 0) {
@@ -122,9 +120,9 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
       shouldReply = true;
     }
 
-    if (groupId === 914620769 || groupId === 473794729) {
+    if (groupId === 829349264) {
       // 主动插话的白名单测试群
-      const triggerChance = 0.03;
+      const triggerChance = 0.3;
       if (Math.random() < triggerChance) {
         shouldReply = true;
         autonomousReply = true;

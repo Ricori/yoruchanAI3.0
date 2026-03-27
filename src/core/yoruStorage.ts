@@ -1,6 +1,6 @@
 import { ChatCompletionMessageParam } from 'openai/resources';
 
-const MAX_CHAT_HISTORY_COUNT = 22;
+const MAX_CHAT_HISTORY_COUNT = 20;
 
 interface RepeaterLog {
   msg: string,
