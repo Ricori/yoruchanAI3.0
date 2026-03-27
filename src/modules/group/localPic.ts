@@ -113,7 +113,6 @@ export default class LocalPictureModule extends YoruModuleBase<GroupMessageData>
     imgs.push(...getImgs(message));
 
     if (imgs.length === 0) {
-      yorubot.sendGroupMsg(groupId, '请在消息中附带图片', userId);
       return;
     }
 
@@ -131,8 +130,7 @@ export default class LocalPictureModule extends YoruModuleBase<GroupMessageData>
 
     if (successCount > 0) {
       refreshKeywords();
-      const totalFiles = fs.readdirSync(destDir).filter((f) => /\.(jpg|jpeg|png|gif|webp|bmp)$/i.test(f)).length;
-      yorubot.sendGroupMsg(groupId, `已添加 ${successCount} 张图片到「${keyword}」(共 ${totalFiles} 张)`);
+      yorubot.sendGroupMsg(groupId, `已添加 ${successCount} 张图片到「${keyword}」`);
       printLog(`[LocalPic] ${userId} 添加了 ${successCount} 张图片到 ${keyword}`);
     } else {
       yorubot.sendGroupMsg(groupId, '图片保存失败，请重试', userId);
@@ -146,6 +144,5 @@ export default class LocalPictureModule extends YoruModuleBase<GroupMessageData>
 
     const fileUri = `file:///${picPath.replace(/\\/g, '/')}`;
     yorubot.sendGroupMsg(groupId, getImgCode(fileUri));
-    printLog(`[LocalPic] Send Picture: ${picPath}`);
   }
 }
