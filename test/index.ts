@@ -11,7 +11,7 @@ import { createScreenshot } from '@/service/twitter/screenshot';
 import { getLatestTweet, getTweetPost } from '@/service/twitter/tweet';
 import { createMsgFromTweetId } from '@/tasks/twitter';
 import getMessageCode, { extractCQCodes } from '@/utils/msgCode';
-import { startTransfer } from '@/utils/githubTransfer';
+import { startTransfer } from '@/modules/group/ykhr/transfer';
 
 // getAiReply(123, '今天吃什么？').then((res) => console.log(res))
 

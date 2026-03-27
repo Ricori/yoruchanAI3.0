@@ -3,8 +3,8 @@ import YoruModuleBase from '@/modules/base';
 import yorubot from '@/core/yoruBot';
 import { extractCQCodes } from '@/utils/msgCode';
 import { printError, printLog } from '@/utils/print';
-import { getJobProgress, initGithubConfig, startTransfer } from '@/utils/githubTransfer';
 import { sleep } from '@/utils/function';
+import { getJobProgress, initGithubConfig, startTransfer } from './transfer';
 
 initGithubConfig();
 
