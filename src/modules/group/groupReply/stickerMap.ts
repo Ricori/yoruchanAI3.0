@@ -17,14 +17,19 @@ const STICKER_MAP: Record<string, string> = {
   围观: 'weiguan.jpg',
 };
 
+// 匹配 [表情: 关键词] 格式
+const regex = /\[表情:\s*(.*?)\]/g;
+
 /**
  * 转换表情标签文本
  */
 export function processStickerTag(text: string): string {
-  // 匹配 [表情: 关键词] 格式
-  const regex = /\[表情:\s*(.*?)\]/g;
-
   return text.replace(regex, (match, keyword) => {
+    // 60%概率直接删除表情
+    if (Math.random() < 0.6) {
+      return '';
+    }
+
     const imgName = STICKER_MAP[keyword.trim()];
     if (imgName) {
       const picPath = path.resolve(STICKER_DIR, imgName);
