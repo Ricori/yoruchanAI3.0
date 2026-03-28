@@ -85,6 +85,8 @@ export async function getAiReply(messageParam: ChatCompletionMessageParam[]) {
   if (response?.choices?.[0]?.message?.content) {
     return response.choices[0].message.content as string;
   }
+  console.log('[AiReply Error]', response.choices);
+
 
   return null;
 }
