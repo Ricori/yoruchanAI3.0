@@ -14,10 +14,8 @@ const processingLocks = new Set<number>(); // 正在回复的群的锁
 const lastAtTime = new Map<number, number>(); // 记录每个群最后被@的时间
 
 async function processReplyQueue(groupId: number, autonomousReply = false) {
-  printLog(`【TEST】 ${groupId} 执行回复`);
   if (processingLocks.has(groupId)) {
     // setTimeout(() => processReplyQueue(groupId), 2000);
-    printLog(`【TEST】 ${groupId} 目前有锁，取消`);
     return;
   }
   processingLocks.add(groupId); // 上锁
@@ -25,8 +23,6 @@ async function processReplyQueue(groupId: number, autonomousReply = false) {
   try {
     yoruStorage.trimGroupChatConversations(groupId);
     const history = yoruStorage.getGroupChatConversations(groupId);
-    printLog('HISTORY');
-    console.log(history);
 
     // 调用 LLM 回复
     let aiReplyText: string | null = null;
