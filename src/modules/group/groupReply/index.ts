@@ -23,6 +23,9 @@ async function processReplyQueue(groupId: number, autonomousReply = false) {
     yoruStorage.trimGroupChatConversations(groupId);
     const history = yoruStorage.getGroupChatConversations(groupId);
 
+
+    console.log('history', history);
+
     // 调用 LLM 回复
     let aiReplyText: string | null = null;
     if (autonomousReply) {
