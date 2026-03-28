@@ -60,6 +60,14 @@ export default class LocalPictureModule extends YoruModuleBase<GroupMessageData>
       return;
     }
     const keyword = match[1];
+    if (keyword.length < 2) {
+      yorubot.sendGroupMsg(groupId, '关键词至少需要两个字', userId);
+      return;
+    }
+    if (keyword.includes('奶龙')) {
+      yorubot.sendGroupMsg(groupId, '该关键词不允许使用', userId);
+      return;
+    }
 
     const imgs = [] as { file: string, url: string }[];
     if (hasReply(message)) {
