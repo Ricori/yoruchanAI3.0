@@ -133,7 +133,7 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
     if (groupId === 914620769 || groupId === 473794729) {
       // 被@的后5分钟内插话概率增大
       const isRecentlyAt = Date.now() - (lastAtTime.get(groupId) || 0) < 300 * 1000;
-      const triggerChance = isRecentlyAt ? 0.22 : 0.03;
+      const triggerChance = isRecentlyAt ? 0.21 : 0.02;
       if (Math.random() < triggerChance) {
         shouldReply = true;
         autonomousReply = true;
