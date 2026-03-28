@@ -11,23 +11,22 @@ import { processStickerTag } from './stickerMap';
 
 const sessionTimers = new Map<number, NodeJS.Timeout | null>();
 const processingLocks = new Set<number>(); // 正在回复的群的锁
+const lastAtTime = new Map<number, number>(); // 记录每个群最后被@的时间
 
 async function processReplyQueue(groupId: number, autonomousReply = false) {
   printLog(`【TEST】 ${groupId} 执行回复`);
-  // 需要下次回复时，如果还在发送上一条，等2秒后再看看锁解开没
   if (processingLocks.has(groupId)) {
+    // setTimeout(() => processReplyQueue(groupId), 2000);
     printLog(`【TEST】 ${groupId} 目前有锁，取消`);
     return;
   }
   processingLocks.add(groupId); // 上锁
 
-  printLog(`【TEST】 ${groupId} 已经上锁`);
   try {
     yoruStorage.trimGroupChatConversations(groupId);
     const history = yoruStorage.getGroupChatConversations(groupId);
-
-
-    console.log('history', history);
+    printLog('HISTORY');
+    console.log(history);
 
     // 调用 LLM 回复
     let aiReplyText: string | null = null;
@@ -62,9 +61,11 @@ async function processReplyQueue(groupId: number, autonomousReply = false) {
       }
     }
   } finally {
-    // 解锁
-    processingLocks.delete(groupId);
-    printLog(`【TEST】 ${groupId} 已经解锁`);
+    // 发完消息后延迟3秒再解锁，控制消息频率
+    setTimeout(() => {
+      processingLocks.delete(groupId);
+      printLog(`【TEST】 ${groupId} 已经解锁`);
+    }, 3000);
   }
 }
 
@@ -96,6 +97,7 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
     let shouldReply = false;
     let autonomousReply = false;
     let processedMessage = '';
+    const isAtMe = message.indexOf(`[CQ:at,qq=${selfId}]`) > -1;
 
     // 获取引用消息文本
     if (hasReply(message)) {
@@ -110,7 +112,7 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
         }
       }
     } else {
-      processedMessage = `[${nickName}]说：${cleanAt(message).trim()}`;
+      processedMessage = `[${nickName}]${isAtMe ? '提到我' : ''}说：${cleanAt(message).trim()}`;
     }
 
     // 记录群对话记录
@@ -121,14 +123,17 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
     }
 
 
-    if (message.indexOf(`[CQ:at,qq=${selfId}]`) > -1) {
+    if (isAtMe) {
       // 在群里被@了
       shouldReply = true;
+      lastAtTime.set(groupId, Date.now());
     }
 
+    // 主动插话的白名单测试群
     if (groupId === 914620769 || groupId === 473794729) {
-      // 主动插话的白名单测试群
-      const triggerChance = 0.03;
+      // 被@的后10分钟内插话概率增大
+      const isRecentlyAt = Date.now() - (lastAtTime.get(groupId) || 0) < 10 * 60 * 1000;
+      const triggerChance = isRecentlyAt ? 0.22 : 0.03;
       if (Math.random() < triggerChance) {
         shouldReply = true;
         autonomousReply = true;
@@ -144,12 +149,10 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
       clearTimeout(sessionTimers.get(groupId)!);
     }
 
-    printLog(`【TEST】 ${groupId} 推入队列`);
-
     const timer = setTimeout(() => {
       sessionTimers.set(groupId, null);
       processReplyQueue(groupId, autonomousReply);
-    }, 4000);
+    }, 4500);
     sessionTimers.set(groupId, timer);
   }
 }
