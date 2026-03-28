@@ -72,21 +72,40 @@ export async function getAiReply(messageParam: ChatCompletionMessageParam[]) {
 
   const messagesToAPI: ChatCompletionMessageParam[] = [systemMsg, ...messageParam];
 
-  const response = await client.chat.completions.create(
+  let response = await client.chat.completions.create(
     {
       model: 'kimi-k2.5',
       messages: messagesToAPI,
       temperature: 0.8,
       max_tokens: 150,
     },
-    { timeout: 30000 },
-  ).catch((e) => printError(`[AiReply Error] ${e}`));
+    { timeout: 20000 },
+  ).catch((e) => { printError(`[AiReply Error] ${e}`); return null; });
+
+  if (!response?.choices?.[0]?.message?.content) {
+    // 多半是远程图片拉取失败，去掉图片消息后重试
+    const messagesNoImg: ChatCompletionMessageParam[] = messagesToAPI.map((msg) => {
+      if (Array.isArray(msg.content)) {
+        const textParts = msg.content.filter((p) => p.type === 'text');
+        const text = textParts.map((p) => (p as { type: 'text'; text: string }).text).join('');
+        return { ...msg, content: text || '[图片]' };
+      }
+      return msg;
+    });
+    response = await client.chat.completions.create(
+      {
+        model: 'kimi-k2.5',
+        messages: messagesNoImg,
+        temperature: 0.8,
+        max_tokens: 150,
+      },
+      { timeout: 20000 },
+    ).catch((e) => { printError(`[AiReply Retry Error] ${e}`); return null; });
+  }
 
   if (response?.choices?.[0]?.message?.content) {
     return response.choices[0].message.content as string;
   }
-  console.log('[AiReply Error]', response.choices);
-
 
   return null;
 }
@@ -108,7 +127,6 @@ export async function translateText(text: string) {
     return null;
   });
   if (ret?.data?.choices?.[0]?.message?.content) {
-    console.log(ret.data.choices[0].message);
     return ret.data.choices[0].message.content;
   }
   return null;
