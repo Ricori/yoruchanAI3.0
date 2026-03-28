@@ -13,12 +13,15 @@ const sessionTimers = new Map<number, NodeJS.Timeout | null>();
 const processingLocks = new Set<number>(); // 正在回复的群的锁
 
 async function processReplyQueue(groupId: number, autonomousReply = false) {
+  printLog(`【TEST】 ${groupId} 执行回复`);
   // 需要下次回复时，如果还在发送上一条，等2秒后再看看锁解开没
   if (processingLocks.has(groupId)) {
+    printLog(`【TEST】 ${groupId} 目前有锁，取消`);
     return;
   }
   processingLocks.add(groupId); // 上锁
 
+  printLog(`【TEST】 ${groupId} 已经上锁`);
   try {
     yoruStorage.trimGroupChatConversations(groupId);
     const history = yoruStorage.getGroupChatConversations(groupId);
@@ -61,6 +64,7 @@ async function processReplyQueue(groupId: number, autonomousReply = false) {
   } finally {
     // 解锁
     processingLocks.delete(groupId);
+    printLog(`【TEST】 ${groupId} 已经解锁`);
   }
 }
 
@@ -124,7 +128,7 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
 
     if (groupId === 914620769 || groupId === 473794729) {
       // 主动插话的白名单测试群
-      const triggerChance = 0.05;
+      const triggerChance = 0.03;
       if (Math.random() < triggerChance) {
         shouldReply = true;
         autonomousReply = true;
@@ -139,6 +143,9 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
     if (sessionTimers.has(groupId) && sessionTimers.get(groupId)) {
       clearTimeout(sessionTimers.get(groupId)!);
     }
+
+    printLog(`【TEST】 ${groupId} 推入队列`);
+
     const timer = setTimeout(() => {
       sessionTimers.set(groupId, null);
       processReplyQueue(groupId, autonomousReply);
