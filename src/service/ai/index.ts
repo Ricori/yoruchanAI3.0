@@ -67,7 +67,13 @@ export function generateAssistantMessageParam(text: string): ChatCompletionMessa
 export async function getAiReply(messageParam: ChatCompletionMessageParam[]) {
   const systemMsg: ChatCompletionMessageParam = {
     role: 'system',
-    content: SYSTEM_PROMPT,
+    content: [
+      {
+        type: 'text',
+        text: SYSTEM_PROMPT,
+        cache_control: { type: 'ephemeral' },
+      } as any,
+    ],
   };
 
   const messagesToAPI: ChatCompletionMessageParam[] = [systemMsg, ...messageParam];

@@ -60,7 +60,6 @@ async function processReplyQueue(groupId: number, autonomousReply = false) {
     // 发完消息后延迟3秒再解锁，控制消息频率
     setTimeout(() => {
       processingLocks.delete(groupId);
-      printLog(`【TEST】 ${groupId} 已经解锁`);
     }, 3000);
   }
 }

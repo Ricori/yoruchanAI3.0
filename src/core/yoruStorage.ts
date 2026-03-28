@@ -1,6 +1,6 @@
 import { ChatCompletionMessageParam } from 'openai/resources';
 
-const MAX_CHAT_HISTORY_COUNT = 20;
+const MAX_CHAT_HISTORY_COUNT = 15;
 
 interface RepeaterLog {
   msg: string,
@@ -90,8 +90,10 @@ class YoruStorage {
     const history = this.privateChatConversations.get(userId)!;
     history.push(messageParam);
     if (history.length > MAX_CHAT_HISTORY_COUNT) {
-      // 删掉前面超出的部分
       history.splice(0, history.length - MAX_CHAT_HISTORY_COUNT);
+      while (history.length > 0 && history[0].role === 'assistant') {
+        history.shift();
+      }
     }
   }
 
@@ -108,8 +110,13 @@ class YoruStorage {
     }
     const history = this.groupChatConversations.get(groupId)!;
     history.push(messageParam);
-    if (history.length > MAX_CHAT_HISTORY_COUNT) {
+    if (history.length > MAX_CHAT_HISTORY_COUNT + 10) {
+      // 触发阶梯式裁剪 (缓冲区 10 条)
       history.splice(0, history.length - MAX_CHAT_HISTORY_COUNT);
+      // 确保首条消息是 user
+      while (history.length > 0 && history[0].role === 'assistant') {
+        history.shift();
+      }
     }
   }
 
