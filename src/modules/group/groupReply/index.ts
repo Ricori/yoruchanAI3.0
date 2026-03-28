@@ -15,7 +15,6 @@ const processingLocks = new Set<number>(); // 正在回复的群的锁
 async function processReplyQueue(groupId: number, autonomousReply = false) {
   // 需要下次回复时，如果还在发送上一条，等2秒后再看看锁解开没
   if (processingLocks.has(groupId)) {
-    setTimeout(() => processReplyQueue(groupId), 2000);
     return;
   }
   processingLocks.add(groupId); // 上锁
@@ -122,7 +121,7 @@ export default class GroupAIReplyModule extends YoruModuleBase<GroupMessageData>
 
     if (groupId === 914620769 || groupId === 473794729) {
       // 主动插话的白名单测试群
-      const triggerChance = 0.06;
+      const triggerChance = 0.05;
       if (Math.random() < triggerChance) {
         shouldReply = true;
         autonomousReply = true;
