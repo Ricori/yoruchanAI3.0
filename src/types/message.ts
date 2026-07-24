@@ -15,4 +15,6 @@ export interface FormattedMessage {
   initiative?: boolean;
   /** 主动插话当次实际使用的触发概率 */
   chance?: number;
+  /** 这次回复注入了几条「旧账」历史发言，0 或未注入时不带此字段 */
+  historyHits?: number;
 }

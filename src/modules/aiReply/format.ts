@@ -3,6 +3,7 @@ import { hasAtUser, transformCQCodes } from '@/utils/msgCode';
 import { BOT_NAME_ALIASES } from '@/constants';
 import { SimpleMessageData } from '@/types/event';
 import { FormattedMessage } from '../../types/message';
+import type { HistoryHit } from './history/search';
 
 /** 将消息中的CQ码转换为对 LLM 友好的占位文本 */
 function clean(rawText: string, cleanImage = false) {
@@ -103,6 +104,7 @@ export function formatAssistantMessage(
   text: string,
   initiative?: boolean,
   chance?: number | null,
+  historyHits = 0,
 ): FormattedMessage {
   return {
     role: 'assistant',
@@ -112,6 +114,7 @@ export function formatAssistantMessage(
     ...(initiative === undefined ? {} : { initiative }),
     // 概率是浮点乘出来的，截断到 4 位免得日志里全是长尾数
     ...(chance === undefined || chance === null ? {} : { chance: Number(chance.toFixed(4)) }),
+    ...(historyHits > 0 ? { historyHits } : {}),
   };
 }
 
@@ -121,6 +124,19 @@ export function formatInitiativePromptMessage(): FormattedMessage {
     userId: 0,
     isMentionMe: false,
     message: '（System：群友并没有@你，请根据上面的对话自然地随机插一句嘴，刷一下存在感）',
+  };
+}
+
+
+export function formatHistoryPromptMessage(hits: HistoryHit[]): FormattedMessage | null {
+  if (hits.length === 0) return null;
+  // hit.text 自带 [昵称]说： 前缀，补个日期就是完整的一条旧账
+  const lines = hits.map((h) => `${h.date} ${h.text}`).join('\n');
+  return {
+    role: 'user',
+    userId: 0,
+    isMentionMe: false,
+    message: `（System：【旧账参考】以下是从群历史记录里检索到的这位群友以前说过的话，仅当与当前话题确实相关时才化用，可以带上日期；不相关就完全无视，不要硬引用：\n${lines}\n）`,
   };
 }
 
