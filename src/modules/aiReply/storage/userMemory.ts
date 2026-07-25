@@ -18,7 +18,9 @@ interface UserMemoryFile {
   /**
    * 群友对这个人的叫法，人工维护，LLM 总结绝不覆盖。
    * 昵称索引本来能从聊天记录自动派生曾用名，但只有在日志里出现过的写法才派生得到——
-   * 大家私下叫的外号、和昵称毫无字面关系的称呼（本名、圈内称谓）只能手写在这里
+   * 大家私下叫的外号、和昵称毫无字面关系的称呼（本名、圈内称谓）只能手写在这里。
+   *
+   * 两处都用：昵称索引拿它认人，档案行也会带上它，让 LLM 知道这份档案对应问句里的哪个叫法
    */
   aliases?: string[];
   updatedAt: number;
@@ -227,13 +229,20 @@ class UserMemoryStorage {
     // traits 由 LLM 写入，人工新建的档案往往只有 relations，没有这个字段
     const traitList = data.traits ?? [];
 
+    // 群友嘴里叫的常常是外号，不把叫法一起注入，LLM 就不知道这份档案对应问句里的谁
+    const name = data.aliases?.length
+      ? `[${data.nickName}]（也叫：${data.aliases.join('、')}）`
+      : `[${data.nickName}]`;
+
     if (!data.relations?.length) {
       // 绝大多数群友没有关系条目，维持原格式，不平白改动 prompt
-      return traitList.length ? `[${data.nickName}] ${traitList.join('、')}` : null;
+      if (traitList.length) return `${name} ${traitList.join('、')}`;
+      // 只有叫法也值得注入：被问「XX是谁」时，这行本身就是答案
+      return data.aliases?.length ? name : null;
     }
 
     const traits = traitList.length ? `｜印象：${traitList.join('、')}` : '';
-    return `[${data.nickName}] 关系：${data.relations.join('；')}${traits}`;
+    return `${name} 关系：${data.relations.join('；')}${traits}`;
   }
 }
 

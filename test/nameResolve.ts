@@ -208,6 +208,19 @@ function testManualAlias() {
     aliasIndex.resolve(FAKE_GROUP, '[某人]说：孤儿档案是谁'),
     [],
   );
+
+  // 认出人只是一半：叫法不跟着注入，LLM 就不知道这份档案对应问句里的哪个外号
+  check(
+    '人工别名会写进注入的档案行',
+    userMemoryStorage.getMemoryContext([111]),
+    `[测试111]（也叫：${MANUAL_ALIAS}） 测试用档案`,
+  );
+
+  check(
+    '没填别名的人档案行不变',
+    userMemoryStorage.getMemoryContext([222]),
+    '[测试222] 测试用档案',
+  );
 }
 
 function userMsg(userId: number, message: string): FormattedMessage {
