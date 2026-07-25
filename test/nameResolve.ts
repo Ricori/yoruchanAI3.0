@@ -3,6 +3,9 @@ import path from 'path';
 import { CHAT_BACKUP_DIR, backupDateKey } from '@/modules/aiReply/storage/message';
 import { matchAlias, normalizeAlias, normalizeText } from '@/modules/aiReply/history/nameMatch';
 import aliasIndex from '@/modules/aiReply/history/aliasIndex';
+import { getMentionedUserIds } from '@/modules/aiReply/history/mention';
+import userMemoryStorage from '@/modules/aiReply/storage/userMemory';
+import type { FormattedMessage } from '@/types/message';
 
 /** 用绝不会撞上真实群的号造样本，跑完就删 */
 const FAKE_GROUP = 88888887;
@@ -177,11 +180,59 @@ function testIndex() {
   );
 }
 
+const MEMORY_DIR = path.resolve(process.cwd(), 'data/memory/user');
+/** 这几个假号要有档案，hasMemory 才会放行 */
+const FAKE_PROFILES = [111, 222, 333];
+
+function userMsg(userId: number, message: string): FormattedMessage {
+  return { role: 'user', userId, isMentionMe: false, message };
+}
+
+function testMention() {
+  console.log('getMentionedUserIds');
+
+  // bot 要回的是最后那条，它提到的人必须先占名额，否则会被前面的旧消息挤掉
+  const crowded = [
+    userMsg(999, '[路人]说：azu 在吗'),
+    userMsg(999, '[路人]说：爱丽丝是谁'),
+  ];
+  check(
+    '最新一条提到的人优先占名额，不被旧消息挤掉',
+    getMentionedUserIds(FAKE_GROUP, crowded, new Set()).includes(111),
+    true,
+  );
+  check(
+    '名额上限 2 生效',
+    getMentionedUserIds(FAKE_GROUP, crowded, new Set()).length,
+    2,
+  );
+  check(
+    '已经会注入的人不再占名额',
+    getMentionedUserIds(FAKE_GROUP, [userMsg(999, '[路人]说：爱丽丝是谁')], new Set([111])),
+    [],
+  );
+  check(
+    '没有档案的人认出来也不注入',
+    getMentionedUserIds(FAKE_GROUP, [userMsg(999, '[路人]说：无档案的人在吗')], new Set()),
+    [],
+  );
+  check(
+    '扫描窗口只看最近 5 条群友发言',
+    getMentionedUserIds(FAKE_GROUP, [
+      userMsg(999, '[路人]说：爱丽丝是谁'),
+      ...Array.from({ length: 5 }, () => userMsg(999, '[路人]说：今天天气不错')),
+    ], new Set()),
+    [],
+  );
+}
+
 export function testNameResolve() {
   fs.mkdirSync(CHAT_BACKUP_DIR, { recursive: true });
+  fs.mkdirSync(MEMORY_DIR, { recursive: true });
   const files = Object.keys(FIXTURES).map((f) => path.join(CHAT_BACKUP_DIR, f));
+  const profiles = FAKE_PROFILES.map((id) => path.join(MEMORY_DIR, `${id}.json`));
 
-  const existing = files.filter((f) => fs.existsSync(f));
+  const existing = [...files, ...profiles].filter((f) => fs.existsSync(f));
   if (existing.length > 0) {
     console.error(`样本文件已存在，先手动清理再跑：\n${existing.join('\n')}`);
     return;
@@ -191,11 +242,16 @@ export function testNameResolve() {
     Object.entries(FIXTURES).forEach(([name, content]) => {
       fs.writeFileSync(path.join(CHAT_BACKUP_DIR, name), content, 'utf-8');
     });
+    FAKE_PROFILES.forEach((id) => {
+      const data = { userId: id, nickName: `测试${id}`, traits: ['测试用档案'], updatedAt: Date.now() };
+      fs.writeFileSync(path.join(MEMORY_DIR, `${id}.json`), JSON.stringify(data), 'utf-8');
+    });
     testMatch();
     testIndex();
+    testMention();
     console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项未通过`);
   } finally {
-    files.forEach((f) => fs.rmSync(f, { force: true }));
+    [...files, ...profiles].forEach((f) => fs.rmSync(f, { force: true }));
   }
 }
 
