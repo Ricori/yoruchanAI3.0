@@ -14,10 +14,13 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const { spawn } = require('child_process');
 
 /** 程序主目录（scripts 的上一级） */
 const ROOT = path.resolve(__dirname, '..');
+/** 要打包下载的记忆目录 */
+const MEMORY_DIR = path.resolve(ROOT, 'data', 'memory');
 /** pm2 要 reload 的应用名（逗号分隔）。注意别写 nonoka-log，否则会把本服务自己重启掉、更新中断 */
 const UPDATE_APPS = (process.env.LOG_UPDATE_APPS || 'nonoka')
   .split(',')
@@ -140,6 +143,115 @@ function readMergedTail(files, n) {
   return merged.slice(-n);
 }
 
+/** CRC32 查表（zip 格式要求，Node 内置 zlib 不直接提供 crc32，自己算） */
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+function crc32(buf) {
+  let c = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+/** JS Date -> DOS 日期/时间（zip 头部字段要求的格式） */
+function toDosTime(date) {
+  const time = ((date.getHours() & 0x1f) << 11) | ((date.getMinutes() & 0x3f) << 5) | ((date.getSeconds() >> 1) & 0x1f);
+  const dosDate = (((date.getFullYear() - 1980) & 0x7f) << 9) | (((date.getMonth() + 1) & 0xf) << 5) | (date.getDate() & 0x1f);
+  return { time, dosDate };
+}
+
+/** 递归收集目录下所有文件，返回相对路径列表 */
+function walkFiles(dir, base = dir) {
+  const out = [];
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const entry of entries) {
+    const abs = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      out.push(...walkFiles(abs, base));
+    } else if (entry.isFile()) {
+      out.push({ abs, rel: path.relative(base, abs).split(path.sep).join('/') });
+    }
+  }
+  return out;
+}
+
+/** 用内置 zlib（deflate raw）手写一个最小可用的 zip 打包器，避免引入第三方依赖 */
+function buildZip(dir) {
+  const files = walkFiles(dir);
+  const chunks = [];
+  const centralRecords = [];
+  let offset = 0;
+
+  for (const { abs, rel } of files) {
+    const content = fs.readFileSync(abs);
+    const { time, dosDate } = toDosTime(fs.statSync(abs).mtime);
+    const crc = crc32(content);
+    const compressed = zlib.deflateRawSync(content);
+    const nameBuf = Buffer.from(rel, 'utf8');
+
+    const localHeader = Buffer.alloc(30);
+    localHeader.writeUInt32LE(0x04034b50, 0);
+    localHeader.writeUInt16LE(20, 4); // version needed
+    localHeader.writeUInt16LE(0, 6); // flags
+    localHeader.writeUInt16LE(8, 8); // method: deflate
+    localHeader.writeUInt16LE(time, 10);
+    localHeader.writeUInt16LE(dosDate, 12);
+    localHeader.writeUInt32LE(crc, 14);
+    localHeader.writeUInt32LE(compressed.length, 18);
+    localHeader.writeUInt32LE(content.length, 22);
+    localHeader.writeUInt16LE(nameBuf.length, 26);
+    localHeader.writeUInt16LE(0, 28); // extra length
+
+    chunks.push(localHeader, nameBuf, compressed);
+
+    const centralHeader = Buffer.alloc(46);
+    centralHeader.writeUInt32LE(0x02014b50, 0);
+    centralHeader.writeUInt16LE(20, 4); // version made by
+    centralHeader.writeUInt16LE(20, 6); // version needed
+    centralHeader.writeUInt16LE(0, 8); // flags
+    centralHeader.writeUInt16LE(8, 10); // method
+    centralHeader.writeUInt16LE(time, 12);
+    centralHeader.writeUInt16LE(dosDate, 14);
+    centralHeader.writeUInt32LE(crc, 16);
+    centralHeader.writeUInt32LE(compressed.length, 20);
+    centralHeader.writeUInt32LE(content.length, 24);
+    centralHeader.writeUInt16LE(nameBuf.length, 28);
+    centralHeader.writeUInt16LE(0, 30); // extra length
+    centralHeader.writeUInt16LE(0, 32); // comment length
+    centralHeader.writeUInt16LE(0, 34); // disk number start
+    centralHeader.writeUInt16LE(0, 36); // internal attrs
+    centralHeader.writeUInt32LE(0, 38); // external attrs
+    centralHeader.writeUInt32LE(offset, 42); // local header offset
+
+    centralRecords.push(Buffer.concat([centralHeader, nameBuf]));
+    offset += localHeader.length + nameBuf.length + compressed.length;
+  }
+
+  const centralDir = Buffer.concat(centralRecords);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(0, 4); // disk number
+  end.writeUInt16LE(0, 6); // disk with central dir
+  end.writeUInt16LE(files.length, 8); // entries this disk
+  end.writeUInt16LE(files.length, 10); // total entries
+  end.writeUInt32LE(centralDir.length, 12);
+  end.writeUInt32LE(offset, 16); // central dir offset
+  end.writeUInt16LE(0, 20); // comment length
+
+  return Buffer.concat([...chunks, centralDir, end]);
+}
+
 /** 监听单个文件的增量内容 */
 function watchFile(file) {
   let size = 0;
@@ -233,6 +345,7 @@ const PAGE = `<!doctype html>
   <span class="sp"></span>
   <input id="filter" placeholder="过滤关键字…" />
   <button id="update">更新代码</button>
+  <button id="memoryBackup">下载记忆备份</button>
   <button id="autoscroll">自动滚动: 开</button>
   <button id="clear">清屏</button>
 </header>
@@ -264,6 +377,17 @@ const PAGE = `<!doctype html>
       setTimeout(() => { updateBtn.disabled = false; updateBtn.textContent = old; }, 5000);
     }
   };
+  const memoryBtn = document.getElementById('memoryBackup');
+  memoryBtn.onclick = () => {
+    const url = '/memory-archive' + (token ? '?token=' + encodeURIComponent(token) : '');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
   filterEl.oninput = () => {
     filter = filterEl.value.toLowerCase();
     for (const div of logEl.children) {
@@ -314,6 +438,32 @@ const server = http.createServer((req, res) => {
     doUpdate(() => {});
     // 立即返回，具体进度通过日志流实时查看
     res.writeHead(202, { 'Content-Type': 'text/plain; charset=utf-8' }).end('更新已触发，请查看日志');
+    return;
+  }
+
+  if (url.pathname === '/memory-archive') {
+    if (!checkAuth(req)) {
+      res.writeHead(401).end('unauthorized');
+      return;
+    }
+    if (!fs.existsSync(MEMORY_DIR)) {
+      res.writeHead(404).end('data/memory 目录不存在');
+      return;
+    }
+    let zipBuf;
+    try {
+      zipBuf = buildZip(MEMORY_DIR);
+    } catch (err) {
+      res.writeHead(500).end('打包失败: ' + err.message);
+      return;
+    }
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+    res.writeHead(200, {
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="memory-${stamp}.zip"`,
+      'Content-Length': zipBuf.length,
+    });
+    res.end(zipBuf);
     return;
   }
 
