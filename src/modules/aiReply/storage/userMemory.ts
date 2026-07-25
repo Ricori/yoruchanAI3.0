@@ -161,6 +161,11 @@ class UserMemoryStorage {
     return this.loadUser(userId)?.traits ?? [];
   }
 
+  /** 这个人有没有可注入的档案内容。认人时用来筛掉「叫得出名字但没有任何记忆」的人 */
+  hasMemory(userId: number): boolean {
+    return this.formatMemoryLine(userId) !== null;
+  }
+
   /**
    * 根据当前对话中出现的用户ID，生成注入 prompt 的记忆上下文。
    * 仅返回有记忆数据的用户；关系是人工确认过的，排在 LLM 总结的印象之前。

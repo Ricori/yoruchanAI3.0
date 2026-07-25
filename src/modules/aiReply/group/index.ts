@@ -9,6 +9,7 @@ import { getTTSAudio } from '@/service/tts';
 import { translateText } from '@/service/llm';
 import messageStorage from '../storage/message';
 import userMemoryStorage from '../storage/userMemory';
+import aliasIndex from '../history/aliasIndex';
 import { formatMessage } from '../format';
 import { sendSegmentedReply } from '../replySender';
 import { GroupReplyTrigger } from './trigger';
@@ -60,6 +61,10 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
 
     // 记录群对话记录
     messageStorage.addGroupChatConversations(groupId, formattedMessage);
+
+    // 昵称索引：改名当天就能认出新名字，不必等日志落盘或重启。
+    // 放在初回复判定之前，所有群都收，认人跟这个群会不会主动插话无关
+    aliasIndex.note(groupId, userId, nickName);
 
     //  -------- 固定回复逻辑 --------
     // 1. 匹配"要不要xxx"时随机回复"要"或"不要"
