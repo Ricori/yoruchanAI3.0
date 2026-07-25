@@ -25,8 +25,8 @@ function getGroupContext(groupId: number): string | undefined {
   return undefined;
 }
 
-/** 认人时往回看几条群友发言：bot 是防抖后才回的，被问的那句可能已经不是最后一条 */
-const MENTION_SCAN_COUNT = 3;
+/** 认人时往回看几条群友发言：bot 有 3.5s 防抖，等它开口时问句往往已经被后续消息挤下去了 */
+const MENTION_SCAN_COUNT = 5;
 /** 一次最多额外注入几个被提到的人的档案 */
 const MAX_MENTIONED_USERS = 2;
 

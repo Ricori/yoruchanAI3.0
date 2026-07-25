@@ -43,11 +43,20 @@ const LATIN_SEG_RE = /^[a-z0-9]+$/;
 const FILLER_CHARS = '的了是在有我你他她它们这那什么怎就都也和跟把被给会要去来吗吧呢啊个不没很还上下今天明昨时候现一';
 
 /**
- * 助词。名字不会以助词开头或结尾，命中片段以它开头或收尾就说明切在了句子中间：
- * 「33就剩最后的枪决了」曾靠「最后的」命中昵称「最后的绿色」，
- * 「一切的一切都…」曾靠「的一切」命中昵称「关于莉莉娅的一切」，都是这么来的
+ * 助词。名字中间不会以助词收口，命中片段在昵称还没走完时就以助词开头或收尾，
+ * 说明切在了句子中间：「33就剩最后的枪决了」曾靠「最后的」命中昵称「最后的绿色」，
+ * 「一切的一切都…」曾靠「的一切」命中昵称「关于莉莉娅的一切」，都是这么来的。
+ * 注意昵称自身的首尾不算——「是流逝啊啊啊」整段命中时结尾就是「啊」
  */
 const PARTICLE_CHARS = '的了着过吗吧呢啊呀哦';
+
+/**
+ * 昵称首尾的系词和语气词。群友叫的是核心名：「是流逝啊啊啊」大家只叫「流逝」，
+ * 把这两截算进覆盖率的分母，2 字的核心名就永远够不到阈值。
+ * 刻意比 FILLER_CHARS 窄得多——只收纯语气成分，不含「好多上下今天」这类实词，
+ * 否则分母缩太多会把「下班」蹭中「有一种下班的预感」这类误命中放进来
+ */
+const TRIM_CHARS = '是的了着过吗吧呢啊呀哦嘛啦哇喔噢';
 
 /** 系统默认名和占位名，谁都可能用到，认人时一律忽略 */
 const JUNK_ALIASES = new Set(['我的设备', 'qq用户', '匿名', '匿名用户', '游客', 'admin', 'unknown']);
@@ -106,9 +115,27 @@ function isAllFiller(seg: string): boolean {
   return [...seg].every((c) => FILLER_CHARS.includes(c));
 }
 
-/** 片段是不是切在了句子中间（以助词开头或结尾） */
-function isCutMidSentence(seg: string): boolean {
-  return PARTICLE_CHARS.includes(seg[0]) || PARTICLE_CHARS.includes(seg[seg.length - 1]);
+/**
+ * 昵称的核心名：剥掉首尾的系词和语气词。覆盖率要按核心名算，
+ * 否则「流逝」占「是流逝啊啊啊」只有 2/6，达不到阈值
+ */
+function aliasCore(normAlias: string): string {
+  let start = 0;
+  let end = normAlias.length;
+  while (start < end && TRIM_CHARS.includes(normAlias[start])) start += 1;
+  while (end > start && TRIM_CHARS.includes(normAlias[end - 1])) end -= 1;
+  const core = normAlias.slice(start, end);
+  // 整个昵称都是语气词（少见）时退回原样，免得核心名空掉
+  return core.length >= MIN_ALIAS_LEN ? core : normAlias;
+}
+
+/**
+ * 片段是不是切在了句子中间。只有片段边界落在昵称内部时才算——
+ * 片段正好顶到昵称的头或尾，那就是完整的名字，即使收尾是语气词也放行
+ */
+function isCutMidSentence(seg: string, alias: string, bStart: number): boolean {
+  if (bStart > 0 && PARTICLE_CHARS.includes(seg[0])) return true;
+  return bStart + seg.length < alias.length && PARTICLE_CHARS.includes(seg[seg.length - 1]);
 }
 
 /** latin 片段要求两侧是非字母，否则 alice 会被 malicious 蹭中、azu 会被 azusa 蹭中 */
@@ -127,11 +154,13 @@ function hasLatinBoundary(text: string, start: number, len: number): boolean {
 export function matchAlias(normText: string, normAlias: string): number {
   if (normAlias.length < MIN_ALIAS_LEN || JUNK_ALIASES.has(normAlias)) return 0;
 
-  const { len, aStart, bStart } = longestCommonSubstring(normText, normAlias);
+  // 一律拿核心名去撞，覆盖率也按核心名算
+  const core = aliasCore(normAlias);
+  const { len, aStart, bStart } = longestCommonSubstring(normText, core);
   if (len < MIN_SEG_LEN) return 0;
 
   const seg = normText.slice(aStart, aStart + len);
-  if (!NAME_SEG_RE.test(seg) || isAllFiller(seg) || isCutMidSentence(seg)) return 0;
+  if (!NAME_SEG_RE.test(seg) || isAllFiller(seg) || isCutMidSentence(seg, core, bStart)) return 0;
 
   // bot 自己的名字要排除，否则每次被叫都会命中昵称含「乃乃香」的群友。
   // 用 includes 而不是相等：命中片段是 bot 别名的一部分（「乃乃」）同样要拒，
@@ -144,13 +173,13 @@ export function matchAlias(normText: string, normAlias: string): number {
     // 昵称一侧也必须成词。只查消息侧不够：off 是 official 的中段、live 是 lovelive 的中段、
     // san 是 sanjen 的中段，而「off会」「看live」「san值」在群里天天出现，
     // 真实日志里这三个碎片一共误命中过 16 次
-    if (!hasLatinBoundary(normAlias, bStart, len)) return 0;
+    if (!hasLatinBoundary(core, bStart, len)) return 0;
   }
 
-  const coverage = len / normAlias.length;
+  const coverage = len / core.length;
   if (coverage < MIN_COVERAGE && len < ENOUGH_SEG_LEN) return 0;
 
   // 群友省略的几乎都是后缀（「爱丽丝offical」→「爱丽丝」），命中在昵称开头是强信号
-  const isPrefix = normAlias.startsWith(seg);
+  const isPrefix = core.startsWith(seg);
   return len * 2 + coverage * 3 + (isPrefix ? 2 : 0);
 }
