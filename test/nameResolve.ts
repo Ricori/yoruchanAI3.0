@@ -183,6 +183,32 @@ function testIndex() {
 const MEMORY_DIR = path.resolve(process.cwd(), 'data/memory/user');
 /** 这几个假号要有档案，hasMemory 才会放行 */
 const FAKE_PROFILES = [111, 222, 333];
+/** 777 只有档案、日志里从没出现过，用来验证「没露过面的人不硬加进索引」 */
+const ORPHAN_PROFILE = 777;
+/** 人工别名：和 111 的昵称「爱丽丝offical」毫无字面关系，自动派生不可能拿到 */
+const MANUAL_ALIAS = '桃子姐';
+
+function testManualAlias() {
+  console.log('人工别名（档案里的 aliases）');
+
+  check(
+    '人工别名能认出人（自动派生拿不到这个叫法）',
+    aliasIndex.resolve(FAKE_GROUP, `[某人]说：${MANUAL_ALIAS}是谁`),
+    [111],
+  );
+
+  check(
+    '加了人工别名，原本自动派生的昵称照样认得',
+    aliasIndex.resolve(FAKE_GROUP, '[某人]说：爱丽丝是谁'),
+    [111],
+  );
+
+  check(
+    '只有档案、日志里没露过面的人不进索引（无从判断在哪个群）',
+    aliasIndex.resolve(FAKE_GROUP, '[某人]说：孤儿档案是谁'),
+    [],
+  );
+}
 
 function userMsg(userId: number, message: string): FormattedMessage {
   return { role: 'user', userId, isMentionMe: false, message };
@@ -230,7 +256,7 @@ export function testNameResolve() {
   fs.mkdirSync(CHAT_BACKUP_DIR, { recursive: true });
   fs.mkdirSync(MEMORY_DIR, { recursive: true });
   const files = Object.keys(FIXTURES).map((f) => path.join(CHAT_BACKUP_DIR, f));
-  const profiles = FAKE_PROFILES.map((id) => path.join(MEMORY_DIR, `${id}.json`));
+  const profiles = [...FAKE_PROFILES, ORPHAN_PROFILE].map((id) => path.join(MEMORY_DIR, `${id}.json`));
 
   const existing = [...files, ...profiles].filter((f) => fs.existsSync(f));
   if (existing.length > 0) {
@@ -243,11 +269,23 @@ export function testNameResolve() {
       fs.writeFileSync(path.join(CHAT_BACKUP_DIR, name), content, 'utf-8');
     });
     FAKE_PROFILES.forEach((id) => {
-      const data = { userId: id, nickName: `测试${id}`, traits: ['测试用档案'], updatedAt: Date.now() };
+      const data = {
+        userId: id,
+        nickName: `测试${id}`,
+        traits: ['测试用档案'],
+        // 只给 111 配人工别名
+        ...(id === 111 ? { aliases: [MANUAL_ALIAS] } : {}),
+        updatedAt: Date.now(),
+      };
       fs.writeFileSync(path.join(MEMORY_DIR, `${id}.json`), JSON.stringify(data), 'utf-8');
     });
+    fs.writeFileSync(path.join(MEMORY_DIR, `${ORPHAN_PROFILE}.json`), JSON.stringify({
+      userId: ORPHAN_PROFILE, nickName: '孤儿档案', traits: ['没在日志里出现过'], aliases: ['孤儿档案'], updatedAt: Date.now(),
+    }), 'utf-8');
+
     testMatch();
     testIndex();
+    testManualAlias();
     testMention();
     console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项未通过`);
   } finally {

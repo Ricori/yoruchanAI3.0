@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { printError, printLog } from '@/utils/print';
 import { CHAT_BACKUP_DIR, backupDateKey } from '../storage/message';
+import userMemoryStorage from '../storage/userMemory';
 import { matchAlias, normalizeAlias, normalizeText } from './nameMatch';
 import { stripSpeakerPrefix } from './keywords';
 
@@ -79,6 +80,33 @@ class AliasIndex {
     });
   }
 
+  /**
+   * 并入人工写在 data/memory/user/{userId}.json 的 aliases。
+   * 自动派生只能拿到日志里出现过的写法，圈内外号、本名这类和昵称毫无字面关系的叫法
+   * 只能人工补。返回补进去的条数。
+   *
+   * 只给已经在日志里露过面的人加：索引靠 groups 做同群约束，
+   * 一个群都没出现过的人无从归属，硬加进去会变成跨群误命中
+   */
+  private addManualAliases(): number {
+    const today = Number(backupDateKey());
+    let added = 0;
+
+    userMemoryStorage.getManualAliases().forEach((aliases, userId) => {
+      const entry = this.byUser.get(userId);
+      if (!entry) return;
+      aliases.forEach((raw) => {
+        const alias = normalizeAlias(raw);
+        // 人工确认过的叫法按「今天见过」算，撞名时压过日志里的旧名
+        if (alias && !entry.aliases.has(alias)) {
+          entry.aliases.set(alias, today);
+          added += 1;
+        }
+      });
+    });
+    return added;
+  }
+
   /** 扫聊天备份建底，失败不致命：索引空着只是认不出人，不影响回复 */
   private build() {
     this.built = true;
@@ -91,8 +119,10 @@ class AliasIndex {
           this.scanFile(file, Number(m[1]), Number(m[2]));
         }
       });
+      const manual = this.addManualAliases();
       const aliasCount = [...this.byUser.values()].reduce((n, e) => n + e.aliases.size, 0);
-      printLog(`[AliasIndex] 已从聊天记录建立 ${this.byUser.size} 人 / ${aliasCount} 个昵称的索引`);
+      printLog(`[AliasIndex] 已从聊天记录建立 ${this.byUser.size} 人 / ${aliasCount} 个昵称的索引`
+        + `（其中 ${manual} 个来自档案里人工填的 aliases）`);
     } catch (e) {
       printError(`[AliasIndex] 建立昵称索引失败: ${e}`);
     }

@@ -15,6 +15,12 @@ interface UserMemoryFile {
   traits: string[];
   /** 与 bot 的关系 / 群内身份，人工维护，LLM 总结绝不覆盖 */
   relations?: string[];
+  /**
+   * 群友对这个人的叫法，人工维护，LLM 总结绝不覆盖。
+   * 昵称索引本来能从聊天记录自动派生曾用名，但只有在日志里出现过的写法才派生得到——
+   * 大家私下叫的外号、和昵称毫无字面关系的称呼（本名、圈内称谓）只能手写在这里
+   */
+  aliases?: string[];
   updatedAt: number;
 }
 
@@ -151,13 +157,16 @@ class UserMemoryStorage {
       }
 
       if (newTraits.length > 0) {
-        // relations 是人工维护的，整对象覆盖写时必须原样带上
-        const relations = this.loadUser(userId)?.relations;
+        // relations 和 aliases 都是人工维护的，整对象覆盖写时必须原样带上
+        const existingFile = this.loadUser(userId);
+        const relations = existingFile?.relations;
+        const aliases = existingFile?.aliases;
         this.saveUser({
           userId,
           nickName,
           traits: newTraits.slice(0, MAX_TRAITS),
           ...(relations?.length ? { relations } : {}),
+          ...(aliases?.length ? { aliases } : {}),
           updatedAt: Date.now(),
         });
         printLog(`[UserMemory] 用户 ${nickName}(${userId}) 特征更新: [${newTraits.join(', ')}]`);
@@ -180,6 +189,26 @@ class UserMemoryStorage {
   }
 
   /**
+   * 取所有人工写在档案里的别名 {userId: [别名]}，供昵称索引兜底。
+   * 昵称索引只在启动时读一次，所以改完 aliases 需要重启 bot 才生效
+   */
+  getManualAliases(): Map<number, string[]> {
+    const map = new Map<number, string[]>();
+    try {
+      for (const file of fs.readdirSync(MEMORY_DIR)) {
+        const userId = parseInt(file.replace('.json', ''), 10);
+        if (file.endsWith('.json') && !Number.isNaN(userId)) {
+          const aliases = this.loadUser(userId)?.aliases;
+          if (aliases?.length) map.set(userId, aliases);
+        }
+      }
+    } catch (e) {
+      printError(`[UserMemory] 读取人工别名失败: ${e}`);
+    }
+    return map;
+  }
+
+  /**
    * 根据当前对话中出现的用户ID，生成注入 prompt 的记忆上下文。
    * 仅返回有记忆数据的用户；关系是人工确认过的，排在 LLM 总结的印象之前。
    */
@@ -195,12 +224,15 @@ class UserMemoryStorage {
     const data = this.loadUser(userId);
     if (!data) return null;
 
+    // traits 由 LLM 写入，人工新建的档案往往只有 relations，没有这个字段
+    const traitList = data.traits ?? [];
+
     if (!data.relations?.length) {
       // 绝大多数群友没有关系条目，维持原格式，不平白改动 prompt
-      return data.traits.length ? `[${data.nickName}] ${data.traits.join('、')}` : null;
+      return traitList.length ? `[${data.nickName}] ${traitList.join('、')}` : null;
     }
 
-    const traits = data.traits.length ? `｜印象：${data.traits.join('、')}` : '';
+    const traits = traitList.length ? `｜印象：${traitList.join('、')}` : '';
     return `[${data.nickName}] 关系：${data.relations.join('；')}${traits}`;
   }
 }
