@@ -67,9 +67,9 @@ const MIN_ALIAS_LEN = 2;
 const MIN_SEG_LEN = 2;
 const MIN_LATIN_SEG_LEN = 3;
 /** 片段占昵称的比例达到这个值就算认出了人，否则要靠绝对长度兜底 */
-const MIN_COVERAGE = 0.5;
+const MIN_COVERAGE = 0.4;
 /** 够长的片段即使只覆盖昵称一小截也算命中，「爱丽丝」对「爱丽丝offical」就靠这条 */
-const ENOUGH_SEG_LEN = 3;
+const ENOUGH_SEG_LEN = 2;
 
 const BOT_ALIASES = BOT_NAME_ALIASES.map((a) => a.toLowerCase());
 
