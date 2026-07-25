@@ -17,4 +17,6 @@ export interface FormattedMessage {
   chance?: number;
   /** 这次回复注入了几条「旧账」历史发言，0 或未注入时不带此字段 */
   historyHits?: number;
+  /** 这次回复额外认出并注入了几位被提到但没发言的群友，0 或未注入时不带此字段 */
+  mentionHits?: number;
 }

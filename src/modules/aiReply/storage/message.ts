@@ -16,9 +16,9 @@ export function backupDateKey(date = new Date()): string {
 }
 
 /**
- * bot 自己的发言在备份日志里额外标注触发方式与旧账注入条数：
- * `[0][主动 0.12]内容`、`[0][被动][旧账 2]内容`。
- * 供离线统计区分主动插话与被 @ 应答，以及核对旧账注入频率
+ * bot 自己的发言在备份日志里额外标注触发方式、旧账注入条数与点名注入条数：
+ * `[0][主动 0.12]内容`、`[0][被动][旧账 2][点名 1]内容`。
+ * 供离线统计区分主动插话与被 @ 应答，以及核对旧账/点名的注入频率
  */
 function backupTriggerMark(msg: FormattedMessage): string {
   const marks: string[] = [];
@@ -26,6 +26,7 @@ function backupTriggerMark(msg: FormattedMessage): string {
     marks.push(msg.initiative ? `[主动 ${msg.chance ?? 0}]` : '[被动]');
   }
   if (msg.historyHits) marks.push(`[旧账 ${msg.historyHits}]`);
+  if (msg.mentionHits) marks.push(`[点名 ${msg.mentionHits}]`);
   return marks.join('');
 }
 

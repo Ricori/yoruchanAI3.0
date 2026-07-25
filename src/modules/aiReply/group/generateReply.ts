@@ -120,10 +120,10 @@ export async function generateGroupReply(
   const aiReplyText = await getLLMReply(messages, getGroupContext(groupId));
   if (aiReplyText) {
     // 记忆自己的回复，并带上触发方式供备份日志标注
-    messageStorage.addGroupChatConversations(
-      groupId,
-      formatAssistantMessage(aiReplyText, isInitiativeReply, initiativeChance, historyHits.length),
-    );
+    const historyHitCount = historyHits.length;
+    const mentionHitCount = mentionedUserIds.length;
+    const assistantMessage = formatAssistantMessage(aiReplyText, isInitiativeReply, initiativeChance, historyHitCount, mentionHitCount);
+    messageStorage.addGroupChatConversations(groupId, assistantMessage);
   }
   return aiReplyText;
 }

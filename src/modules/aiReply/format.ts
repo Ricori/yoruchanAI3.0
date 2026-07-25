@@ -105,6 +105,7 @@ export function formatAssistantMessage(
   initiative?: boolean,
   chance?: number | null,
   historyHits = 0,
+  mentionHits = 0,
 ): FormattedMessage {
   return {
     role: 'assistant',
@@ -115,6 +116,7 @@ export function formatAssistantMessage(
     // 概率是浮点乘出来的，截断到 4 位免得日志里全是长尾数
     ...(chance === undefined || chance === null ? {} : { chance: Number(chance.toFixed(4)) }),
     ...(historyHits > 0 ? { historyHits } : {}),
+    ...(mentionHits > 0 ? { mentionHits } : {}),
   };
 }
 
