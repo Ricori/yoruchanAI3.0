@@ -37,12 +37,14 @@ export async function getLLMReply(
   return ret?.data?.text ?? null;
 }
 
-/** 将用户近期消息归纳为不超过 6 条核心特征短句 */
+/**
+ * 将用户近期消息归纳为不超过 6 条核心特征短句
+ */
 export async function summarizeUserTraits(
   nickName: string,
   messages: string[],
   existingTraits: string[],
-): Promise<string[]> {
+): Promise<string[] | null> {
   const ret = await Axios.post(getServiceUrl('/llm/summarize'), {
     nickName, messages, existingTraits,
   }, {
@@ -51,6 +53,8 @@ export async function summarizeUserTraits(
     printError(`[LLM summarize error] ${e.message}`);
     return null;
   });
+
+  if (!ret) return null;
 
   const traits = ret?.data?.traits;
   if (Array.isArray(traits) && traits.length > 0) {

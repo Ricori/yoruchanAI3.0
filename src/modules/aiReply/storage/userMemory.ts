@@ -5,6 +5,7 @@ import { printError, printLog } from '@/utils/print';
 
 const SUMMARY_THRESHOLD = 30; // 每攒够 30 句触发一次
 const MAX_TRAITS = 6; // 核心特征上限：6个
+const MAX_BUFFER = SUMMARY_THRESHOLD * 3; // 总结持续失败时，缓冲区最多保留的消息数，避免无限增长
 const MEMORY_DIR = path.resolve(process.cwd(), 'data/memory/user');
 
 interface UserMemoryFile {
@@ -136,6 +137,18 @@ class UserMemoryStorage {
 
       printLog(`[UserMemory] 开始总结用户 ${nickName}(${userId}) 的特征...`);
       const newTraits = await summarizeUserTraits(nickName, messages, existingTraits);
+
+      if (newTraits === null) {
+        // 请求失败：把这批消息放回缓冲区头部，等下次一起重试，而不是无声丢弃
+        if (buffer) {
+          buffer.messages.unshift(...messages);
+          if (buffer.messages.length > MAX_BUFFER) {
+            buffer.messages.splice(0, buffer.messages.length - MAX_BUFFER);
+          }
+        }
+        printError(`[UserMemory] 总结用户 ${nickName}(${userId}) 失败，消息已放回缓冲区等待重试`);
+        return;
+      }
 
       if (newTraits.length > 0) {
         // relations 是人工维护的，整对象覆盖写时必须原样带上
