@@ -64,6 +64,17 @@ export interface BotConfig {
     blackList: number[];
     /** 主动发起对话的群名单 */
     initiativeList: number[];
+    /** 记忆系统。整块可省略，省略时按代码里的默认值走 */
+    memory?: {
+      /**
+       * 每次回复允许模型调几轮召回工具。
+       * 主动插话默认 0：本来就是随口一句，不值得多花一次网络往返
+       */
+      toolRounds?: {
+        mention?: number;
+        initiative?: number;
+      };
+    };
   },
   /** YKHR OneDrive 文件转存功能 */
   ykhrOneDrive: {

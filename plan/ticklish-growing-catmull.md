@@ -289,6 +289,19 @@ recall_chat   { query: string, speaker?: string, days?: number }
 - **工具循环跑在 bot 端** —— 记忆数据在本地文件,不能让服务端反向依赖 bot
 - `REPLY_TIMEOUT`(`service/llm/index.ts:11` 现为 90s)按轮数重新核算
 
+**实施要点:**
+
+- **服务端无状态,所以 bot 每轮都要把上一轮的 `tool_use` 原样带回去。** Anthropic 要求 `tool_result` 的前一条必须是发出对应 `tool_use` 的 assistant 消息,服务端不存会话,只能靠 bot 重建。契约里因此多了 `toolRounds: [{use, results}]`。
+- **最后一轮不再下发 `tools`**,逼模型必须出文本,否则它可能一直要求继续调用。
+- **工具定义要带 `cache_control`。** Anthropic 的缓存前缀顺序是 `tools → system → messages`,不给工具块打标记的话,带工具的请求会把人设块的缓存整个顶掉。
+- **超时分两档**:工具决策轮 75s(只吐一个工具调用,但不能短过服务端「35s + 超时重试一次」,否则 bot 会在服务端还在重试时先放弃),最终出文本那轮仍是 90s。带工具时最坏耗时翻倍。
+- 一轮里模型可能同时要调多个工具,`Promise.all` 全部执行完再一起回传(实测确实会发生:问「浅秋是个什么样的人」时它同时调了 `recall_memory` 和 `recall_chat`)。
+
+**`recallMemory` 的两处修正**(都是端到端实测暴露的):
+
+1. **指定了 `about` 时,向量检索的范围要先收窄到这些人的条目。** 否则 top-30 会被别人的记忆占满,按 owner 过滤完一条不剩。
+2. **检索落空时要兜底把该人的档案端出来。** 问「浅秋是个什么样的人」,检索词是「性格」「关系」这类抽象词,而库里存的是「爱发表情包」「脸盲严重」这类具体事实,字面对不上、向量也未必够近 —— 但这种问句本来就该直接给档案。兜底只在指名道姓时生效,没指定人不兜底(否则会灌一堆无关档案)。判断要看**最终结果**而不是候选:候选非空但全被可见性筛掉,同样算空手。
+
 ### P5 — 组装
 
 改 `group/generateReply.ts`:
@@ -299,21 +312,78 @@ recall_chat   { query: string, speaker?: string, days?: number }
 - 注入顺序保持「稳定内容在前、易变内容在后」,**不要破坏 `cacheControl`(`storage/message.ts:74`)的缓存断点**
 - `config_demo.json` 补上新配置项
 
+**实施要点:**
+
+- **整块 `memory` 配置可省略**,省略时按代码里的 `DEFAULT_TOOL_ROUNDS` 走。现有的 `config.json` 不改也能直接跑。
+- **0 轮时走原来的无工具请求**(不下发 `tools`),缓存前缀与改造前逐字一致 —— 主动插话是最高频的路径,不能让它为了一个用不上的工具块多付缓存成本。
+- **消息数组的拼装顺序没变**:`[...history, 档案行?, 主动插话提示?]`。工具结果不再以 user 消息的形式插进来,而是走 `tool_result` 块由服务端追加在最后,`history` 里的 `cacheControl` 断点一个都没动。
+- **备份日志的 `[旧账 N]` 标记改成 `[工具 N]`**,记的是模型主动调了几次召回工具。`FormattedMessage.historyHits` 相应改名 `toolCalls`。**`ingest.ts` 的 `BOT_MARK_RE` 两个都认** —— 关键词时代写下的 19 万行日志里还有 `[旧账 N]`,不认就会把它当正文索引进去。
+
+**顺带删掉的**(改完之后就没有 importer 了):`history/search.ts`、`history/keywords.ts`、`test/historySearch.ts`。第八节要求保留的四个语义用例(跨用户命中、bot `[0]` 行排除、时间窗口、同义话题召回)在 `test/memory.ts` 里都已经有对应断言,不存在覆盖缺口。
+
 ### P6 — 巩固任务
 
 `src/tasks/memoryConsolidate.ts`,照 `src/tasks/clean.ts` 的 `SimpleIntervalJob` 模式写,注册进 `src/index.ts` 的 `nnkSchedule.loadJob`。每 24h:
 
 1. 增量 ingest 新备份行
 2. `initiativeList` 群的日志切话题 → `topic` → 向量化
-3. 合并近重复记忆、重复出现的 episode 升 confidence、老 episode 衰减
+3. ~~合并近重复记忆、重复出现的 episode 升 confidence、老 episode 衰减~~ —— 见下,前两条已在别处覆盖,第三条不该做
 4. 执行淘汰
+
+逻辑在 `memory/consolidate.ts`,任务壳子在 `tasks/memoryConsolidate.ts`(`AsyncTask` + `preventOverrun`)。
+
+**第 3 步为什么砍掉:**
+
+- **「合并近重复记忆」用向量阈值做不了。** 实测 432 条真实记忆、同一个人内部 1132 对两两比较,相似度最高的一对是 `0.772「常自称乃乃香」vs「自封的妈妈，把乃乃香当女儿」`—— **不是重复**,合了就毁掉一条关系事实。而真正的重复(`0.741「擅长IT对抗」vs「热衷智斗IT」`、`0.716「幽默风趣」vs「喜欢开玩笑」`)分数更低。最高分是假阳性,任何阈值都切不开。去重本来就该由写入侧做:`extract` 每次都带着已有条目让模型调和,它发同一件事时给的是 UPDATE 而不是 ADD,那是带上下文的语义去重,比这里用余弦硬猜靠谱。
+- **「重复出现升 confidence」已经在写入侧做了** —— `applyOps` 里 UPDATE 和同文本 ADD 都会 `hits + 1`。
+- **「老 episode 衰减」不需要单独跑。** 衰减是 `memoryScore` 在读取和淘汰时算出来的,不是存下来的状态,写一遍反而会把数据搞乱。
+
+**实施要点:**
+
+- **重跑某一天前先清掉那天的话题和向量。** 上一轮跑到一半失败(或进程被杀)时水位不会推进,下轮会重来这一天;不清就会写出重复话题。实测把水位倒回去重跑,那几天的话题数是 `2→1、5→4、2→2`(替换)而不是 `4、10、4`(叠加),孤儿向量 0 条。
+- **一天内的分段可以并发**(`CHUNK_CONCURRENCY = 3`),段与段互不依赖。
+- **天数和调用次数都要封顶**(`MAX_DAYS_PER_RUN = 3`、`MAX_CHUNKS_PER_RUN = 40`),否则首次跑会把几十天的积压一次性打满额度。
+- **失败自愈**:切话题时向量化失败的、以及抽取时服务不可用漏掉的,都会被 `backfillMissingVectors` 在下一轮捞回来。
+
+**吞吐实测(必须知道)**:`/llm/topic` 单次 100 行要 **40~80s**,比早先小样本上量到的 19~53s 慢不少。按这个速度:
+
+| 群 | 日均行数 | 每天需要的段数 | 并发 3 时每天耗时 |
+|---|---|---|---|
+| 1087024871 | 56 | 1 | ~45s |
+| 301750074 | 2793 | 28 | ~12min |
+
+40 段的预算意味着**最忙的那个群每轮只能消化约 1.4 天**,22 天积压要十几轮(十几天)才追得平。日常增量(每天 1 天)完全跟得上,只是首次铺底慢。要加快就调大 `CHUNK_CONCURRENCY`,或者先把 `[表情]`/`早`/`好困` 这类无内容行滤掉再送(粗估能砍掉三四成体量)。
 
 ### P7 — 迁移与清理
 
 - ~~`scripts/migrate-memory.ts`~~ **已在 P3 完成**(`memory/migrate.ts`,理由见 P3)
+
+**`aliasIndex.build()` 换数据源(已完成)**:「扫 180 天备份文件」→「一条 `GROUP BY (group_id, user_id, nick)` 查 `chat_line`」。逐项比对过两种实现的产出,别名集合与最后活跃日期完全一致。
+
+但**「启动更快」这个预期没兑现**:实测 167ms → 144ms,只快 1.2 倍。原本以为瓶颈是读几百个文件,实际瓶颈在 `normalizeAlias` 的字符串处理,换数据源省不掉。真正的收益是不再依赖备份文件还在原地,以及代码少了一半。
+
+### 换数据源时挖出来的一个真 bug
+
+比对两种实现时发现新的比旧的少一个别名(`2942022479:临璞`)。追下去是 **`parseBackupLine` 吃不下 CRLF 行**:文件按 `\n` 切完尾部留着 `\r`,而 JS 正则里的 `.` **不匹配 `\r`**,于是 `^\[(\d+)\](.*)$` 匹配失败,整行被当成格式不对**静默丢掉**。
+
+全库 15 行受影响(2 个文件),其中 2 行是正常发言。已在 `parseBackupLine` 里剥掉尾部 `\r` 并补了断言,重置这两个文件的水位后补回了 2 行。
+
+**这个 bug 之前躲过了 P1 的验收**,因为当时「备份总行数 vs `chat_line` 行数」两边都是用同一个 `parseBackupLine` 数出来的 —— 自己和自己比,永远一致。教训是验收口径不能和被测实现同源。
+
+### 多行消息的续行(已修)
+
+同一次排查顺带量出来:全库 199768 行里,**4871 行(2.4%)解析不了**,它们是**消息正文自带换行**被写成多行后的续行。备份格式是一行一条消息,而群友粘贴的长公告、转发内容里带 `\n`,于是只有带 `[userId][昵称]` 前缀的第一行进了索引,后面几行整段检索不到。
+
+修法没动备份格式(第三节要求 `storage/message.ts` 不动),只改读取侧:`parseFileMessages()` 把「不以 `[数字]` 开头且非空」的行**并进上一条消息**,用空格连接(不用换行 —— 注入时一条命中占一行,正文带换行会把格式冲散)。判据用 `^\[\d+\]` 而不是 `^\[`,`[图片]` 这类占位符照样接得回去。
+
+**存量数据靠 `meta.ingest_version` 就地修正,不能删表重导** —— `chat_line.id` 一重编,`topic.line_from/line_to` 指的就全是错地方了。所以是按 `(group_id, date_key, seq)` 找到原行、`UPDATE` 正文再重建那一行的 FTS。实测**就地修正 974 条消息、耗时 1.9s**,`max(id)` 不变、58 个话题的区间引用全部仍然有效、FTS 对齐 0;再跑一次 123ms 空转。
+
+改了 `parseFileMessages` 的行为就把 `INGEST_VERSION` +1,启动时会自动按新规则修一遍存量。
+
+顺带在 `tools.ts` 里加了单条召回结果 120 字的截断:合并之后一条长公告就是一条消息,整段塞回模型会把上下文吃光。
 - 全量 ingest `data/memory/chat/*.txt`(P1 已完成),全部 memory item 向量化(接口部署后由 `embedQueue` 补齐)
-- **确认无误后删除 `data/memory/user/`**(迁移不会自动删,留着做人工比对)
-- 删除 `history/search.ts`、`history/keywords.ts`(~~`storage/userMemory.ts`~~ **已在 P3 删除**,改完调用方后它就没有任何 importer 了)
+- **确认无误后删除 `data/memory/user/`** —— 迁移不会自动删。比对已通过(70 人里 69 人的档案行与旧实现逐字一致,剩下 1 个是那人存了 7 条 trait 而注入上限 6 条),**删不删由用户执行**,不代劳:这是不可逆的真实数据
+- ~~删除 `history/search.ts`、`history/keywords.ts`、`storage/userMemory.ts`~~ **都已删除**(分别在 P5 / P5 / P3,改完调用方后它们就没有任何 importer 了)
 - `service/llm` 里的 `summarizeUserTraits` 也已经没人调(服务端 `/llm/summarize` 端点仍在),确认不需要后可一并删
 - 切换 `aliasIndex.build()` 的数据源:「扫 180 天文件」→「查 `chat_line` 表」,启动更快
 
@@ -330,7 +400,9 @@ bot 这边按这四个契约写客户端,服务端同步实现:
 | `POST /llm/embed` | `{ texts: string[] }` | `{ vectors: number[][] }` | ✅ |
 | `POST /llm/memory/extract` | `{ nickName, messages, existing: [{id, kind, text, pinned}] }` | `{ ops: [{op:'ADD'\|'UPDATE'\|'DELETE', id?, kind, text, confidence}] }` | ✅ |
 | `POST /llm/topic` | `{ lines: [{id, userId, text}] }` | `{ topics: [{summary, userIds, lineFrom, lineTo}] }` | ✅ |
-| `POST /llm/reply`(扩展) | 原参数 + `tools`, `toolResults` | `{ text }` 或 `{ stopReason:'tool_use', toolUse:[{id, name, input}] }` | P4 |
+| `POST /llm/reply`(扩展) | 原参数 + `tools`, `toolRounds` | `{ text }` 或 `{ stopReason:'tool_use', toolUse:[{id, name, input}] }` | ✅ |
+
+`toolRounds` 是 `[{use: [{id,name,input}], results: [{id, content}]}]`,即已经跑完的历次工具轮次。三个参数全可选,不传时行为与老接口逐字一致。
 
 向量维度不写死,从返回值推断并存进 `meta`,换模型时校验维度一致性(`vector.ts` 已做)。
 
@@ -350,7 +422,7 @@ bot 这边按这四个契约写客户端,服务端同步实现:
 - **`test/historySearch.ts`**:改写成对 `retrieve.ts` 的测试。保留原有语义用例(跨用户命中、bot `[0]` 行排除、时间窗口),**新增「同义/相关话题能召回」用例 —— 这是本次重做的验收点**
 - **`test/nameResolve.ts`**:不动。用来确认 `aliasIndex` 换数据源后行为无回归
 - **迁移比对**:迁移前先记下 `getMemoryContext()` 对一批 userId 的输出,迁移后比对(应为超集)
-- **端到端**:`yarn dev` 连测试群,分别验证被 @(1 轮 tool)与主动插话(0 轮)两条路径,看日志里 tool 调用参数和召回条数是否合理
+- **端到端**: （用户手动验证）`yarn dev` 连测试群,分别验证被 @(1 轮 tool)与主动插话(0 轮)两条路径,看日志里 tool 调用参数和召回条数是否合理
 - `yarn lint` 必须过(airbnb-base + TS,配置见 `.eslintrc`)
 
 ---

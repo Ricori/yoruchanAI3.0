@@ -95,6 +95,11 @@ export function setMeta(db: MemoryDatabase, key: string, value: string) {
   db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
 }
 
+/** 删一条 meta */
+export function delMeta(db: MemoryDatabase, key: string) {
+  db.prepare('DELETE FROM meta WHERE key = ?').run(key);
+}
+
 /** 按 meta.schema_version 递增执行未应用的迁移，每步单独一个事务 */
 function migrate(db: MemoryDatabase) {
   db.exec('CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)');

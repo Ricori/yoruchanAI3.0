@@ -11,6 +11,13 @@ import type { FormattedMessage } from '@/types/message';
 const REPLY_TIMEOUT = 90000;
 const COMMON_TIMEOUT = 50000;
 
+/**
+ * 工具决策轮的超时。这一轮模型只吐一个工具调用、输出极短，不该等满 90s；
+ * 但也不能短过服务端「一次 35s + 超时重试一次」，否则 bot 会在服务端还在重试时先放弃。
+ * 带工具时最坏耗时 = 这一轮 + 最终出文本那一轮
+ */
+const TOOL_ROUND_TIMEOUT = 75000;
+
 function getServiceUrl(path: string) {
   const { baseUrl, apiKey } = botConfig.nonokaService;
   return `${baseUrl}${path}?apikey=${apiKey}`;
@@ -27,14 +34,118 @@ export async function getLLMReply(
     role, message, imgUrl, cacheControl,
   }));
 
-  const ret = await Axios.post(getServiceUrl('/llm/reply'), { messages, context }, {
-    timeout: REPLY_TIMEOUT,
-  }).catch((e) => {
+  const data = await postReply({ messages, context }, REPLY_TIMEOUT);
+  return data?.text ?? null;
+}
+
+export interface ToolDef {
+  name: string;
+  description: string;
+  input_schema: object;
+}
+
+export interface ToolUse {
+  id: string;
+  name: string;
+  input: unknown;
+}
+
+interface ToolRound {
+  use: ToolUse[];
+  results: { id: string, content: string }[];
+}
+
+/** 本地执行一次工具调用，返回给模型看的文本 */
+export type ToolRunner = (name: string, input: unknown) => Promise<string>;
+
+/** 发一次 /llm/reply，可能拿到文本，也可能拿到「要调工具」 */
+async function postReply(body: object, timeout: number) {
+  const ret = await Axios.post(getServiceUrl('/llm/reply'), body, { timeout }).catch((e) => {
     printError(`[LLM reply error] ${e.message}`);
     return null;
   });
+  return ret?.data ?? null;
+}
 
-  return ret?.data?.text ?? null;
+/**
+ * 带工具的回复。工具循环跑在 bot 这边——记忆数据都在本地，
+ * 不能让服务端反向依赖 bot。
+ *
+ * 服务端无状态，所以每轮都要把之前的 tool_use 和执行结果一起带回去重建对话。
+ * maxRounds 为 0 时等价于普通回复
+ */
+export async function getLLMReplyWithTools(
+  formattedMessage: FormattedMessage[],
+  context: string | undefined,
+  tools: ToolDef[],
+  runTool: ToolRunner,
+  maxRounds: number,
+): Promise<string | null> {
+  const messages = formattedMessage.map(({
+    role, message, imgUrl, cacheControl,
+  }) => ({
+    role, message, imgUrl, cacheControl,
+  }));
+
+  const rounds: ToolRound[] = [];
+
+  for (let round = 0; round <= maxRounds; round++) {
+    const canUseTools = round < maxRounds;
+    const data = await postReply({
+      messages,
+      context,
+      // 最后一轮不再给工具，逼模型必须出文本，否则可能一直要求调用下去
+      ...(canUseTools ? { tools } : {}),
+      ...(rounds.length ? { toolRounds: rounds } : {}),
+    }, canUseTools ? TOOL_ROUND_TIMEOUT : REPLY_TIMEOUT);
+
+    if (!data) return null;
+    if (data.stopReason !== 'tool_use') return data.text ?? null;
+
+    const toolUse: ToolUse[] = Array.isArray(data.toolUse) ? data.toolUse : [];
+    if (toolUse.length === 0) return null;
+
+    // 模型一轮可能要调多个工具，全部执行完再一起回传
+    const results = await Promise.all(toolUse.map(async (u) => ({
+      id: u.id,
+      content: await runTool(u.name, u.input).catch(() => '查询出错了，这次没有拿到结果。'),
+    })));
+    rounds.push({ use: toolUse, results });
+  }
+
+  return null;
+}
+
+export interface TopicSegment {
+  summary: string;
+  userIds: number[];
+  lineFrom: number;
+  lineTo: number;
+}
+
+/**
+ * 这一段被上游内容审核拒收了。和 null（暂时失败）区分开：
+ * 拒收是确定性的，重试多少次都一样，调用方跳过这段继续即可
+ */
+export const TOPIC_REJECTED = Symbol('topicRejected');
+
+/** 把日志切成话题片段，每段一句概括，供每日巩固任务向量化 */
+export async function segmentTopics(
+  lines: { id: number, userId: number, text: string }[],
+): Promise<TopicSegment[] | typeof TOPIC_REJECTED | null> {
+  if (lines.length === 0) return [];
+
+  const ret = await Axios.post(getServiceUrl('/llm/topic'), { lines }, {
+    timeout: COMMON_TIMEOUT * 2,
+  }).catch((e) => {
+    printError(`[LLM topic error] ${e.message}`);
+    return null;
+  });
+
+  if (ret?.data?.rejected) return TOPIC_REJECTED;
+
+  const topics = ret?.data?.topics;
+  return Array.isArray(topics) ? topics : null;
 }
 
 export interface MemoryOpDTO {

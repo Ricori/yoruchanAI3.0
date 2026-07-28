@@ -7,7 +7,6 @@ import {
   getMemoryDb, getMeta, setMeta, type MemoryDatabase,
 } from './db';
 import { dictSignature, segment, stripSpeakerPrefix } from './segment';
-import { migrateLegacyUserMemory } from './migrate';
 
 /**
  * 把 data/memory/chat/*.txt 导进 chat_line + chat_fts。
@@ -25,8 +24,9 @@ const LINE_RE = /^\[(\d+)\](.*)$/;
 /** 行首的 `[昵称]` */
 const NICK_RE = /^\[([^\]]*)\]/;
 
-/** bot 自己的行额外带触发标记，见 storage/message.ts 的 backupTriggerMark */
-const BOT_MARK_RE = /^(?:\[(?:主动 [\d.]+|被动|旧账 \d+|点名 \d+)\])+/;
+/** bot 自己的行额外带触发标记，见 storage/message.ts 的 backupTriggerMark。
+ *  `旧账` 是 `工具` 在关键词预注入时代的前身，老日志里还有，一并认掉 */
+const BOT_MARK_RE = /^(?:\[(?:主动 [\d.]+|被动|工具 \d+|旧账 \d+|点名 \d+)\])+/;
 
 interface ParsedLine {
   userId: number;
@@ -37,9 +37,19 @@ interface ParsedLine {
   body: string;
 }
 
+/**
+ * CRLF 文件按 \n 切完会留下尾部的 \r，而正则里的 `.` 不匹配 \r，
+ * 不剥掉的话 `(.*)$` 匹配不上，整行会被当成格式不对静默丢掉
+ */
+function stripCr(raw: string): string {
+  return raw.endsWith('\r') ? raw.slice(0, -1) : raw;
+}
+
 /** 解析一行备份，格式不对或内容为空返回 null */
 export function parseBackupLine(raw: string): ParsedLine | null {
-  const m = LINE_RE.exec(raw);
+  const line = stripCr(raw);
+
+  const m = LINE_RE.exec(line);
   if (!m) return null;
 
   const userId = Number(m[1]);
@@ -60,6 +70,42 @@ function indexBody(userId: number, text: string): string {
   return userId === 0 ? text : stripSpeakerPrefix(text);
 }
 
+interface FileMessage {
+  /** 首行在文件里的行号，决定这条消息的 seq */
+  seq: number;
+  parsed: ParsedLine;
+}
+
+/**
+ * 把一个备份文件解析成消息序列。
+ *
+ * 备份是一行一条消息，但群友粘的长公告、转发内容正文里自带换行，
+ * 会被写成好几行 —— 只有带 `[userId][昵称]` 前缀的首行认得出来，
+ * 后续行不接回去就整段检索不到（实测占全库 2.4%）。
+ * 判据是「不以 `[数字]` 开头」，`[图片]` 这种占位符照样接得回去
+ */
+function parseFileMessages(lines: string[]): FileMessage[] {
+  const messages: FileMessage[] = [];
+
+  lines.forEach((raw, seq) => {
+    const parsed = parseBackupLine(raw);
+    if (parsed) {
+      messages.push({ seq, parsed });
+      return;
+    }
+
+    const tail = stripCr(raw).trim();
+    const prev = messages[messages.length - 1];
+    // 接回上一条。用空格而不是换行连接：注入时一条命中占一行，正文里带换行会把格式冲散
+    if (prev && tail !== '') {
+      prev.parsed.text += ` ${tail}`;
+      prev.parsed.body += ` ${tail}`;
+    }
+  });
+
+  return messages;
+}
+
 /** 词典指纹存这里，变了就得重建全文索引 */
 const DICT_KEY = 'segment_dict';
 
@@ -70,7 +116,7 @@ const REBUILD_CHUNK = 5000;
 function eachRow<T extends { id: number }>(db: MemoryDatabase, sql: string, fn: (row: T) => void) {
   const stmt = db.prepare(sql);
   let lastId = 0;
-  for (;;) {
+  for (; ;) {
     const rows = stmt.all(lastId, REBUILD_CHUNK) as T[];
     if (rows.length === 0) return;
     rows.forEach(fn);
@@ -110,6 +156,48 @@ function rebuildFtsIfDictChanged(db: MemoryDatabase) {
   })();
 }
 
+/** 读一个备份文件的行。末尾换行切出来的空串不算一行，否则下次追加时这个位置会被水位跳过 */
+function readBackupLines(file: string): string[] {
+  const lines = fs.readFileSync(path.join(CHAT_BACKUP_DIR, file), 'utf-8').split('\n');
+  if (lines[lines.length - 1] === '') lines.pop();
+  return lines;
+}
+
+/** 解析规则的版本。改了 parseFileMessages 的行为就 +1，启动时会按新规则修正已入库的正文 */
+const INGEST_VERSION = '2';
+const VERSION_KEY = 'ingest_version';
+
+/**
+ * 解析规则变了之后，按新规则重新解析备份文件，**就地**修正已入库行的正文。
+ *
+ * 不能删表重导：`chat_line.id` 会重新编号，而 `topic.line_from/line_to` 指着这些 id，
+ * 重编一次所有话题就都指错地方了
+ */
+function repairParsedText(db: MemoryDatabase, files: { file: string, groupId: number, dateKey: number }[]) {
+  if (getMeta(db, VERSION_KEY) === INGEST_VERSION) return;
+
+  const select = db.prepare('SELECT id, text FROM chat_line WHERE group_id = ? AND date_key = ? AND seq = ?');
+  const update = db.prepare('UPDATE chat_line SET text = ? WHERE id = ?');
+  const reindex = db.prepare('UPDATE chat_fts SET seg = ? WHERE rowid = ?');
+
+  let fixed = 0;
+  db.transaction(() => {
+    files.forEach(({ file, groupId, dateKey }) => {
+      parseFileMessages(readBackupLines(file)).forEach(({ seq, parsed }) => {
+        const row = select.get(groupId, dateKey, seq) as { id: number, text: string } | undefined;
+        if (row && row.text !== parsed.text) {
+          update.run(parsed.text, row.id);
+          reindex.run(segment(parsed.body), row.id);
+          fixed += 1;
+        }
+      });
+    });
+    setMeta(db, VERSION_KEY, INGEST_VERSION);
+  })();
+
+  if (fixed > 0) printLog(`[Ingest] 解析规则已更新，就地修正 ${fixed} 行正文并重建其索引`);
+}
+
 export interface IngestStats {
   /** 有新增行的文件数 */
   files: number;
@@ -128,17 +216,17 @@ function ingestFile(
   const metaKey = `ingest:${groupId}:${dateKey}`;
   const done = Number(getMeta(db, metaKey) ?? -1);
 
-  const lines = fs.readFileSync(path.join(CHAT_BACKUP_DIR, file), 'utf-8').split('\n');
-  // 末尾换行切出来的空串不算一行，否则下次追加时这个位置会被水位跳过
-  if (lines[lines.length - 1] === '') lines.pop();
+  const lines = readBackupLines(file);
   if (lines.length - 1 <= done) return 0;
+
+  // 整个文件都要解析：一条消息的后续行要接回首行，只从水位往后切会丢掉上下文
+  const messages = parseFileMessages(lines);
 
   // 两表的 rowid 靠手工对齐，必须同一个事务，否则中途失败会飘
   return db.transaction(() => {
     let written = 0;
-    for (let seq = done + 1; seq < lines.length; seq++) {
-      const parsed = parseBackupLine(lines[seq]);
-      if (parsed) {
+    for (const { seq, parsed } of messages) {
+      if (seq > done) {
         const info = insertLine.run(groupId, parsed.userId, dateKey, seq, parsed.nick, parsed.text);
         // UNIQUE 撞了说明这行早入过库，此时 lastInsertRowid 是上一条的，不能拿去写 FTS
         if (info.changes === 1) {
@@ -172,20 +260,26 @@ export function ingestChatBackups(
   }
 
   const only = groupIds?.length ? new Set(groupIds) : null;
+
+  // 按文件名排序即按群、按日期，同群的 chat_line.id 大致随时间递增
+  const files = entries.sort().flatMap((file) => {
+    const m = FILE_RE.exec(file);
+    if (!m) return [];
+    const groupId = Number(m[1]);
+    if (only && !only.has(groupId)) return [];
+    return [{ file, groupId, dateKey: Number(m[2]) }];
+  });
+
+  repairParsedText(db, files);
+
   const insertLine = db.prepare(
     'INSERT OR IGNORE INTO chat_line (group_id, user_id, date_key, seq, nick, text) VALUES (?, ?, ?, ?, ?, ?)',
   );
   const insertFts = db.prepare('INSERT INTO chat_fts (rowid, seg) VALUES (?, ?)');
 
-  // 按文件名排序即按群、按日期，同群的 chat_line.id 大致随时间递增
-  entries.sort().forEach((file) => {
-    const m = FILE_RE.exec(file);
-    if (!m) return;
-    const groupId = Number(m[1]);
-    if (only && !only.has(groupId)) return;
-
+  files.forEach(({ file, groupId, dateKey }) => {
     try {
-      const n = ingestFile(db, insertLine, insertFts, file, groupId, Number(m[2]));
+      const n = ingestFile(db, insertLine, insertFts, file, groupId, dateKey);
       if (n > 0) {
         stats.files += 1;
         stats.lines += n;
@@ -202,9 +296,6 @@ export function ingestChatBackups(
 /** 启动时的全量导入，同步跑完再进主流程。失败不致命，检索空转而已 */
 export function ingestOnStartup() {
   try {
-    // 旧 JSON 档案先迁进来，不然认人和档案注入会当这些人不存在
-    migrateLegacyUserMemory();
-
     const t = Date.now();
     const { files, lines } = ingestChatBackups();
     if (lines > 0) {

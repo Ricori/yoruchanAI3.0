@@ -148,7 +148,9 @@ function fixtureFile(daysAgo: number) {
 /** 20 天前那条是「拉面」的强命中，用来验证相关性能压过时间近度 */
 const DAY_20 = '[111][雨漫]说：一兰拉面真的好吃\n[333][路人]说：天妇罗也不错\n';
 const DAY_3 = '[111][雨漫]说：我周末要去爬山\n[0][主动 0.12]爬山啊，注意别摔了\n[222][hina]说：爬山好累\n';
-const DAY_1 = '[111][雨漫]说：昨天在秋叶原买了手办\n[222][hina]说：这家店好吃\n';
+/** 第二条是「正文自带换行」的长消息：只有首行带 [userId][昵称] 前缀，后两行得接回去 */
+const DAY_1 = '[111][雨漫]说：昨天在秋叶原买了手办\n'
+  + '[222][hina]说：这家店好吃\n公告：周末有活动\n报名链接在群公告\n';
 /** 追加验证增量导入：同一个文件后来又长出两行 */
 const DAY_1_MORE = '[222][hina]说：我也想去秋叶原\n[0][被动][旧账 2][点名 1]秋叶原确实好逛\n';
 
@@ -157,10 +159,14 @@ function testParse() {
   check('群友行留前缀、单独取昵称', parseBackupLine('[111][雨漫]说：我周末要去爬山'), {
     userId: 111, nick: '雨漫', text: '[雨漫]说：我周末要去爬山', body: '我周末要去爬山',
   });
-  check('bot 行剥掉触发标记', parseBackupLine('[0][被动][旧账 2][点名 1]秋叶原确实好逛'), {
+  check('bot 行剥掉触发标记', parseBackupLine('[0][被动][工具 2][点名 1]秋叶原确实好逛'), {
     userId: 0, nick: null, text: '秋叶原确实好逛', body: '秋叶原确实好逛',
   });
+  // 关键词预注入时代写下的日志里是 [旧账 N]，解析侧要一直认它
+  check('老日志里的旧账标记照样剥掉', parseBackupLine('[0][被动][旧账 2]秋叶原确实好逛')?.text, '秋叶原确实好逛');
   check('空行和杂行跳过', [parseBackupLine(''), parseBackupLine('随便一行')], [null, null]);
+  // CRLF 文件按 \n 切完尾部留着 \r，正则里的 `.` 不匹配它，不剥掉整行会被静默丢掉
+  check('CRLF 行照样解析', parseBackupLine('[111][雨漫]说：我周末要去爬山\r')?.body, '我周末要去爬山');
 }
 
 function testIngest() {
@@ -171,11 +177,22 @@ function testIngest() {
 
   withDb((db) => {
     const first = ingestChatBackups(db, [FAKE_GROUP]);
-    check('三个文件共 7 行', [first.files, first.lines], [3, 7]);
+    // 备份共 9 行，其中 2 行是上一条消息正文的换行续行，并进去后是 7 条消息
+    check('三个文件共 7 条消息', [first.files, first.lines], [3, 7]);
 
     const count = () => (db.prepare('SELECT count(*) AS n FROM chat_line WHERE group_id = ?').get(FAKE_GROUP) as { n: number }).n;
-    check('chat_line 行数与备份行数一致', count(), 7);
+    check('chat_line 条数与消息数一致', count(), 7);
     check('chat_fts 同步写入', (db.prepare('SELECT count(*) AS n FROM chat_fts').get() as { n: number }).n, 7);
+
+    const merged = db.prepare(
+      "SELECT text FROM chat_line WHERE group_id = ? AND text LIKE '%这家店好吃%'",
+    ).get(FAKE_GROUP) as { text: string };
+    check('正文里的换行续行接回上一条', merged.text, '[hina]说：这家店好吃 公告：周末有活动 报名链接在群公告');
+    check(
+      '续行的内容能被检索到（以前整段搜不着）',
+      (db.prepare('SELECT count(*) AS n FROM chat_fts WHERE chat_fts MATCH ?').get(`"${segment('报名')}"`) as { n: number }).n,
+      1,
+    );
 
     const again = ingestChatBackups(db, [FAKE_GROUP]);
     check('重复跑不写重', [again.lines, count()], [0, 7]);
@@ -282,11 +299,11 @@ async function testRecall() {
     check(
       '20 天前的强命中排在昨天弱命中的前面（旧实现里正好相反）',
       texts(byRelevance),
-      ['[雨漫]说：一兰拉面真的好吃', '[hina]说：这家店好吃'],
+      ['[雨漫]说：一兰拉面真的好吃', '[hina]说：这家店好吃 公告：周末有活动 报名链接在群公告'],
     );
 
     const windowed = await recallChat(FAKE_GROUP, { query: '拉面好吃吗', days: 14, semantic: false }, db);
-    check('窗口外的召不回来', texts(windowed), ['[hina]说：这家店好吃']);
+    check('窗口外的召不回来', texts(windowed), ['[hina]说：这家店好吃 公告：周末有活动 报名链接在群公告']);
 
     const akiba = await recallChat(FAKE_GROUP, { query: '秋叶原', days: 30, semantic: false }, db);
     check('bot 自己的发言不算旧账', akiba.map((h) => h.userId).includes(0), false);
@@ -347,6 +364,14 @@ async function testRecall() {
     const about = await recallMemory(FAKE_GROUP, { query: '研究生', aboutUserIds: [111], semantic: false }, db);
     check('问某个人就只翻他的档案（硬过滤）', about.map((h) => h.ownerId), [111]);
     check('翻出来的是没被软删的那条', texts(about), ['在读研究生，专业是计算机']);
+
+    // 问「他是个什么样的人」时检索词是抽象的，跟具体事实对不上，但不该空手而归
+    const broad = await recallMemory(FAKE_GROUP, { query: '是个什么样的人', aboutUserIds: [111], semantic: false }, db);
+    check('指名道姓要档案时检索落空就兜底给档案', texts(broad), ['在读研究生，专业是计算机']);
+    check('兜底同样不给软删的条目', broad.some((h) => h.text === '以前说过喜欢吃拉面'), false);
+
+    const noOne = await recallMemory(FAKE_GROUP, { query: '是个什么样的人', semantic: false }, db);
+    check('没指定人就不兜底，避免灌一堆无关档案', noOne.length, 0);
   });
 }
 

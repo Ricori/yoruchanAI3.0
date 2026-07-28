@@ -3,6 +3,7 @@ import nnkbot from '@/core/nnkBot';
 import nnkSchedule from '@/core/nnkSchedule';
 import { NonokaAdmin } from '@/core/nnkAdmin';
 import SystemCleanupJob from '@/tasks/clean';
+import MemoryConsolidateJob from '@/tasks/memoryConsolidate';
 import TwitterPushJob from '@/tasks/twitter';
 import YtLivePushJob from '@/tasks/youtube';
 import RequestFriendModule from '@/modules/request/requestFriend';
@@ -44,6 +45,7 @@ nnkbot.loadModules([
 // 加载定时任务
 nnkSchedule.loadJob([
   SystemCleanupJob,
+  MemoryConsolidateJob,
   // BilibiliNewSharedJob,
   TwitterPushJob,
   YtLivePushJob,

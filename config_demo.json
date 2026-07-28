@@ -45,7 +45,13 @@
     "aiReply": {
       "enable": true,
       "blackList": [],
-      "initiativeList": []
+      "initiativeList": [],
+      "memory": {
+        "toolRounds": {
+          "mention": 1,
+          "initiative": 0
+        }
+      }
     },
     "ykhrOneDrive": {
       "groupIds": []

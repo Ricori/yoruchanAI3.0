@@ -1,16 +1,13 @@
-import { getLLMReply } from '@/service/llm';
+import { getLLMReply, getLLMReplyWithTools } from '@/service/llm';
 import nnkbot from '@/core/nnkBot';
 import { printLog } from '@/utils/print';
-import type { FormattedMessage } from '@/types/message';
 import messageStorage from '../storage/message';
 import memoryStore from '../memory/store';
 import groupProfileStorage from '../storage/groupProfile';
-import { searchGroupHistory, type HistoryHit } from '../history/search';
-import { extractKeywords } from '../history/keywords';
+import { MEMORY_TOOLS, runMemoryTool } from '../memory/tools';
 import { getMentionedUserIds } from '../history/mention';
 import {
-  formatAssistantMessage, formatHistoryPromptMessage,
-  formatInitiativePromptMessage, formatUserMemoryPromptMessage,
+  formatAssistantMessage, formatInitiativePromptMessage, formatUserMemoryPromptMessage,
 } from '../format';
 
 /** 会主动插话、却还没写群档案的群，先按陌生群对待，免得把主场的语气带过去 */
@@ -25,32 +22,21 @@ function getGroupContext(groupId: number): string | undefined {
   return undefined;
 }
 
-/** 同群两次注入旧账的最小间隔，防止 bot 变成检索工具人 */
-const HISTORY_COOLDOWN = 10 * 60 * 1000;
-const lastHistoryInjectTime = new Map<number, number>();
+/**
+ * 每次回复允许模型调几轮召回工具。
+ *
+ * 旧账不再由关键词启发式预先塞进 prompt，改成模型自己按需去查——
+ * 它才是最好的查询生成器：同义扩展、指代消解、意图推断都是免费的。
+ * 主动插话给 0 轮：随口插一句不值得多花一次网络往返
+ */
+const DEFAULT_TOOL_ROUNDS = { mention: 1, initiative: 0 };
 
-/** 取「旧账」槽位：检索这位群友以前说过的、和当前话题相关的话。
- *  大多数时候检索不到，返回空数组即什么都不注入 */
-function getHistoryHits(groupId: number, history: FormattedMessage[]): HistoryHit[] {
-  const now = Date.now();
-  if (now - (lastHistoryInjectTime.get(groupId) ?? 0) < HISTORY_COOLDOWN) return [];
-
-  const last = [...history].reverse().find((m) => m.role === 'user' && m.userId !== 0);
-  if (!last) return [];
-
-  const keywords = extractKeywords(last.message);
-  if (keywords.length === 0) return [];
-
-  // 只翻今天以前的：30 条的会话窗口已经覆盖了当天近期的发言，
-  // 再把它们当「旧账」注入就是同一句话说两遍
-  const hits = searchGroupHistory(groupId, { userIds: [last.userId], keywords, fromDaysAgo: 1 });
-
-  // 节流只在真的注入了才计时，检索落空不占用冷却窗口
-  if (hits.length > 0) lastHistoryInjectTime.set(groupId, now);
-  return hits;
+function getToolRounds(isInitiativeReply: boolean): number {
+  const key = isInitiativeReply ? 'initiative' : 'mention';
+  return nnkbot.config.aiReply.memory?.toolRounds?.[key] ?? DEFAULT_TOOL_ROUNDS[key];
 }
 
-/** 组装群聊上下文（会话历史 + 群友记忆 + 旧账 + 主动插话提示）并调用 LLM 生成回复；
+/** 组装群聊上下文（会话历史 + 群友记忆 + 主动插话提示）并调用 LLM 生成回复；
  *  生成成功后会把回复记入该群会话历史 */
 export async function generateGroupReply(
   groupId: number,
@@ -73,25 +59,38 @@ export async function generateGroupReply(
   const userMemoryContext = memoryStore.getMemoryContext([...recentUserIds, ...mentionedUserIds]);
   const userMemoryPrompt = formatUserMemoryPromptMessage(userMemoryContext);
 
-  const historyHits = getHistoryHits(groupId, history);
-  const historyPrompt = formatHistoryPromptMessage(historyHits);
-
+  // 档案行接在会话历史之后：稳定内容在前、易变内容在后，
+  // 不动 history 里已有的 cacheControl 断点（见 storage/message.ts）
   const messages = [
     ...history,
     ...(userMemoryPrompt ? [userMemoryPrompt] : []),
-    ...(historyPrompt ? [historyPrompt] : []),
   ];
   if (isInitiativeReply) {
     // 主动发起会话的提示词
     messages.push(formatInitiativePromptMessage());
   }
 
-  const aiReplyText = await getLLMReply(messages, getGroupContext(groupId));
+  const context = getGroupContext(groupId);
+  const rounds = getToolRounds(isInitiativeReply);
+
+  let toolCalls = 0;
+  const aiReplyText = rounds > 0
+    ? await getLLMReplyWithTools(messages, context, MEMORY_TOOLS, (name, input) => {
+      toolCalls += 1;
+      return runMemoryTool(groupId, name, input);
+    }, rounds)
+    // 0 轮就走原来的无工具请求：不下发 tools，缓存前缀和以前完全一致
+    : await getLLMReply(messages, context);
+
   if (aiReplyText) {
     // 记忆自己的回复，并带上触发方式供备份日志标注
-    const historyHitCount = historyHits.length;
-    const mentionHitCount = mentionedUserIds.length;
-    const assistantMessage = formatAssistantMessage(aiReplyText, isInitiativeReply, initiativeChance, historyHitCount, mentionHitCount);
+    const assistantMessage = formatAssistantMessage(
+      aiReplyText,
+      isInitiativeReply,
+      initiativeChance,
+      toolCalls,
+      mentionedUserIds.length,
+    );
     messageStorage.addGroupChatConversations(groupId, assistantMessage);
   }
   return aiReplyText;
