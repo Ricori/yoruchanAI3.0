@@ -2,6 +2,28 @@
 # yarn lockfile v1
 
 
+"@emnapi/core@^1.4.3":
+  version "1.11.3"
+  resolved "https://registry.yarnpkg.com/@emnapi/core/-/core-1.11.3.tgz#5e95348a42cd1e06f0b9aa380cd74091daa4d520"
+  integrity sha512-zLpS5asjEb7lq8jYLq37N6XKaE41DIexlY1rF/z4/tIl3wo13Sqm28fRyfIsKZD+NZ8mM5RoKkpW/rBcuoSZSg==
+  dependencies:
+    "@emnapi/wasi-threads" "1.2.3"
+    tslib "^2.4.0"
+
+"@emnapi/runtime@^1.4.3":
+  version "1.11.3"
+  resolved "https://registry.yarnpkg.com/@emnapi/runtime/-/runtime-1.11.3.tgz#84257ae3b0531eb2aec1ffa23d70700da007ba95"
+  integrity sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==
+  dependencies:
+    tslib "^2.4.0"
+
+"@emnapi/wasi-threads@1.2.3":
+  version "1.2.3"
+  resolved "https://registry.yarnpkg.com/@emnapi/wasi-threads/-/wasi-threads-1.2.3.tgz#c9bf72fd4be5b928aee894820e8d814ed73916e9"
+  integrity sha512-ELEBe8PsLvvJ6QMr0zLt8ffvOHW/dc1m3CEzNMg7aJUv3bMaoDtw2TXyDAwkYBuroxxuHEwhRTLJSe5sya547g==
+  dependencies:
+    tslib "^2.4.0"
+
 "@esbuild/aix-ppc64@0.20.2":
   version "0.20.2"
   resolved "https://registry.yarnpkg.com/@esbuild/aix-ppc64/-/aix-ppc64-0.20.2.tgz#a70f4ac11c6a1dfc18b8bbb13284155d933b9537"
@@ -173,6 +195,107 @@
   resolved "https://registry.npmjs.org/@humanwhocodes/object-schema/-/object-schema-2.0.3.tgz"
   integrity sha512-93zYdMES/c1D69yZiKDBj0V24vqNzB/koF26KPaagAfd3P/4gUlh3Dys5ogAK+Exi9QyzlD8x/08Zt7wIKcDcA==
 
+"@napi-rs/wasm-runtime@^0.2.5":
+  version "0.2.12"
+  resolved "https://registry.yarnpkg.com/@napi-rs/wasm-runtime/-/wasm-runtime-0.2.12.tgz#3e78a8b96e6c33a6c517e1894efbd5385a7cb6f2"
+  integrity sha512-ZVWUcfwY4E/yPitQJl481FjFo3K22D6qF0DuFH6Y/nbnE11GY5uguDxZMGXPQ8WQ0128MXQD7TnfHyK4oWoIJQ==
+  dependencies:
+    "@emnapi/core" "^1.4.3"
+    "@emnapi/runtime" "^1.4.3"
+    "@tybys/wasm-util" "^0.10.0"
+
+"@node-rs/jieba-android-arm-eabi@2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@node-rs/jieba-android-arm-eabi/-/jieba-android-arm-eabi-2.0.1.tgz#65a0dce955718f03e89d6516facd731aa5490757"
+  integrity sha512-tavsIaxybnlA9tRbJ+oc3NW3zhx0d5rNiCGdpIdGWjflwS7HyeUTVAZmAFDlg58Mc6EjTdVKZH+RolBbAJtgcQ==
+
+"@node-rs/jieba-android-arm64@2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@node-rs/jieba-android-arm64/-/jieba-android-arm64-2.0.1.tgz#321c3d8f804f4232ea0f03dcf8b2287b9fa9d1c3"
+  integrity sha512-AwdyqKvVNuSDnDq3anUfq+nJ5J/kzXjkfbr/1WY6TfaAlTNuuGVskuQv72/wIx/jn7NoXfm/UPuJrWYG16NC6w==
+
+"@node-rs/jieba-darwin-arm64@2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@node-rs/jieba-darwin-arm64/-/jieba-darwin-arm64-2.0.1.tgz#37d61fa5f11ab614cee6bb145f968f3eb61beefe"
+  integrity sha512-10+nwGQ6KzXXJlIL/sELA6Fi6m7eJ7xJksBiKuw1kxKUgaJwtVfAG0iqRF+NRQv0Sdq7r3k5ew9K9y0+IYaEcA==
+
+"@node-rs/jieba-darwin-x64@2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@node-rs/jieba-darwin-x64/-/jieba-darwin-x64-2.0.1.tgz#7f520141630d734fe4c4dd69e6c8017258851464"
+  integrity sha512-IJ5RK0X/uPQa1XRmTvwKSieya+w1IJeiKLw0EekoBFJKybXQdvo8/uqM/8z2eVJ8vQxW9X6K2vkVGFvYQa9dYA==
+
+"@node-rs/jieba-freebsd-x64@2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@node-rs/jieba-freebsd-x64/-/jieba-freebsd-x64-2.0.1.tgz#4354e2d274d35c39fcabcd2977dfce6b9f6af1db"
+  integrity sha512-yg7vyhqzP2weJu5DJ3q9q4pb0b4GWWRwcv54zK7MSSA6KNJ/uQv2a4R9/qmptLU/fZv14gWuJBEMFdL7y1Dv2w==
+
+"@node-rs/jieba-linux-arm-gnueabihf@2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@node-rs/jieba-linux-arm-gnueabihf/-/jieba-linux-arm-gnueabihf-2.0.1.tgz#f45588f3e21d4d01119b4c81adc426f2684c57ec"
+  integrity sha512-fxQYunS7w2tv8XV9GigkWJPzHnbcw6tjrUdDu5/qU0FdQVEzGuEYG85DjlNf8lZTDGSUKHBVyAQs7bBIvq8yqg==
+
+"@node-rs/jieba-linux-arm64-gnu@2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@node-rs/jieba-linux-arm64-gnu/-/jieba-linux-arm64-gnu-2.0.1.tgz#9743b082ab1850bf92cc3c0264b97a1dfd070a4e"
+  integrity sha512-VnLU630hQIyO/fwyxh2vqZi72mO+hXkVUC3jVLPfOAlppinmsGX9N81tpTPUK3840hbV8WLtbYTWN1XodI38eg==
+
+"@node-rs/jieba-linux-arm64-musl@2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@node-rs/jieba-linux-arm64-musl/-/jieba-linux-arm64-musl-2.0.1.tgz#7f6f2b461a32d4604f0176d5ba51ecbd7bc497b1"
+  integrity sha512-K4EDyNixSLVdTNYnHwD+7I/ytvzpo7tt+vdCLqwQViiek2PMpL/FFRvA39uU2tk99jXIxvkczdxARG20BRZppg==
+
+"@node-rs/jieba-linux-x64-gnu@2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@node-rs/jieba-linux-x64-gnu/-/jieba-linux-x64-gnu-2.0.1.tgz#5552787b477baa40e3c451902049599f10b424ac"
+  integrity sha512-sq3J6L2ANTE25I9eVFq/nb57OtXcvUIeUD1CTKJxwgTKIVmcB2LyOZpWf20AjHRUfbMER9Klqg5dgyyO+Six+w==
+
+"@node-rs/jieba-linux-x64-musl@2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@node-rs/jieba-linux-x64-musl/-/jieba-linux-x64-musl-2.0.1.tgz#b7da60664421c7b1fe3272c4bd3a961d94bf535d"
+  integrity sha512-0zfP9Qy68yEXrhBFknfhF6WUJDPU/8eRuyIrkMGdMjfRpxhpSbr2fMfnsqhOQLvhuK4w3iDFvTy4t5d0s6JKMA==
+
+"@node-rs/jieba-wasm32-wasi@2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@node-rs/jieba-wasm32-wasi/-/jieba-wasm32-wasi-2.0.1.tgz#9d95ac2471eb47667e18f26d3df31b628b545d2f"
+  integrity sha512-7I5rJya5rlQNJIhv8PvPzIVT1/gVc0vFzHmlfRGwCPGDJ3tHVxkSPW34dDx3OgDmbIeadNpmgIyC1RaS9djPJg==
+  dependencies:
+    "@napi-rs/wasm-runtime" "^0.2.5"
+
+"@node-rs/jieba-win32-arm64-msvc@2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@node-rs/jieba-win32-arm64-msvc/-/jieba-win32-arm64-msvc-2.0.1.tgz#c88e200f5dfc205cbd2b3e336d39320005a181a8"
+  integrity sha512-Aj/2EwYSaPgAbKnSl+vKM/2kOaZNMZWnShiZzbSNyzlLy3eIOyOYVLbYRDno4547KngRxer8uzROhIQIwXwkvw==
+
+"@node-rs/jieba-win32-ia32-msvc@2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@node-rs/jieba-win32-ia32-msvc/-/jieba-win32-ia32-msvc-2.0.1.tgz#466bcd37bb38ea288869997eebaf560745266cea"
+  integrity sha512-tpJt3uuBlGrcOInQLTYvcgamQgfadl5cwExLYU+CX9rXKpXLDO31dIujUDBgNWoiQq3tOiU1/AKbT7ZdNd4lBQ==
+
+"@node-rs/jieba-win32-x64-msvc@2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@node-rs/jieba-win32-x64-msvc/-/jieba-win32-x64-msvc-2.0.1.tgz#907734774cff8e73e7034d0ab06e7fcbdaf2a4b0"
+  integrity sha512-LDOyo2/2CO8UnpSGLJdgqtH8mOnsABPhNxkfIky7UT9cyLEzOaU44nbA5YzPGpBI3qzMbWcwJYQsjBcgK2VqAg==
+
+"@node-rs/jieba@^2.0.1":
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/@node-rs/jieba/-/jieba-2.0.1.tgz#58c7236c17031e80ab7a2dd81323c68e225c9634"
+  integrity sha512-tnfzXOMqzVQF2dSKMhPC9HrHzzWmN6KheL/zYtGenhOpq/bCKHJWVASSggEnHlkmHgXGeIJHR2N/IuPzewz1BQ==
+  optionalDependencies:
+    "@node-rs/jieba-android-arm-eabi" "2.0.1"
+    "@node-rs/jieba-android-arm64" "2.0.1"
+    "@node-rs/jieba-darwin-arm64" "2.0.1"
+    "@node-rs/jieba-darwin-x64" "2.0.1"
+    "@node-rs/jieba-freebsd-x64" "2.0.1"
+    "@node-rs/jieba-linux-arm-gnueabihf" "2.0.1"
+    "@node-rs/jieba-linux-arm64-gnu" "2.0.1"
+    "@node-rs/jieba-linux-arm64-musl" "2.0.1"
+    "@node-rs/jieba-linux-x64-gnu" "2.0.1"
+    "@node-rs/jieba-linux-x64-musl" "2.0.1"
+    "@node-rs/jieba-wasm32-wasi" "2.0.1"
+    "@node-rs/jieba-win32-arm64-msvc" "2.0.1"
+    "@node-rs/jieba-win32-ia32-msvc" "2.0.1"
+    "@node-rs/jieba-win32-x64-msvc" "2.0.1"
+
 "@nodelib/fs.scandir@2.1.5":
   version "2.1.5"
   resolved "https://registry.npmjs.org/@nodelib/fs.scandir/-/fs.scandir-2.1.5.tgz"
@@ -193,6 +316,20 @@
   dependencies:
     "@nodelib/fs.scandir" "2.1.5"
     fastq "^1.6.0"
+
+"@tybys/wasm-util@^0.10.0":
+  version "0.10.3"
+  resolved "https://registry.yarnpkg.com/@tybys/wasm-util/-/wasm-util-0.10.3.tgz#015cba9e9dd47ce14d03d2a8c5d547bfb169665d"
+  integrity sha512-F3fo1MYrRJYL3zER0OUOmkutjr1Vp23m7OsSgp7nq4SP6OqX6C/56XFIPAl5bt3zaBRjmW7SGz3u/6LwFpYcOg==
+  dependencies:
+    tslib "^2.4.0"
+
+"@types/better-sqlite3@^7.6.13":
+  version "7.6.13"
+  resolved "https://registry.yarnpkg.com/@types/better-sqlite3/-/better-sqlite3-7.6.13.tgz#a72387f00d2f53cab699e63f2e2c05453cf953f0"
+  integrity sha512-NMv9ASNARoKksWtsq/SHakpYAYnhBrQgGD8zkLYk/jaK8jUGn08CfEdTRgYhMypUQAfzSP8W6gNLe0q19/t4VA==
+  dependencies:
+    "@types/node" "*"
 
 "@types/json5@^0.0.29":
   version "0.0.29"
@@ -459,6 +596,13 @@ balanced-match@^1.0.0:
   version "1.0.2"
   resolved "https://registry.npmjs.org/balanced-match/-/balanced-match-1.0.2.tgz"
   integrity sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==
+
+better-sqlite3@^13.0.1:
+  version "13.0.1"
+  resolved "https://registry.yarnpkg.com/better-sqlite3/-/better-sqlite3-13.0.1.tgz#7e537f7ec14f0bb419b6cd666b666d6bc00bbc1e"
+  integrity sha512-LYpmOXdkpQYf4wmlxkdzW01XGlOXNIbjLg45yNkh0FQ4814VbK9PdOFmhZpYbej+EZtR/i3FDdhEG98HqZdgnA==
+  dependencies:
+    node-addon-api "^8.0.0"
 
 boolbase@^1.0.0:
   version "1.0.0"
@@ -1830,6 +1974,11 @@ nhentai-api@^3.4.3:
   resolved "https://registry.npmjs.org/nhentai-api/-/nhentai-api-3.4.3.tgz"
   integrity sha512-IPzoB9/GRVF/wofyao6SfpFIak2GyE8+4F7ipDJXK/vmxV3QPa+7E7+cst2zsXis5j9Yxk3Cf/zodktaM9UU9w==
 
+node-addon-api@^8.0.0:
+  version "8.9.0"
+  resolved "https://registry.yarnpkg.com/node-addon-api/-/node-addon-api-8.9.0.tgz#d2467090e6195c428ccd510dfd604f01c027f0a0"
+  integrity sha512-ekZMeaaIzSQTSpr7X2X3iJM7lTzgnx8ahAG9pJfT/7+14mlEM8ZYQ9cgCDvSSRbReFK0oHli3WrZdCiRsgAT9Q==
+
 node-gyp-build@^4.3.0:
   version "4.8.1"
   resolved "https://registry.npmjs.org/node-gyp-build/-/node-gyp-build-4.8.1.tgz"
@@ -2288,6 +2437,11 @@ tsconfig-paths@^3.15.0:
     json5 "^1.0.2"
     minimist "^1.2.6"
     strip-bom "^3.0.0"
+
+tslib@^2.4.0:
+  version "2.8.1"
+  resolved "https://registry.yarnpkg.com/tslib/-/tslib-2.8.1.tgz#612efe4ed235d567e8aba5f2a5fab70280ade83f"
+  integrity sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==
 
 tsx@^4.11.0:
   version "4.11.0"
