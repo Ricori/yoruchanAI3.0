@@ -80,13 +80,20 @@ function formatMemory(hits: Awaited<ReturnType<typeof recallMemory>>): string {
 export async function runMemoryTool(groupId: number, name: string, rawInput: unknown): Promise<string> {
   const input = (rawInput ?? {}) as { query?: string, about?: string, speaker?: string, days?: number };
   const query = typeof input.query === 'string' ? input.query.trim() : '';
-  if (!query) return '缺少 query 参数。';
+  // 每条出口都要留日志：只在成功时打印的话，「认不出名字」这种失败在日志里是隐形的
+  if (!query) {
+    printLog(`[MemoryTool] ${name} -> 缺少 query`);
+    return '缺少 query 参数。';
+  }
 
   try {
     if (name === 'recall_memory') {
       const about = input.about?.trim();
       const aboutUserIds = about ? resolveName(groupId, about) : undefined;
-      if (about && aboutUserIds!.length === 0) return UNKNOWN_NAME(about);
+      if (about && aboutUserIds!.length === 0) {
+        printLog(`[MemoryTool] recall_memory(${query}, about=${about}) -> 名字未解析`);
+        return UNKNOWN_NAME(about);
+      }
 
       const hits = await recallMemory(groupId, { query, aboutUserIds, limit: TOOL_LIMIT });
       printLog(`[MemoryTool] recall_memory(${query}${about ? `, about=${about}` : ''}) -> ${hits.length} 条`);
@@ -96,7 +103,10 @@ export async function runMemoryTool(groupId: number, name: string, rawInput: unk
     if (name === 'recall_chat') {
       const speaker = input.speaker?.trim();
       const speakerIds = speaker ? resolveName(groupId, speaker) : undefined;
-      if (speaker && speakerIds!.length === 0) return UNKNOWN_NAME(speaker);
+      if (speaker && speakerIds!.length === 0) {
+        printLog(`[MemoryTool] recall_chat(${query}, speaker=${speaker}) -> 名字未解析`);
+        return UNKNOWN_NAME(speaker);
+      }
 
       const days = typeof input.days === 'number' && input.days > 0 ? Math.min(input.days, 365) : undefined;
       const hits = await recallChat(groupId, {
@@ -106,6 +116,7 @@ export async function runMemoryTool(groupId: number, name: string, rawInput: unk
       return formatChat(hits);
     }
 
+    printLog(`[MemoryTool] 未知的工具 ${name}`);
     return `未知的工具 ${name}。`;
   } catch (e) {
     // 工具挂了不该让整轮回复失败，告诉模型查不到就行
