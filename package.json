@@ -8,6 +8,7 @@
     "prod": "tsx ./src/index.ts",
     "debug": "cross-env YDEBUG=true tsx ./src/index.ts",
     "test": "cross-env YDEBUG=true tsx ./test/index.ts",
+    "memory:consolidate": "tsx ./scripts/consolidateMemory.ts",
     "lint": "eslint --ext .ts src/ --quiet",
     "lint-fix": "eslint --fix --ext .ts src/ --quiet"
   },
