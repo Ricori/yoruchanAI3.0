@@ -54,7 +54,7 @@
 | `group/trigger.ts` `voiceState.ts` `replySender.ts` | 不动 |
 | `history/keywords.ts` | 废弃,但 **`stripSpeakerPrefix()` 必须搬走保留** —— `aliasIndex.ts:7` 依赖它 |
 | `history/search.ts` | 替换为 `memory/retrieve.ts` |
-| `storage/userMemory.ts` | 替换为 `memory/store.ts` + `memory/extract.ts` |
+| `storage/userMemory.ts` | 替换为 `memory/store.ts` + `memory/extract.ts`,**已删除** |
 | `group/generateReply.ts` | 改造:删掉 `getHistoryHits`,加工具循环 |
 
 **关键约束:SQLite 是派生索引,不是唯一真相。** `data/memory/chat/*.txt` 继续照常写,SQLite 随时可从备份文件全量重建。数据库损坏不丢数据。
@@ -261,6 +261,16 @@ recallChat  (groupId, { query, speakerIds?, days?, limit })
 - **失败回填沿用现在 `userMemory.ts:149-159` 的做法**(消息放回缓冲区头部 + `MAX_BUFFER` 上限),这块设计是对的
 - **验收**:ops 应用的单测通过,尤其 pinned 保护和软删可见性
 
+**实施时的三处调整:**
+
+1. **旧档案迁移从 P7 提到了 P3。** 一旦 `aliasIndex` / `mention` / `generateReply` 改读新 store,`data/memory/user/*.json` 就成了孤儿数据 —— 70 个人的档案会当场消失。所以 `memory/migrate.ts` 现在由 `ingestOnStartup()` 自动调用,幂等,跑完在 `meta.legacy_user_migrated` 记一笔。**不删源文件**,留着人工比对。
+
+2. **`memory` 表放不下 `nickName`,新增了 `user_profile` 表(schema v2)。** memory 每行是一条事实,而昵称是「每人一个」的属性。迁移把 JSON 里的 `nickName` 落到这张表,`noteNickName()` 在收消息时顺带更新(带内存缓存,昵称没变就不写库)。
+
+3. **衰减按天取整,不是按毫秒。** 时间常数是 30 天,毫秒级的先后毫无意义,但会让同一批写入的条目因为相差几毫秒排出随机顺序 —— 实测迁移后 70 个人里有 31 个的档案行顺序被打乱(`名字叫XX` 被挤到中间)。改成按天后 69/70 与旧实现逐字一致,剩下 1 个是那人有 7 条 trait、注入上限 6 条,属预期。`listUserMemories` 同时改成 `ORDER BY id` + 稳定排序,同分保持写入顺序。
+
+**迁移实测**:70 人 → 420 条 trait、9 条 relation、3 条 alias、70 条 user_profile,12 条 pinned;强制重跑写入 0 条。
+
 ### P4 — 服务层与工具
 
 - `src/service/llm/index.ts` 新增:
@@ -300,14 +310,11 @@ recall_chat   { query: string, speaker?: string, days?: number }
 
 ### P7 — 迁移与清理
 
-- `scripts/migrate-memory.ts`:`data/memory/user/*.json` → memory 表
-  - `traits` → `kind='trait'`, `confidence=0.6`
-  - `relations` → `kind='relation'`, `pinned=1`
-  - `aliases` → `kind='alias'`, `pinned=1`
-  - `nickName` 落到对应 memory 行的 owner 元信息
-- 全量 ingest `data/memory/chat/*.txt`,全部 memory item 向量化
-- **迁移完成后直接删除 `data/memory/user/`**(开发期,用户已确认不需要回滚)
-- 删除 `history/search.ts`、`history/keywords.ts`、`storage/userMemory.ts`
+- ~~`scripts/migrate-memory.ts`~~ **已在 P3 完成**(`memory/migrate.ts`,理由见 P3)
+- 全量 ingest `data/memory/chat/*.txt`(P1 已完成),全部 memory item 向量化(接口部署后由 `embedQueue` 补齐)
+- **确认无误后删除 `data/memory/user/`**(迁移不会自动删,留着做人工比对)
+- 删除 `history/search.ts`、`history/keywords.ts`(~~`storage/userMemory.ts`~~ **已在 P3 删除**,改完调用方后它就没有任何 importer 了)
+- `service/llm` 里的 `summarizeUserTraits` 也已经没人调(服务端 `/llm/summarize` 端点仍在),确认不需要后可一并删
 - 切换 `aliasIndex.build()` 的数据源:「扫 180 天文件」→「查 `chat_line` 表」,启动更快
 
 ---

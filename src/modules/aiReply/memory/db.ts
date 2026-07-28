@@ -5,7 +5,7 @@ import { printError, printLog } from '@/utils/print';
 
 export type MemoryDatabase = Database.Database;
 
-export const MEMORY_DB_PATH = path.resolve('data/memory/nonoka.db');
+const MEMORY_DB_PATH = path.resolve('data/memory/nonoka.db');
 
 /**
  * schema 迁移脚本，下标 + 1 即为版本号。
@@ -72,6 +72,16 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (ref_kind, ref_id)
   );
   `,
+
+  // v2 群友当前昵称。memory 表每行是一条事实，没地方放这种「每人一个」的属性，
+  // 而档案行要用它来称呼人（原来存在 user/{id}.json 的 nickName 字段里）
+  `
+  CREATE TABLE user_profile (
+    user_id    INTEGER PRIMARY KEY,
+    nick       TEXT    NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  `,
 ];
 
 /** 读一条 meta，没有返回 null */
@@ -129,10 +139,4 @@ let defaultDb: MemoryDatabase | null = null;
 export function getMemoryDb(): MemoryDatabase {
   if (!defaultDb) defaultDb = createMemoryDb();
   return defaultDb;
-}
-
-/** 关掉默认库，仅进程退出与测试用 */
-export function closeMemoryDb() {
-  defaultDb?.close();
-  defaultDb = null;
 }

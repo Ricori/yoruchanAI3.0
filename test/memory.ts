@@ -12,6 +12,7 @@ import {
 import {
   buildTermQueries, recallChat, recallMemory, rrfFuse,
 } from '@/modules/aiReply/memory/retrieve';
+import memoryStore from '@/modules/aiReply/memory/store';
 import { CHAT_BACKUP_DIR, backupDateKey } from '@/modules/aiReply/storage/message';
 
 /** 临时库跑完就删，不碰 data/memory 下的真实库 */
@@ -53,7 +54,10 @@ async function withDbAsync(fn: (db: MemoryDatabase) => Promise<void>) {
   }
 }
 
-const EXPECTED_TABLES = ['chat_fts', 'chat_line', 'embedding', 'memory', 'memory_fts', 'meta', 'topic'];
+const EXPECTED_TABLES = ['chat_fts', 'chat_line', 'embedding', 'memory', 'memory_fts', 'meta', 'topic', 'user_profile'];
+
+/** 迁移脚本条数，加一条就要同步改这里 */
+const SCHEMA_VERSION = '2';
 
 function testSchema() {
   console.log('\n[schema]');
@@ -61,10 +65,10 @@ function testSchema() {
     const tables = (db.prepare(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
     ).all() as { name: string }[]).map((r) => r.name);
-    check('七张表齐全', EXPECTED_TABLES.filter((t) => tables.includes(t)), EXPECTED_TABLES);
+    check('建表齐全', EXPECTED_TABLES.filter((t) => tables.includes(t)), EXPECTED_TABLES);
 
     check('WAL 已开启', String(db.pragma('journal_mode', { simple: true })).toLowerCase(), 'wal');
-    check('schema_version 已落库', getMeta(db, 'schema_version'), '1');
+    check('schema_version 已落库', getMeta(db, 'schema_version'), SCHEMA_VERSION);
 
     const cols = (db.prepare('PRAGMA table_info(memory)').all() as { name: string }[]).map((c) => c.name);
     check('memory 列完整', cols, [
@@ -82,7 +86,7 @@ function testSchema() {
 function testIdempotent() {
   console.log('\n[重复打开]');
   withDb((db) => {
-    check('已是最新版就不重跑迁移', getMeta(db, 'schema_version'), '1');
+    check('已是最新版就不重跑迁移', getMeta(db, 'schema_version'), SCHEMA_VERSION);
     check('老数据还在', getMeta(db, 'probe'), 'b');
   });
 }
@@ -346,6 +350,78 @@ async function testRecall() {
   });
 }
 
+function testStore() {
+  console.log('\n[记忆存取]');
+  withDb((db) => {
+    const U = 555;
+    memoryStore.noteNickName(U, '雨漫', db);
+
+    const trait = memoryStore.addMemory({ ownerId: U, kind: 'trait', text: '在读研究生' }, db);
+    const ep = memoryStore.addMemory({ ownerId: U, kind: 'episode', text: '最近在打黑神话' }, db);
+    const rel = memoryStore.addMemory({
+      ownerId: U, kind: 'relation', text: '是乃乃香的同桌', pinned: true,
+    }, db);
+    memoryStore.addMemory({
+      ownerId: U, kind: 'alias', text: '桃子姐', pinned: true,
+    }, db);
+
+    check('档案行：关系在前、印象在后、叫法进名字', memoryStore.formatMemoryLine(U, db),
+      '[雨漫]（也叫：桃子姐） 关系：是乃乃香的同桌｜印象：在读研究生、最近在打黑神话');
+
+    console.log('\n[ops 应用]');
+    const r1 = memoryStore.applyOps(U, FAKE_GROUP, [
+      { op: 'ADD', kind: 'trait', text: '住在广州', confidence: 0.9 },
+      { op: 'UPDATE', id: ep, kind: 'episode', text: '已通关黑神话', confidence: 0.8 },
+      { op: 'DELETE', id: trait },
+    ], db);
+    check('增删改都落地', [r1.added.length, r1.updated.length, r1.deleted.length], [1, 1, 1]);
+
+    const texts = () => memoryStore.listUserMemories(U, db).map((m) => m.text);
+    check('软删的条目读不到了', texts().includes('在读研究生'), false);
+    check('UPDATE 改的是同一行不是新增', texts().includes('已通关黑神话') && !texts().includes('最近在打黑神话'), true);
+
+    const updated = memoryStore.listUserMemories(U, db).find((m) => m.id === ep)!;
+    check('UPDATE 保留 first_seen 并累加 hits', [updated.firstSeen === updated.lastSeen, updated.hits], [false, 2]);
+
+    const deleted = db.prepare('SELECT superseded_by FROM memory WHERE id = ?').get(trait) as { superseded_by: number };
+    check('DELETE 是软删不是物理删', deleted.superseded_by, -1);
+    check('软删的条目同时摘出全文索引',
+      (db.prepare('SELECT count(*) AS n FROM memory_fts WHERE rowid = ?').get(trait) as { n: number }).n, 0);
+
+    console.log('\n[pinned 保护]');
+    const r2 = memoryStore.applyOps(U, FAKE_GROUP, [
+      { op: 'UPDATE', id: rel, kind: 'relation', text: '已经绝交了' },
+      { op: 'DELETE', id: rel },
+    ], db);
+    check('对钉住条目的改动全被挡下', [r2.blocked, r2.updated.length, r2.deleted.length], [2, 0, 0]);
+    check('钉住的内容原样还在', texts().includes('是乃乃香的同桌'), true);
+
+    const r3 = memoryStore.applyOps(U, FAKE_GROUP, [{ op: 'DELETE', id: 999999 }], db);
+    check('认不出 id 的操作直接丢掉，不误伤', r3.deleted.length, 0);
+
+    const before = texts().length;
+    const r4 = memoryStore.applyOps(U, FAKE_GROUP, [{ op: 'ADD', kind: 'trait', text: '住在广州' }], db);
+    check('同一句话又说一遍不新增，算又被印证一次', [texts().length, r4.added.length, r4.updated.length], [before, 0, 1]);
+
+    console.log('\n[淘汰]');
+    // 塞满上限之外的低分条目：置信度低、只被印证过一次
+    for (let i = 0; i < 15; i++) {
+      memoryStore.addMemory({
+        ownerId: U, kind: 'episode', text: `随口说的第${i}件事`, confidence: 0.3,
+      }, db);
+    }
+    const evicted = memoryStore.evict(U, db);
+    check('淘汰后非钉住的条数落回上限', memoryStore.listUserMemories(U, db).filter((m) => !m.pinned).length, 12);
+    check('淘汰的是低分那批', evicted.length > 0 && texts().includes('住在广州'), true);
+    check('钉住的永不淘汰', texts().includes('是乃乃香的同桌') && texts().includes('桃子姐'), true);
+
+    console.log('\n[对外兼容形态]');
+    check('getManualAliases 形态不变', [...memoryStore.getManualAliases(db).entries()], [[U, ['桃子姐']]]);
+    check('hasMemory', [memoryStore.hasMemory(U, db), memoryStore.hasMemory(666, db)], [true, false]);
+    check('没有昵称就没有档案行', memoryStore.formatMemoryLine(666, db), null);
+  });
+}
+
 export async function testMemory() {
   const fixtures = [fixtureFile(20), fixtureFile(3), fixtureFile(1)];
   const existing = fixtures.filter((f) => fs.existsSync(f));
@@ -364,6 +440,7 @@ export async function testMemory() {
     testIngest();
     testVector();
     testRrf();
+    testStore();
     await testRecall();
     console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项未通过`);
   } finally {

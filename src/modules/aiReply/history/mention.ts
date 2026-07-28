@@ -1,5 +1,5 @@
 import type { FormattedMessage } from '@/types/message';
-import userMemoryStorage from '../storage/userMemory';
+import memoryStore from '../memory/store';
 import aliasIndex from './aliasIndex';
 
 /** 认人时往回看几条群友发言：bot 有 3.5s 防抖，等它开口时问句往往已经被后续消息挤下去了 */
@@ -26,7 +26,7 @@ export function getMentionedUserIds(
   recent.forEach((m) => {
     aliasIndex.resolve(groupId, m.message).forEach((userId) => {
       // 认出了名字但这个人没有任何档案可注入，占名额也没意义
-      if (!loaded.has(userId) && userMemoryStorage.hasMemory(userId)) ids.add(userId);
+      if (!loaded.has(userId) && memoryStore.hasMemory(userId)) ids.add(userId);
     });
   });
 

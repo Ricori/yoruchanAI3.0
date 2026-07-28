@@ -37,30 +37,36 @@ export async function getLLMReply(
   return ret?.data?.text ?? null;
 }
 
+export interface MemoryOpDTO {
+  op: 'ADD' | 'UPDATE' | 'DELETE';
+  id?: number;
+  kind?: string;
+  text?: string;
+  confidence?: number;
+}
+
 /**
- * 将用户近期消息归纳为不超过 6 条核心特征短句
+ * 抽取新记忆并与已有条目调和，返回对档案的增删改操作。
+ *
+ * 失败返回 null，和「确实没有变化」的空数组区分开——
+ * 前者要把这批消息放回缓冲区重试，后者不能重试
  */
-export async function summarizeUserTraits(
+export async function extractMemory(
   nickName: string,
   messages: string[],
-  existingTraits: string[],
-): Promise<string[] | null> {
-  const ret = await Axios.post(getServiceUrl('/llm/summarize'), {
-    nickName, messages, existingTraits,
+  existing: { id: number, kind: string, text: string, pinned: boolean }[],
+): Promise<MemoryOpDTO[] | null> {
+  const ret = await Axios.post(getServiceUrl('/llm/memory/extract'), {
+    nickName, messages, existing,
   }, {
     timeout: COMMON_TIMEOUT,
   }).catch((e) => {
-    printError(`[LLM summarize error] ${e.message}`);
+    printError(`[LLM memory extract error] ${e.message}`);
     return null;
   });
 
-  if (!ret) return null;
-
-  const traits = ret?.data?.traits;
-  if (Array.isArray(traits) && traits.length > 0) {
-    return traits;
-  }
-  return existingTraits;
+  const ops = ret?.data?.ops;
+  return Array.isArray(ops) ? ops : null;
 }
 
 /**

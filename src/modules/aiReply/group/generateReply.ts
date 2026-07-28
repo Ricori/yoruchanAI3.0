@@ -3,7 +3,7 @@ import nnkbot from '@/core/nnkBot';
 import { printLog } from '@/utils/print';
 import type { FormattedMessage } from '@/types/message';
 import messageStorage from '../storage/message';
-import userMemoryStorage from '../storage/userMemory';
+import memoryStore from '../memory/store';
 import groupProfileStorage from '../storage/groupProfile';
 import { searchGroupHistory, type HistoryHit } from '../history/search';
 import { extractKeywords } from '../history/keywords';
@@ -70,7 +70,7 @@ export async function generateGroupReply(
     printLog(`[GenerateReply] ${groupId} 认出被提到的群友: ${mentionedUserIds.join(', ')}`);
   }
 
-  const userMemoryContext = userMemoryStorage.getMemoryContext([...recentUserIds, ...mentionedUserIds]);
+  const userMemoryContext = memoryStore.getMemoryContext([...recentUserIds, ...mentionedUserIds]);
   const userMemoryPrompt = formatUserMemoryPromptMessage(userMemoryContext);
 
   const historyHits = getHistoryHits(groupId, history);

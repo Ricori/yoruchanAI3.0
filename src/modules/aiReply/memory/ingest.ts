@@ -7,6 +7,7 @@ import {
   getMemoryDb, getMeta, setMeta, type MemoryDatabase,
 } from './db';
 import { dictSignature, segment, stripSpeakerPrefix } from './segment';
+import { migrateLegacyUserMemory } from './migrate';
 
 /**
  * 把 data/memory/chat/*.txt 导进 chat_line + chat_fts。
@@ -201,6 +202,9 @@ export function ingestChatBackups(
 /** 启动时的全量导入，同步跑完再进主流程。失败不致命，检索空转而已 */
 export function ingestOnStartup() {
   try {
+    // 旧 JSON 档案先迁进来，不然认人和档案注入会当这些人不存在
+    migrateLegacyUserMemory();
+
     const t = Date.now();
     const { files, lines } = ingestChatBackups();
     if (lines > 0) {

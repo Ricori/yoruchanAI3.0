@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { printError, printLog } from '@/utils/print';
 import { CHAT_BACKUP_DIR, backupDateKey } from '../storage/message';
-import userMemoryStorage from '../storage/userMemory';
+import memoryStore from '../memory/store';
 import { stripSpeakerPrefix } from '../memory/segment';
 import { matchAlias, normalizeAlias, normalizeText } from './nameMatch';
 
@@ -92,7 +92,7 @@ class AliasIndex {
     const today = Number(backupDateKey());
     let added = 0;
 
-    userMemoryStorage.getManualAliases().forEach((aliases, userId) => {
+    memoryStore.getManualAliases().forEach((aliases, userId) => {
       const entry = this.byUser.get(userId);
       if (!entry) return;
       aliases.forEach((raw) => {

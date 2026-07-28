@@ -8,7 +8,7 @@ import { getRecordCode } from '@/utils/msgCode';
 import { getTTSAudio } from '@/service/tts';
 import { translateText } from '@/service/llm';
 import messageStorage from '../storage/message';
-import userMemoryStorage from '../storage/userMemory';
+import memoryExtractor from '../memory/extract';
 import aliasIndex from '../history/aliasIndex';
 import { formatMessage } from '../format';
 import { sendSegmentedReply } from '../replySender';
@@ -96,7 +96,7 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
       }
 
       // 群友记忆系统
-      userMemoryStorage.onMessage(userId, nickName, formattedMessage.message, formattedMessage.isMentionMe);
+      memoryExtractor.onMessage(groupId, userId, nickName, formattedMessage.message, formattedMessage.isMentionMe);
     }
 
     // 没有命中触发条件直接返回
