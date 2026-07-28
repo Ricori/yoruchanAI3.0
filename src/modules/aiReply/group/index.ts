@@ -4,12 +4,17 @@ import nnkbot from '@/core/nnkBot';
 import { BOT_NAME } from '@/constants';
 import { getReplyMsgId, hasReply } from '@/utils/function';
 import { printLog } from '@/utils/print';
+import { getRecordCode } from '@/utils/msgCode';
+import { getTTSAudio } from '@/service/tts';
+import { translateText } from '@/service/llm';
 import messageStorage from '../storage/message';
 import userMemoryStorage from '../storage/userMemory';
+import aliasIndex from '../history/aliasIndex';
 import { formatMessage } from '../format';
 import { sendSegmentedReply } from '../replySender';
 import { GroupReplyTrigger } from './trigger';
 import { generateGroupReply } from './generateReply';
+import { isVoiceEnabled } from './voiceState';
 
 class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
   readonly name = 'GroupAIReplyModule';
@@ -57,6 +62,10 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
     // 记录群对话记录
     messageStorage.addGroupChatConversations(groupId, formattedMessage);
 
+    // 昵称索引：改名当天就能认出新名字，不必等日志落盘或重启。
+    // 放在初回复判定之前，所有群都收，认人跟这个群会不会主动插话无关
+    aliasIndex.note(groupId, userId, nickName);
+
     //  -------- 固定回复逻辑 --------
     // 1. 匹配"要不要xxx"时随机回复"要"或"不要"
     if (/要不要/.test(formattedMessage.message)) {
@@ -69,6 +78,7 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
     // -------- AI 回复触发决策 --------
     let shouldReply = false; // 需要AI回复
     let isInitiativeReply = false; // 是否是主动插话
+    let initiativeChance: number | null = null; // 本次主动插话实际使用的概率
 
     if (formattedMessage.isMentionMe) {
       // 被提到了
@@ -78,9 +88,11 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
 
     // 主动插话的群
     if (nnkbot.config.aiReply.initiativeList.includes(groupId)) {
-      if (this.trigger.shouldInitiative(groupId, formattedMessage.message)) {
+      const chance = this.trigger.rollInitiative(groupId, formattedMessage.message);
+      if (chance !== null) {
         shouldReply = true;
         isInitiativeReply = true;
+        initiativeChance = chance;
       }
 
       // 群友记忆系统
@@ -97,39 +109,27 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
 
     const timer = setTimeout(() => {
       this.sessionTimers.set(groupId, null);
-      this.processReply(groupId, isInitiativeReply);
+      this.processReply(groupId, isInitiativeReply, initiativeChance);
     }, 3500);
     this.sessionTimers.set(groupId, timer);
   }
 
   /** 生成并发送 AI 回复（同一群同时只处理一次） */
-  private async processReply(groupId: number, isInitiativeReply = false) {
+  private async processReply(groupId: number, isInitiativeReply = false, initiativeChance: number | null = null) {
     if (this.processingLocks.has(groupId)) {
       return;
     }
     this.processingLocks.add(groupId);
 
     try {
-      const aiReplyText = await generateGroupReply(groupId, isInitiativeReply);
+      const aiReplyText = await generateGroupReply(groupId, isInitiativeReply, initiativeChance);
       printLog(`[GroupAIReplyModule] Auto reply to ${groupId}: ${aiReplyText}`);
 
       if (aiReplyText) {
-        /* 语音回复
-        if (Math.random() < 0.2) {
-          // 语音发送
-          const message = aiReplyText.replace(/\[表情:\s*(.*?)\]/g, '').replace('||', '').trim();
-          if (message) {
-            const jpText = await translateText(message, 'jp');
-            if (!jpText) return;
-            printLog(`[GroupAIReplyModule] Auto reply audio: ${jpText}`);
-            const base64 = await getTTSAudio(jpText);
-            if (base64) {
-              const recordCode = getRecordCode(base64);
-              nnkbot.sendGroupMsg(groupId, recordCode);
-            }
-          }
+        // 开启语音回复的群优先发语音，成功后不再发文字，避免同样内容重复出现
+        if (isVoiceEnabled(groupId) && await this.trySendVoice(groupId, aiReplyText)) {
+          return;
         }
-        */
 
         // 分段文字发送
         await sendSegmentedReply(aiReplyText, (msg) => nnkbot.sendGroupMsg(groupId, msg));
@@ -137,6 +137,26 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
     } finally {
       this.processingLocks.delete(groupId);
     }
+  }
+
+  /** 尝试把回复转成语音发送，任一环节失败都返回 false 由调用方回退到文字 */
+  private async trySendVoice(groupId: number, aiReplyText: string) {
+    // 去掉表情标签，分段符换成空格以免相邻两段粘连
+    const message = aiReplyText
+      .replace(/\[表情:\s*(.*?)\]/g, '')
+      .replace(/\|\|/g, ' ')
+      .trim();
+    if (!message) return false;
+
+    const jpText = await translateText(message, 'jp');
+    if (!jpText) return false;
+
+    printLog(`[GroupAIReplyModule] Auto reply audio: ${jpText}`);
+    const base64 = await getTTSAudio(jpText);
+    if (!base64) return false;
+
+    nnkbot.sendGroupMsg(groupId, getRecordCode(base64));
+    return true;
   }
 }
 

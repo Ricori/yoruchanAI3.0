@@ -5,7 +5,7 @@ import axios from 'axios';
 
 export async function getTTSAudio(text: string) {
   const nnkServiceConfig = botConfig.nonokaService;
-  const authorization = `Bearer ${nnkServiceConfig.apiKey}${nnkServiceConfig.apiKey}${nnkServiceConfig.apiKey}${nnkServiceConfig.apiKey}`;
+  const authorization = `Bearer ${nnkServiceConfig.apiKey}`;
 
   const url = `${nnkServiceConfig.baseUrl}/v1/audio/speech`;
 
@@ -19,6 +19,7 @@ export async function getTTSAudio(text: string) {
           'Content-Type': 'application/json',
         },
         responseType: 'arraybuffer',
+        timeout: 60000,
       },
     );
     const base64Audio = Buffer.from(response.data).toString('base64');

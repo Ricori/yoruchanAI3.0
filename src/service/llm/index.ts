@@ -7,7 +7,7 @@ import type { FormattedMessage } from '@/types/message';
  * LLM 这里只负责把请求转发给 nonoka API 服务
  */
 
-// claude 失败会在服务端回退 kimi 并可能去图重试，留足余量
+// 服务端 claude 单次 35s，超时会重试一次，最坏 70s，留足余量
 const REPLY_TIMEOUT = 90000;
 const COMMON_TIMEOUT = 50000;
 
@@ -16,14 +16,18 @@ function getServiceUrl(path: string) {
   return `${baseUrl}${path}?apikey=${apiKey}`;
 }
 
-export async function getLLMReply(formattedMessage: FormattedMessage[]): Promise<string | null> {
+/** context 为当前群聊环境描述，服务端会作为 system 附加段落注入 */
+export async function getLLMReply(
+  formattedMessage: FormattedMessage[],
+  context?: string,
+): Promise<string | null> {
   const messages = formattedMessage.map(({
     role, message, imgUrl, cacheControl,
   }) => ({
     role, message, imgUrl, cacheControl,
   }));
 
-  const ret = await Axios.post(getServiceUrl('/llm/reply'), { messages }, {
+  const ret = await Axios.post(getServiceUrl('/llm/reply'), { messages, context }, {
     timeout: REPLY_TIMEOUT,
   }).catch((e) => {
     printError(`[LLM reply error] ${e.message}`);
@@ -33,12 +37,14 @@ export async function getLLMReply(formattedMessage: FormattedMessage[]): Promise
   return ret?.data?.text ?? null;
 }
 
-/** 将用户近期消息归纳为不超过 6 条核心特征短句 */
+/**
+ * 将用户近期消息归纳为不超过 6 条核心特征短句
+ */
 export async function summarizeUserTraits(
   nickName: string,
   messages: string[],
   existingTraits: string[],
-): Promise<string[]> {
+): Promise<string[] | null> {
   const ret = await Axios.post(getServiceUrl('/llm/summarize'), {
     nickName, messages, existingTraits,
   }, {
@@ -47,6 +53,8 @@ export async function summarizeUserTraits(
     printError(`[LLM summarize error] ${e.message}`);
     return null;
   });
+
+  if (!ret) return null;
 
   const traits = ret?.data?.traits;
   if (Array.isArray(traits) && traits.length > 0) {

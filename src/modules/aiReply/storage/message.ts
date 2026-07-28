@@ -3,8 +3,32 @@ import path from 'path';
 import type { FormattedMessage } from '@/types/message';
 import { printError } from '@/utils/print';
 
-const MAX_CHAT_HISTORY_COUNT = 10;
-const CHAT_BACKUP_DIR = path.resolve('data/memory/chat');
+const MAX_CHAT_HISTORY_COUNT = 30;
+
+export const CHAT_BACKUP_DIR = path.resolve('data/memory/chat');
+
+/**
+ * 备份文件名里的日期串 yyyymmdd。检索模块要按文件名倒推日期，
+ * 跟写入侧共用这个函数，免得两边算法飘掉（注意取的是 UTC 日期）
+ */
+export function backupDateKey(date = new Date()): string {
+  return date.toISOString().slice(0, 10).replace(/-/g, '');
+}
+
+/**
+ * bot 自己的发言在备份日志里额外标注触发方式、旧账注入条数与点名注入条数：
+ * `[0][主动 0.12]内容`、`[0][被动][旧账 2][点名 1]内容`。
+ * 供离线统计区分主动插话与被 @ 应答，以及核对旧账/点名的注入频率
+ */
+function backupTriggerMark(msg: FormattedMessage): string {
+  const marks: string[] = [];
+  if (msg.initiative !== undefined) {
+    marks.push(msg.initiative ? `[主动 ${msg.chance ?? 0}]` : '[被动]');
+  }
+  if (msg.historyHits) marks.push(`[旧账 ${msg.historyHits}]`);
+  if (msg.mentionHits) marks.push(`[点名 ${msg.mentionHits}]`);
+  return marks.join('');
+}
 
 class MessageStorage {
   /** 私聊消息对话记录 (key: qq) */
@@ -25,9 +49,8 @@ class MessageStorage {
     this.groupUnbackedCount.set(groupId, 0);
 
     try {
-      const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-      const file = path.join(CHAT_BACKUP_DIR, `${groupId}_${date}.txt`);
-      const lines = `${newMessages.map((m) => `[${m.userId}]${m.message}`).join('\n')}\n`;
+      const file = path.join(CHAT_BACKUP_DIR, `${groupId}_${backupDateKey()}.txt`);
+      const lines = `${newMessages.map((m) => `[${m.userId}]${backupTriggerMark(m)}${m.message}`).join('\n')}\n`;
       await fs.promises.appendFile(file, lines, 'utf-8');
     } catch (e) {
       // 写入失败则把这批消息计回待备份数量，下次备份时重试
@@ -47,14 +70,14 @@ class MessageStorage {
     }
     const history = store.get(key)!;
 
-    // 第10条消息标记 Cache
-    if (history.length === 9) {
+    // 第20条消息标记 Cache（窗口 30，断点放在中段，后 10 条留给增量）
+    if (history.length === 19) {
       history.push({ ...msg, cacheControl: true });
     } else {
       history.push(msg);
     }
 
-    // 每累计20条备份一次群聊记录
+    // 触到裁剪阈值就备份一次群聊记录：首轮攒满 40 条，之后每裁剪回 30 条再攒 10 条触发一次
     if (store === this.groupChatConversations) {
       this.groupUnbackedCount.set(key, (this.groupUnbackedCount.get(key) ?? 0) + 1);
       if (history.length === MAX_CHAT_HISTORY_COUNT + 10) {

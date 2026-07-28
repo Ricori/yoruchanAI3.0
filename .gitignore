@@ -10,8 +10,8 @@ config.json
 config_github.json
 
 # Test
-test/*
-!test/index.ts
+test/ai.ts
+test/forward.ts
 
 # Logs
 logs
