@@ -2,9 +2,24 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { createMemoryDb, getMeta, setMeta, MemoryDatabase } from '@/modules/aiReply/memory/db';
+import {
+  dictSignature, queryTerms, segment, stripSpeakerPrefix,
+} from '@/modules/aiReply/memory/segment';
+import { ingestChatBackups, parseBackupLine } from '@/modules/aiReply/memory/ingest';
+import {
+  blobToVec, deleteEmbeddings, getVectorDim, normalize, saveEmbedding, saveEmbeddings, searchSimilar, vecToBlob,
+} from '@/modules/aiReply/memory/vector';
+import {
+  buildTermQueries, recallChat, recallMemory, rrfFuse,
+} from '@/modules/aiReply/memory/retrieve';
+import { CHAT_BACKUP_DIR, backupDateKey } from '@/modules/aiReply/storage/message';
 
 /** 临时库跑完就删，不碰 data/memory 下的真实库 */
 const TEST_DB = path.join(os.tmpdir(), `nonoka_test_${process.pid}.db`);
+
+/** 用一个绝不会撞上真实群的号来造样本，跑完就删 */
+const FAKE_GROUP = 88888888;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 let failed = 0;
 
@@ -24,6 +39,15 @@ function withDb(fn: (db: MemoryDatabase) => void) {
   const db = createMemoryDb(TEST_DB);
   try {
     fn(db);
+  } finally {
+    db.close();
+  }
+}
+
+async function withDbAsync(fn: (db: MemoryDatabase) => Promise<void>) {
+  const db = createMemoryDb(TEST_DB);
+  try {
+    await fn(db);
   } finally {
     db.close();
   }
@@ -80,18 +104,272 @@ function testFts() {
     db.prepare('DELETE FROM chat_fts WHERE rowid = ?').run(1);
     const after = db.prepare('SELECT count(*) AS n FROM chat_fts WHERE chat_fts MATCH ?').get('"拉面"') as { n: number };
     check('删除能摘掉索引行', after.n, 0);
+
+    // 这里手填的 rowid 会和后面导入测试的 chat_line.id 撞上，清干净再走
+    db.exec('DELETE FROM chat_fts');
   });
 }
 
-export function testMemory() {
+function testSegment() {
+  console.log('\n[分词]');
+  check('剥掉说话人前缀', stripSpeakerPrefix('[雨漫]说：我周末要去爬山'), '我周末要去爬山');
+  check('剥掉被截断的引文前缀', stripSpeakerPrefix('[雨漫]回复了我的消息(上次那个'), '回复了我的消息(上次那个');
+
+  check('中文按词切开', segment('我周末要去爬山'), '我 周末 要 去 爬山');
+  check('标点和空白不进索引', segment('在跑 Docker，和 K8S！'), '在 跑 Docker 和 K8S');
+
+  console.log('\n[自定义词典]');
+  check('默认词典缺的词补上后不再被切成单字', [segment('手办'), segment('小雏')], ['手办', '小雏']);
+  check('补进去的词能进检索词，不再被最小长度滤掉', queryTerms('上次说的那个手办'), ['手办', '上次']);
+  check('还没补的词照样被切开', segment('天妇罗'), '天 妇 罗');
+  check('指纹稳定', dictSignature(), dictSignature());
+
+  console.log('\n[检索词]');
+  check('虚词全滤掉', queryTerms('[某人]说：是不是啊'), []);
+  check('占位符没有检索价值', queryTerms('[雨漫]回复了我的消息([之前的图片])，说：[图片]'), []);
+  check('bot 自己的名字不算检索词', queryTerms('[雨漫]提到我说：乃乃香你吃拉面吗'), ['拉面']);
+  check('英文保留、两字母词滤掉', queryTerms('[某人]说：在跑 Docker 和 K8S'), ['Docker', 'K8S']);
+  check(
+    '按稀有度排序而不是长度：更短的「手办」排在更长的「秋叶原」前面',
+    queryTerms('[某人]说：明天去秋叶原买手办然后吃拉面看电影', 3),
+    ['手办', '秋叶原', '拉面'],
+  );
+}
+
+function fixtureFile(daysAgo: number) {
+  const key = backupDateKey(new Date(Date.now() - daysAgo * DAY_MS));
+  return path.join(CHAT_BACKUP_DIR, `${FAKE_GROUP}_${key}.txt`);
+}
+
+/** 20 天前那条是「拉面」的强命中，用来验证相关性能压过时间近度 */
+const DAY_20 = '[111][雨漫]说：一兰拉面真的好吃\n[333][路人]说：天妇罗也不错\n';
+const DAY_3 = '[111][雨漫]说：我周末要去爬山\n[0][主动 0.12]爬山啊，注意别摔了\n[222][hina]说：爬山好累\n';
+const DAY_1 = '[111][雨漫]说：昨天在秋叶原买了手办\n[222][hina]说：这家店好吃\n';
+/** 追加验证增量导入：同一个文件后来又长出两行 */
+const DAY_1_MORE = '[222][hina]说：我也想去秋叶原\n[0][被动][旧账 2][点名 1]秋叶原确实好逛\n';
+
+function testParse() {
+  console.log('\n[行解析]');
+  check('群友行留前缀、单独取昵称', parseBackupLine('[111][雨漫]说：我周末要去爬山'), {
+    userId: 111, nick: '雨漫', text: '[雨漫]说：我周末要去爬山', body: '我周末要去爬山',
+  });
+  check('bot 行剥掉触发标记', parseBackupLine('[0][被动][旧账 2][点名 1]秋叶原确实好逛'), {
+    userId: 0, nick: null, text: '秋叶原确实好逛', body: '秋叶原确实好逛',
+  });
+  check('空行和杂行跳过', [parseBackupLine(''), parseBackupLine('随便一行')], [null, null]);
+}
+
+function testIngest() {
+  console.log('\n[导入]');
+  fs.writeFileSync(fixtureFile(20), DAY_20, 'utf-8');
+  fs.writeFileSync(fixtureFile(3), DAY_3, 'utf-8');
+  fs.writeFileSync(fixtureFile(1), DAY_1, 'utf-8');
+
+  withDb((db) => {
+    const first = ingestChatBackups(db, [FAKE_GROUP]);
+    check('三个文件共 7 行', [first.files, first.lines], [3, 7]);
+
+    const count = () => (db.prepare('SELECT count(*) AS n FROM chat_line WHERE group_id = ?').get(FAKE_GROUP) as { n: number }).n;
+    check('chat_line 行数与备份行数一致', count(), 7);
+    check('chat_fts 同步写入', (db.prepare('SELECT count(*) AS n FROM chat_fts').get() as { n: number }).n, 7);
+
+    const again = ingestChatBackups(db, [FAKE_GROUP]);
+    check('重复跑不写重', [again.lines, count()], [0, 7]);
+
+    fs.appendFileSync(fixtureFile(1), DAY_1_MORE, 'utf-8');
+    const inc = ingestChatBackups(db, [FAKE_GROUP]);
+    check('增量只处理新增行', [inc.files, inc.lines, count()], [1, 2, 9]);
+
+    const row = db.prepare('SELECT user_id, nick, text FROM chat_line WHERE group_id = ? AND user_id = 0 ORDER BY id').get(FAKE_GROUP) as any;
+    check('bot 行入库时标记已剥掉', [row.user_id, row.nick, row.text], [0, null, '爬山啊，注意别摔了']);
+
+    const hits = db.prepare(
+      'SELECT c.user_id FROM chat_fts f JOIN chat_line c ON c.id = f.rowid WHERE f.chat_fts MATCH ? AND c.group_id = ? ORDER BY c.id',
+    ).all('"秋叶原"', FAKE_GROUP) as { user_id: number }[];
+    check('中文词能召回，rowid 与 chat_line 对齐', hits.map((h) => h.user_id), [111, 222, 0]);
+
+    const nick = db.prepare(
+      'SELECT count(*) AS n FROM chat_fts f JOIN chat_line c ON c.id = f.rowid WHERE f.chat_fts MATCH ? AND c.group_id = ?',
+    ).get('"雨漫"', FAKE_GROUP) as { n: number };
+    check('说话人昵称不进索引，否则每条都命中自己', nick.n, 0);
+
+    // 「天妇罗」不在词典里，索引侧被切成「天 妇 罗」；
+    // 查询串不过一遍同样的分词就命不中，建 MATCH 语句时必须走 segment()
+    const match = db.prepare('SELECT count(*) AS n FROM chat_fts WHERE chat_fts MATCH ?');
+    check('查询串不分词就召不回词典外的词', (match.get('"天妇罗"') as { n: number }).n, 0);
+    check('查询串同样分词后能召回', (match.get(`"${segment('天妇罗')}"`) as { n: number }).n, 1);
+
+    // 词典一改，同一句话的切法就变了，旧索引必须整表重建，否则查询侧永远对不上
+    db.prepare('DELETE FROM chat_fts WHERE rowid <= 3').run();
+    setMeta(db, 'segment_dict', '被改脏了');
+    ingestChatBackups(db, [FAKE_GROUP]);
+    check('词典指纹变了会重建全文索引', (db.prepare('SELECT count(*) AS n FROM chat_fts').get() as { n: number }).n, 9);
+  });
+}
+
+function testVector() {
+  console.log('\n[向量]');
+  withDb((db) => {
+    const round = (v: Float32Array) => [...v].map((x) => Number(x.toFixed(4)));
+    check('归一化成单位向量', round(normalize([3, 4, 0])), [0.6, 0.8, 0]);
+    check('零向量不炸', round(normalize([0, 0, 0])), [0, 0, 0]);
+    check('BLOB 往返不丢精度', round(blobToVec(vecToBlob(normalize([1, 2, 3])))), round(normalize([1, 2, 3])));
+
+    saveEmbeddings(db, 'topic', [
+      { refId: 1, vec: [1, 0, 0] },
+      { refId: 2, vec: [0.9, 0.44, 0] },
+      { refId: 3, vec: [0, 1, 0] },
+    ]);
+    check('维度写进 meta', getVectorDim(db), 3);
+
+    const hits = searchSimilar(db, 'topic', [1, 0, 0], 3);
+    check('按余弦降序', hits.map((h) => h.refId), [1, 2, 3]);
+    check('同向的相似度为 1', Number(hits[0].score.toFixed(4)), 1);
+
+    check('allowIds 能收窄范围', searchSimilar(db, 'topic', [1, 0, 0], 3, new Set([3])).map((h) => h.refId), [3]);
+    check('维度对不上直接拒绝', saveEmbeddings(db, 'topic', [{ refId: 9, vec: [1, 0] }]), 0);
+
+    saveEmbedding(db, 'topic', 1, [0, 0, 1]);
+    check('覆盖写立刻生效（缓存已失效）', searchSimilar(db, 'topic', [1, 0, 0], 1).map((h) => h.refId), [2]);
+    deleteEmbeddings(db, 'topic', [1, 2, 3]);
+    check('删干净', searchSimilar(db, 'topic', [1, 0, 0], 5).length, 0);
+  });
+}
+
+function testRrf() {
+  console.log('\n[RRF 融合]');
+  const scores = rrfFuse([{ ids: [1, 2, 3] }, { ids: [3, 4] }]);
+  check('两路都召回的排最前', [...scores.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]), [3, 1, 2, 4]);
+  check('名次相同则得分相同', scores.get(2), scores.get(4));
+
+  const weighted = rrfFuse([{ ids: [1], weight: 0.6 }, { ids: [2], weight: 0.4 }]);
+  check('权重高的那一路的第一名压过权重低的第一名', weighted.get(1)! > weighted.get(2)!, true);
+}
+
+/** 造一条记忆并同步写 memory_fts */
+function addMemory(db: MemoryDatabase, m: {
+  ownerId: number, text: string, groupId?: number | null, kind?: string, superseded?: number,
+}): number {
+  const now = Date.now();
+  const info = db.prepare(`
+    INSERT INTO memory (scope, owner_id, group_id, kind, text, first_seen, last_seen, confidence, superseded_by, updated_at)
+    VALUES ('user', ?, ?, ?, ?, ?, ?, 0.6, ?, ?)
+  `).run(m.ownerId, m.groupId ?? FAKE_GROUP, m.kind ?? 'trait', m.text, now, now, m.superseded ?? null, now);
+
+  const id = Number(info.lastInsertRowid);
+  db.prepare('INSERT INTO memory_fts (rowid, seg) VALUES (?, ?)').run(id, segment(m.text));
+  return id;
+}
+
+async function testRecall() {
+  console.log('\n[检索词拆成多路]');
+  const ramen = buildTermQueries('拉面好吃吗');
+  check('一个检索词一路', ramen.map((q) => q.match), ['"拉面"', '"好吃"']);
+  check('稀有的那个权重更高', ramen[0].weight > ramen[1].weight, true);
+  check('权重加起来是 1', Number(ramen.reduce((s, q) => s + q.weight, 0).toFixed(6)), 1);
+  check('词典外的词退回整句词组', buildTermQueries('天妇罗'), [{ match: '"天 妇 罗"', weight: 1 }]);
+  check('引号转义，不会拼出坏语法', buildTermQueries('他说"拉面"好吃').map((q) => q.match), ['"拉面"', '"好吃"']);
+
+  await withDbAsync(async (db) => {
+    console.log('\n[聊天召回]');
+    const texts = (hits: { text: string }[]) => hits.map((h) => h.text);
+
+    const byRelevance = await recallChat(FAKE_GROUP, { query: '拉面好吃吗', days: 30, semantic: false }, db);
+    check(
+      '20 天前的强命中排在昨天弱命中的前面（旧实现里正好相反）',
+      texts(byRelevance),
+      ['[雨漫]说：一兰拉面真的好吃', '[hina]说：这家店好吃'],
+    );
+
+    const windowed = await recallChat(FAKE_GROUP, { query: '拉面好吃吗', days: 14, semantic: false }, db);
+    check('窗口外的召不回来', texts(windowed), ['[hina]说：这家店好吃']);
+
+    const akiba = await recallChat(FAKE_GROUP, { query: '秋叶原', days: 30, semantic: false }, db);
+    check('bot 自己的发言不算旧账', akiba.map((h) => h.userId).includes(0), false);
+    check('同一话题里多个人的发言都能召回', akiba.map((h) => h.userId).sort(), [111, 222]);
+
+    const plain = await recallChat(FAKE_GROUP, { query: '爬山累不累', days: 30, semantic: false }, db);
+    const boosted = await recallChat(FAKE_GROUP, {
+      query: '爬山累不累', speakerIds: [222], days: 30, semantic: false,
+    }, db);
+    check('不指定说话人时两个人都在', plain.map((h) => h.userId).sort(), [111, 222]);
+    check('指定说话人后他排到最前', boosted[0].userId, 222);
+    check('但只是加权，别人说的照样在候选里', boosted.map((h) => h.userId).sort(), [111, 222]);
+
+    console.log('\n[语义召回]');
+    // 3 天前那段爬山对话（含 bot 那行）切成一个话题，给它一个向量
+    const lines = db.prepare(
+      "SELECT min(id) AS a, max(id) AS b FROM chat_line WHERE group_id = ? AND text LIKE '%爬山%'",
+    ).get(FAKE_GROUP) as { a: number, b: number };
+    db.prepare(
+      "INSERT INTO topic (id, group_id, date_key, summary, user_ids, line_from, line_to) VALUES (1, ?, ?, '周末爬山', '[111,222]', ?, ?)",
+    ).run(FAKE_GROUP, Number(backupDateKey(new Date(Date.now() - 3 * DAY_MS))), lines.a, lines.b);
+    saveEmbeddings(db, 'topic', [{ refId: 1, vec: [1, 0, 0] }]);
+
+    const literalOnly = await recallChat(FAKE_GROUP, { query: '登山运动', days: 30, semantic: false }, db);
+    check('字面检索对同义词无能为力', literalOnly.length, 0);
+
+    const semantic = await recallChat(FAKE_GROUP, {
+      query: '登山运动', queryVec: Float32Array.from([1, 0, 0]), days: 30,
+    }, db);
+    check('话题向量命中后展开成原文，一个字都没重合也召回了', texts(semantic), [
+      '[雨漫]说：我周末要去爬山', '[hina]说：爬山好累',
+    ]);
+    check('展开时同样排除 bot 的发言', semantic.map((h) => h.userId).includes(0), false);
+
+    // 余弦只排序不判断有无：没有下限的话，全库最不相关的那条也会以 rank 1 进融合
+    const unrelated = await recallChat(FAKE_GROUP, {
+      query: '登山运动', queryVec: Float32Array.from([0.2, 0.98, 0]), days: 30,
+    }, db);
+    check('相似度低于下限就不算召回', unrelated.length, 0);
+
+    // 话题展开会把整段对话都带出来，其中只发了表情/图片的行不该占注入名额
+    db.prepare("INSERT INTO chat_line (group_id, user_id, date_key, seq, nick, text) VALUES (?, 222, 20260101, 99, 'hina', '[hina]说：[表情]')").run(FAKE_GROUP);
+    const noise = db.prepare('SELECT last_insert_rowid() AS id').get() as { id: number };
+    db.prepare('INSERT INTO chat_fts (rowid, seg) VALUES (?, ?)').run(noise.id, segment('爬山'));
+    const filtered = await recallChat(FAKE_GROUP, { query: '爬山累不累', days: 3650, semantic: false }, db);
+    check('只发了表情的行不进结果', filtered.map((h) => h.id).includes(noise.id), false);
+
+    console.log('\n[记忆召回]');
+    const alive = addMemory(db, { ownerId: 111, text: '在读研究生，专业是计算机' });
+    addMemory(db, { ownerId: 111, text: '以前说过喜欢吃拉面', superseded: -1 });
+    addMemory(db, { ownerId: 222, text: '也在读研究生' });
+    addMemory(db, { ownerId: 333, text: '别的群的研究生', groupId: 99999999 });
+
+    const all = await recallMemory(FAKE_GROUP, { query: '研究生', semantic: false }, db);
+    check('软删的条目不可见', all.map((h) => h.id).includes(alive + 1), false);
+    check('别的群的记忆不串台', all.map((h) => h.ownerId).sort(), [111, 222]);
+
+    const about = await recallMemory(FAKE_GROUP, { query: '研究生', aboutUserIds: [111], semantic: false }, db);
+    check('问某个人就只翻他的档案（硬过滤）', about.map((h) => h.ownerId), [111]);
+    check('翻出来的是没被软删的那条', texts(about), ['在读研究生，专业是计算机']);
+  });
+}
+
+export async function testMemory() {
+  const fixtures = [fixtureFile(20), fixtureFile(3), fixtureFile(1)];
+  const existing = fixtures.filter((f) => fs.existsSync(f));
+  if (existing.length > 0) {
+    console.error(`样本文件已存在，先手动清理再跑：\n${existing.join('\n')}`);
+    return;
+  }
+
   try {
     testSchema();
     testIdempotent();
     testFts();
+    testSegment();
+    testParse();
+    fs.mkdirSync(CHAT_BACKUP_DIR, { recursive: true });
+    testIngest();
+    testVector();
+    testRrf();
+    await testRecall();
     console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项未通过`);
   } finally {
+    fixtures.forEach((f) => fs.rmSync(f, { force: true }));
     ['', '-wal', '-shm'].forEach((suffix) => fs.rmSync(`${TEST_DB}${suffix}`, { force: true }));
   }
 }
 
-testMemory();
+await testMemory();

@@ -192,6 +192,19 @@ CREATE TABLE embedding (
 - **全量 ingest 可以阻塞启动**,跑完再进主流程
 - **验收**:`chat_line` 行数与备份文件总行数一致;`chat_fts` 能 MATCH 到中文词
 
+**`memory/userDict.ts` —— 自定义词典(必需,不是可选项)**
+
+jieba 默认词典缺很多词,缺的后果是**用户问的东西被静默丢掉**:「手办」被切成「手 办」,两个单字都短于检索词最小长度、进不了候选,于是查「上次说的那个手办」实际只拿「上次」去检索,召回一堆「我上次下车了」。
+
+初始清单是从 19 万行真实日志挖出来的(统计被切成单字却频繁相邻的字串),主要是三类:群友名字(`小雏` 出现 1857 次)、游戏与 ACG 词(`原神`/`舞萌`/`打轴`)、群内梗(`咩哇抛瓦`)。补上之后同一个问题召回的是真正在聊手办的记录。
+
+两个必须守住的点:
+
+- **词典变更必须触发全文索引重建。** 索引侧和查询侧必须用同一套分词,否则改完词典老数据就再也召不回。`segment.ts` 导出词典指纹,`ingest.ts` 比对 `meta.segment_dict`,不一致就按 `chat_line`/`memory` 现有数据重建两张 FTS 表。19 万行重建实测 2.9s。
+- **重建时不能用 `iterate()`。** better-sqlite3 在游标没关的时候不许对同一个连接写入,必须按 id 分批 `all()`。
+
+jieba 已经认识的词会被自动跳过,不用担心加重复了反而把它原有的词频改低。
+
 ### P2 — 混合检索
 
 - `memory/vector.ts`:embedding 存取(Float32Array ↔ BLOB)+ 暴力余弦 top-K
@@ -202,12 +215,37 @@ recallMemory(groupId, { query, aboutUserIds?, limit })
 recallChat  (groupId, { query, speakerIds?, days?, limit })
 ```
 
-两路召回 + RRF 融合(`score = Σ 1/(60 + rank)`,不需要调权重):
-  - 字面:jieba 分词 → FTS5 MATCH → `bm25()` 排序 → top 30
-  - 语义:`/llm/embed` 向量化 query → 与 `embedding` 表余弦 → top 30(topic 命中展开成 `chat_line` 区间)
+多路召回 + RRF 融合(`score = Σ weight/(60 + rank)`):
+  - 字面:**一个检索词一路**,各自 FTS5 MATCH → `bm25()` 排序 → top 30
+  - 语义:`/llm/embed` 向量化 query → 与 `embedding` 表余弦 → top 30(topic 命中展开成 `chat_line` 区间,一个话题最多展开 8 行)
 
   融合后过滤:同群约束、`superseded_by IS NULL`、时间窗口。
   **`speakerIds` 改为加权而非硬过滤** —— 别人说过的相关内容也能进候选,注入时标明是谁说的。这条直接修掉「只查最后一个说话人」的窄口子。
+  `aboutUserIds` 相反,是硬过滤:问某个人就只翻他的档案,混进别人的是噪音。
+
+**实施时踩到的三条,写死在代码里别再改回去:**
+
+1. **查询串必须过一遍 `segment()` 再包成双引号词组。** 索引侧存的是分词后的 seg,查询侧不分词就对不上:实测 `MATCH '"手办"'` 命中 0 行,`MATCH '"手 办"'` 命中 24 行。不加引号则空格被当成 AND,会召回「手」和「办」分别出现在任意位置的行。
+
+2. **join 必须写成 `chat_fts f CROSS JOIN chat_line c ON c.id = f.rowid`。** 用普通 JOIN 时 SQLite 会挑 `chat_line` 走 `idx_chat_group_date` 当外层,再对每一行重跑一次 MATCH —— 6 万行的群实测 **3673ms**;`CROSS JOIN` 强制 FTS 当外层、内层走主键回表,同一条查询 **2ms**。`memory_fts` 同理。
+
+3. **不要把所有检索词 OR 进一条 MATCH。** BM25 的长度归一会让「好吃好吃」这种两个 token 的行拿到极高分,常见词于是盖过稀有词 —— 查「拉面好吃吗」召回的全是「好吃」。改成一词一路、权重取该词的 TF-IDF(归一化到和为 1)再融合,排序维度才真的是稀有度。实测「最近在玩什么游戏」由此从混着「宜宾最近」「最近有点不顺」变成清一色的游戏话题。
+
+4. **语义那一路必须有相似度下限**(`MIN_SIMILARITY`)。余弦只排序不判断有无:没有下限时,哪怕全库话题都跟问题无关,最不相关的那个也会以 rank 1 进入融合,反过来压掉真正的字面命中 —— 实测查「大家在聊什么游戏」召回了一串「好困」。阈值跟 embedding 模型强绑定,换模型必须重新量:`qwen3.7-text-embedding` 上该命中的最低 0.446、该落空的最高 0.394,中间有空档;同一组样本换 `text-embedding-v4` 是 0.409 对 0.409,**根本切不开**。
+
+5. **话题展开出来的行要过一遍内容过滤**。一段对话里夹着大量只发 `[表情]`、`[图片]`、`？` 的行,展开时会一并带出来白占注入名额。
+
+### 语义召回目前的边界
+
+已经能做到字面检索做不到的事(实测,零字面重合):
+
+| 问法 | 召回 |
+|---|---|
+| 有人跟朋友闹掰了吗 | `[- Randy_Dust HQ-]说：和一个几年的老朋友爆了` |
+| 谁早上起不来 | `[丈育小雏]说：小雏不想起床怎么办` |
+| 显卡多少钱 | 语义路正确地一条都不给(全在下限之下),结果等同纯字面 |
+
+但**话题层面的误命中还没解决**:「大家在聊什么游戏」仍会命中「好困」那个话题。话题概括都是「谁和谁在聊什么」的同一种腔调,这层共性把基线相似度整体抬高了。可能的解法是对话题向量做去均值消掉共性,但要等 P6 攒出全量话题再校准 —— 现在只有一天的 10 个话题,拿这个调参就是过拟合。
 
 - **验收**:`test/memory.ts` 里「相关话题能召回」的用例通过(见第八节)
 
@@ -278,14 +316,24 @@ recall_chat   { query: string, speaker?: string, days?: number }
 
 bot 这边按这四个契约写客户端,服务端同步实现:
 
-| 端点 | 输入 | 输出 |
-|---|---|---|
-| `POST /llm/embed` | `{ texts: string[] }` | `{ vectors: number[][] }` |
-| `POST /llm/memory/extract` | `{ nickName, messages, existing: [{id, kind, text, pinned}] }` | `{ ops: [{op:'ADD'\|'UPDATE'\|'DELETE'\|'NOOP', id?, kind, text, confidence}] }` |
-| `POST /llm/topic` | `{ lines: [{id, userId, text}] }` | `{ topics: [{summary, userIds, lineFrom, lineTo}] }` |
-| `POST /llm/reply`(扩展) | 原参数 + `tools`, `toolResults` | `{ text }` 或 `{ stopReason:'tool_use', toolUse:[{id, name, input}] }` |
+仓库在 `D:\Development\nonoka-service-cf`(Hono + Cloudflare Worker)。前三个**已实现并本地验证**,`/llm/reply` 的 tools 扩展留到 P4。
 
-向量维度不写死,从返回值推断并存进 `meta`,换模型时校验维度一致性。
+| 端点 | 输入 | 输出 | 状态 |
+|---|---|---|---|
+| `POST /llm/embed` | `{ texts: string[] }` | `{ vectors: number[][] }` | ✅ |
+| `POST /llm/memory/extract` | `{ nickName, messages, existing: [{id, kind, text, pinned}] }` | `{ ops: [{op:'ADD'\|'UPDATE'\|'DELETE', id?, kind, text, confidence}] }` | ✅ |
+| `POST /llm/topic` | `{ lines: [{id, userId, text}] }` | `{ topics: [{summary, userIds, lineFrom, lineTo}] }` | ✅ |
+| `POST /llm/reply`(扩展) | 原参数 + `tools`, `toolResults` | `{ text }` 或 `{ stopReason:'tool_use', toolUse:[{id, name, input}] }` | P4 |
+
+向量维度不写死,从返回值推断并存进 `meta`,换模型时校验维度一致性(`vector.ts` 已做)。
+
+**调用方必须知道的三条上限:**
+
+1. **`/llm/embed` 单次最多 200 条**。上游 DashScope 兼容接口一次只收 10 条,服务端按 10 切批并发再拼回原序;超过 200 条会占掉太多 Worker 子请求配额,直接 400。任一批失败整体返回 502 —— 不能只返回成功的部分,调用方是按下标把向量对回记忆条目的,缺一条就全错位。
+2. **`/llm/topic` 单次最多 100 行**。实测 150 行要 19~53s、波动极大并撞过 60s 超时,所以 P6 必须把一天的日志切成 ≤100 行的段分别请求(超时已放宽到 90s)。
+3. **`extract` / `topic` 失败返回 502 而不是空结果**。空数组的语义是「确实没有变化」,和「调用失败」必须分开,否则 P3 的失败回填逻辑会把没总结成功的消息当成已处理丢掉。
+
+服务端已对 `ops` 和 `topics` 做过一轮清洗:未知 `kind` 退成 `trait`、缺 id 的 UPDATE/DELETE 丢弃、行号越界或倒置的话题丢弃。但 **pinned 保护仍必须在 bot 端强制执行**(第四节决策 4),prompt 里的约束只是第一道。
 
 ---
 

@@ -3,8 +3,8 @@ import path from 'path';
 import { printError, printLog } from '@/utils/print';
 import { CHAT_BACKUP_DIR, backupDateKey } from '../storage/message';
 import userMemoryStorage from '../storage/userMemory';
+import { stripSpeakerPrefix } from '../memory/segment';
 import { matchAlias, normalizeAlias, normalizeText } from './nameMatch';
-import { stripSpeakerPrefix } from './keywords';
 
 /**
  * 昵称索引：userId -> 这个人用过的全部名字。

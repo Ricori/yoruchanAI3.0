@@ -63,6 +63,23 @@ export async function summarizeUserTraits(
   return existingTraits;
 }
 
+/**
+ * 文本向量化。维度不写死，由调用方从返回值推断
+ */
+export async function embedTexts(texts: string[]): Promise<number[][] | null> {
+  if (texts.length === 0) return [];
+
+  const ret = await Axios.post(getServiceUrl('/llm/embed'), { texts }, {
+    timeout: COMMON_TIMEOUT,
+  }).catch((e) => {
+    printError(`[LLM embed error] ${e.message}`);
+    return null;
+  });
+
+  const vectors = ret?.data?.vectors;
+  return Array.isArray(vectors) && vectors.length === texts.length ? vectors : null;
+}
+
 /** 调用LLM翻译 */
 export async function translateText(text: string, lang = 'cn'): Promise<string | null> {
   const ret = await Axios.post(getServiceUrl('/llm/translate'), { text, lang }, {

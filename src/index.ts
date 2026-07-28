@@ -15,6 +15,7 @@ import GroupAIReplyModule from '@/modules/aiReply/group';
 import RepeaterModule from '@/modules/group/repeater';
 import LocalPictureModule from '@/modules/group/localPic';
 import GroupCommandModule from '@/modules/group/command';
+import { ingestOnStartup } from '@/modules/aiReply/memory/ingest';
 
 // 加载模块
 nnkbot.loadModules([
@@ -47,6 +48,9 @@ nnkSchedule.loadJob([
   TwitterPushJob,
   YtLivePushJob,
 ]);
+
+// 聊天备份导入记忆检索索引，跑完再接消息，避免刚启动时检索空转
+ingestOnStartup();
 
 // 启动管理面板
 new NonokaAdmin(nnkbot).start();

@@ -1,18 +1,10 @@
 import { BOT_NAME_ALIASES } from '@/constants';
+import { stripSpeakerPrefix } from '../memory/segment';
 
-/** 消息正文前的说话人前缀，检索前要剥掉，否则昵称会被当成关键词 */
-const PREFIX_RE = /^\[[^\]]*\](?:回复了[\s\S]*?的消息\([\s\S]*?\)，说：|提到我说：|说：)/;
-
-/** 引文过长会被截断，导致整条前缀正则匹配不上，只好退回剥掉开头的 `[昵称]` */
-const NICK_RE = /^\[[^\]]*\]/;
-
-/** 去掉 `[昵称]说：` 这类前缀只留正文。认人时也要用：
- *  不剥的话说话人自己的昵称永远命中自己，白占一个注入名额 */
-export function stripSpeakerPrefix(message: string): string {
-  const body = message.replace(PREFIX_RE, '');
-  // 正则整条命中时开头已经不是 [ 了；没命中说明是被截断的引文，至少把昵称摘掉
-  return body === message ? body.replace(NICK_RE, '') : body;
-}
+/**
+ * 靠虚词硬切词的旧关键词抽取，已被 memory/segment.ts 的 jieba + TF-IDF 取代。
+ * 这里只剩 generateReply.ts 的旧账通道还在用，等它改成工具召回后整个文件删掉
+ */
 
 /**
  * 虚词与高频字。它们自己不能当关键词，同时充当切词的分隔符——
