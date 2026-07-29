@@ -95,6 +95,22 @@ class AliasIndex {
     return added;
   }
 
+  /**
+   * 管理面板加完别名后立刻并进索引，省得为一条别名重启 bot。
+   * 返回 false 表示这人在日志里一次都没露过面，无从判断属于哪个群，只能等下次建底
+   */
+  noteManualAlias(userId: number, raw: string): boolean {
+    // 还没建底就什么都不用做，build() 会连人工别名一起读进来
+    if (!this.built) return true;
+
+    const entry = this.byUser.get(userId);
+    const alias = normalizeAlias(raw);
+    if (!entry || !alias) return false;
+
+    entry.aliases.set(alias, Number(backupDateKey()));
+    return true;
+  }
+
   /** 查 chat_line 建底，失败不致命：索引空着只是认不出人，不影响回复 */
   private build() {
     this.built = true;

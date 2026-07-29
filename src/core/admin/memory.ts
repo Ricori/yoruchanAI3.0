@@ -1,0 +1,570 @@
+import http from 'http';
+import aliasIndex from '@/modules/aiReply/history/aliasIndex';
+import { enqueueEmbedding } from '@/modules/aiReply/memory/embedQueue';
+import memoryStore, { type MemoryKind, type MemoryPatch } from '@/modules/aiReply/memory/store';
+import groupProfile from '@/modules/aiReply/storage/groupProfile';
+import { printLog } from '@/utils/print';
+import { readJsonBody, sendJson } from './http';
+
+/**
+ * 管理面板的记忆编辑页。
+ *
+ * 直接在数据库里改 memory 表是不行的：memory_fts 存的是 segment() 分词后的结果、
+ * 向量存在 embedding 表，手改的条目召不回来。所以这里所有写入都走 MemoryStore，
+ * 由它同步全文索引，向量交给 embedQueue 重排。
+ */
+
+const KINDS: MemoryKind[] = ['trait', 'episode', 'relation', 'alias'];
+
+/** 一条记忆的文本上限。档案行是要塞进 prompt 的，太长会挤掉别人 */
+const MAX_TEXT_LEN = 200;
+
+/** 群环境描述整段注入 system，比单条记忆宽松些，但也不能没有边 */
+const MAX_PROFILE_LEN = 500;
+
+/** 主动插话概率的缩放上限。再往上就是刷屏了，手滑多打个 0 得挡住 */
+const MAX_CHANCE_SCALE = 3;
+
+const PAGE = `<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nonoka 记忆管理</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.6 ui-monospace, Consolas, Menlo, monospace;
+         background: #0d1117; color: #c9d1d9; }
+  header { position: sticky; top: 0; z-index: 10; display: flex; gap: 12px; align-items: center;
+           padding: 12px 16px; background: #161b22; border-bottom: 1px solid #30363d; }
+  header b { color: #58a6ff; }
+  header .sp { flex: 1; }
+  header a { color: #8b949e; text-decoration: none; }
+  header a:hover { color: #58a6ff; }
+  #status { font-size: 13px; }
+  #status.ok { color: #3fb950; }
+  #status.err { color: #f85149; }
+  main { max-width: 1000px; margin: 0 auto; padding: 16px; }
+  section { background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+            padding: 14px 16px; margin-bottom: 14px; }
+  section h2 { margin: 0 0 10px; font-size: 15px; color: #58a6ff; }
+  .row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .hint { color: #6e7681; font-size: 12px; }
+  input[type=text], input[type=number], select, textarea {
+    font: inherit; color: #c9d1d9; background: #0d1117; border: 1px solid #30363d;
+    border-radius: 6px; padding: 6px 10px;
+  }
+  input[type=text] { flex: 1; min-width: 160px; }
+  textarea { width: 100%; min-height: 76px; resize: vertical; }
+  label.lbl { width: 92px; flex-shrink: 0; color: #8b949e; }
+  input[type=checkbox] { width: 18px; height: 18px; }
+  button { font: inherit; color: #c9d1d9; background: #21262d; border: 1px solid #30363d;
+           border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+  button:hover { background: #30363d; }
+  button.primary { background: #238636; border-color: #2ea043; color: #fff; }
+  button.primary:hover { background: #2ea043; }
+  button.danger { background: #21262d; border-color: #f85149; color: #f85149; }
+  button.danger:hover { background: #da3633; color: #fff; }
+  .users { display: flex; flex-wrap: wrap; gap: 8px; }
+  .user { text-align: left; line-height: 1.4; }
+  .user.on { border-color: #58a6ff; background: #1f6feb33; }
+  .user small { display: block; color: #6e7681; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 860px; }
+  th { text-align: left; font-weight: normal; color: #6e7681; font-size: 12px; padding: 0 6px 6px; }
+  td { padding: 4px 6px; vertical-align: middle; }
+  td.id, td.meta, td.ops { white-space: nowrap; }
+  td.id { color: #6e7681; }
+  td.meta { color: #6e7681; font-size: 12px; }
+  td.ops button { padding: 6px 10px; }
+  tr.dirty td.id { color: #d29922; }
+  .empty { color: #6e7681; padding: 8px 0; }
+</style>
+</head>
+<body>
+<header>
+  <b>Nonoka</b> 记忆管理
+  <span class="sp"></span>
+  <span id="status"></span>
+  <a id="backLink" href="#">← 配置面板</a>
+</header>
+<main>
+  <section>
+    <h2>群档案</h2>
+    <div class="row">
+      <label class="lbl">群</label>
+      <select id="groupSel" style="flex:1"></select>
+    </div>
+    <div class="row">
+      <label class="lbl">插话系数</label>
+      <input type="number" id="chanceScale" step="0.1" min="0" max="3" style="width:90px">
+      <span class="hint">1 为默认，0 表示完全不主动插话，上限 3</span>
+    </div>
+    <div class="row" style="align-items:flex-start">
+      <label class="lbl">群环境描述</label>
+      <textarea id="profileText" placeholder="这个群是什么氛围、聊什么、能不能放开玩笑。整段注入 system"></textarea>
+    </div>
+    <div class="row">
+      <span class="sp" style="flex:1"></span>
+      <span class="hint" id="groupMeta"></span>
+      <button id="saveGroup" class="primary">保存群档案</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>找人</h2>
+    <div class="row">
+      <input type="text" id="q" placeholder="QQ 号 / 昵称 / 别名，留空看档案最多的人">
+      <button id="search" class="primary">搜索</button>
+    </div>
+    <div class="users" id="users"></div>
+  </section>
+
+  <section id="itemsSection" style="display:none">
+    <h2 id="who"></h2>
+    <div class="scroll">
+      <table>
+        <thead><tr>
+          <th style="width:52px">id</th><th style="width:110px">类型</th><th>内容</th>
+          <th style="width:80px">置信度</th><th style="width:52px">钉住</th>
+          <th style="width:150px">印证 / 最近</th><th style="width:130px"></th>
+        </tr></thead>
+        <tbody id="items"></tbody>
+      </table>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <select id="newKind"></select>
+      <input type="text" id="newText" placeholder="新增一条，例如：千果的室友">
+      <label class="hint">钉住 <input type="checkbox" id="newPinned" checked></label>
+      <button id="add" class="primary">新增</button>
+    </div>
+    <div class="hint">
+      钉住的条目 LLM 不会改也不会淘汰，人工写的建议都钉上。
+      relation 排在印象之前注入，alias 决定别人叫这个外号时能不能认出他。
+    </div>
+  </section>
+</main>
+<script>
+  const token = new URLSearchParams(location.search).get('token') || '';
+  const KINDS = ['trait', 'episode', 'relation', 'alias'];
+  const KIND_LABEL = { trait: 'trait 印象', episode: 'episode 事件', relation: 'relation 关系', alias: 'alias 别名' };
+  let currentUser = null;
+
+  document.getElementById('backLink').href = '/?token=' + encodeURIComponent(token);
+
+  function api(pathname, opts) {
+    const url = pathname + (pathname.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token);
+    return fetch(url, opts).then(async (r) => {
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+      return data;
+    });
+  }
+
+  function post(pathname, payload) {
+    return api(pathname, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+    });
+  }
+
+  function setStatus(text, ok) {
+    const el = document.getElementById('status');
+    el.textContent = text;
+    el.className = ok ? 'ok' : 'err';
+  }
+
+  function fmtDate(ms) {
+    const d = new Date(ms);
+    const p = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+
+  function kindSelect(value) {
+    const sel = document.createElement('select');
+    KINDS.forEach((k) => {
+      const opt = document.createElement('option');
+      opt.value = k;
+      opt.textContent = KIND_LABEL[k];
+      sel.appendChild(opt);
+    });
+    sel.value = value || 'trait';
+    return sel;
+  }
+
+  function renderUsers(list) {
+    const box = document.getElementById('users');
+    box.textContent = '';
+    if (!list.length) {
+      const p = document.createElement('div');
+      p.className = 'empty';
+      p.textContent = '没找到人';
+      box.appendChild(p);
+      return;
+    }
+    list.forEach((u) => {
+      const btn = document.createElement('button');
+      btn.className = 'user';
+      btn.textContent = (u.nick || '(无昵称)') + ' · ' + u.count + ' 条';
+      const small = document.createElement('small');
+      small.textContent = u.userId + (u.aliases.length ? ' · ' + u.aliases.join('、') : '');
+      btn.appendChild(small);
+      btn.onclick = () => {
+        box.querySelectorAll('.user').forEach((e) => e.classList.remove('on'));
+        btn.classList.add('on');
+        loadItems(u);
+      };
+      box.appendChild(btn);
+    });
+  }
+
+  function renderItems(items) {
+    const tbody = document.getElementById('items');
+    tbody.textContent = '';
+    if (!items.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 7;
+      td.className = 'empty';
+      td.textContent = '这个人还没有任何记忆条目';
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    items.forEach((it) => {
+      const tr = document.createElement('tr');
+      const cell = (cls) => {
+        const td = document.createElement('td');
+        if (cls) td.className = cls;
+        tr.appendChild(td);
+        return td;
+      };
+
+      cell('id').textContent = '#' + it.id;
+
+      const sel = kindSelect(it.kind);
+      cell().appendChild(sel);
+
+      const text = document.createElement('input');
+      text.type = 'text';
+      text.value = it.text;
+      if (it.source) text.title = '来源：' + it.source;
+      cell().appendChild(text);
+
+      const conf = document.createElement('input');
+      conf.type = 'number';
+      conf.step = '0.05';
+      conf.min = '0';
+      conf.max = '1';
+      conf.style.width = '72px';
+      conf.value = it.confidence;
+      cell().appendChild(conf);
+
+      const pin = document.createElement('input');
+      pin.type = 'checkbox';
+      pin.checked = it.pinned;
+      cell().appendChild(pin);
+
+      cell('meta').textContent = it.hits + ' 次 · ' + fmtDate(it.lastSeen);
+
+      const ops = cell('ops');
+      const save = document.createElement('button');
+      save.textContent = '保存';
+      save.onclick = () => {
+        setStatus('保存中…', true);
+        post('/api/memory/update', {
+          id: it.id,
+          kind: sel.value,
+          text: text.value,
+          confidence: Number(conf.value),
+          pinned: pin.checked,
+        }).then(() => { setStatus('#' + it.id + ' 已保存', true); reloadItems(); })
+          .catch((e) => setStatus('保存失败: ' + e.message, false));
+      };
+      const del = document.createElement('button');
+      del.textContent = '删除';
+      del.className = 'danger';
+      del.onclick = () => {
+        if (!confirm('删除 #' + it.id + '「' + it.text + '」？')) return;
+        post('/api/memory/delete', { id: it.id })
+          .then(() => { setStatus('#' + it.id + ' 已删除', true); reloadItems(); })
+          .catch((e) => setStatus('删除失败: ' + e.message, false));
+      };
+      ops.appendChild(save);
+      ops.appendChild(document.createTextNode(' '));
+      ops.appendChild(del);
+
+      [sel, text, conf, pin].forEach((el) => {
+        el.addEventListener('input', () => tr.classList.add('dirty'));
+      });
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  function loadItems(user) {
+    currentUser = user;
+    document.getElementById('itemsSection').style.display = '';
+    document.getElementById('who').textContent = (user.nick || '(无昵称)') + ' · ' + user.userId;
+    reloadItems();
+  }
+
+  function reloadItems() {
+    if (!currentUser) return;
+    api('/api/memory/items?userId=' + currentUser.userId)
+      .then((d) => renderItems(d.items))
+      .catch((e) => setStatus('加载失败: ' + e.message, false));
+  }
+
+  function search() {
+    setStatus('搜索中…', true);
+    api('/api/memory/users?q=' + encodeURIComponent(document.getElementById('q').value))
+      .then((d) => { renderUsers(d.users); setStatus('找到 ' + d.users.length + ' 人', true); })
+      .catch((e) => setStatus('搜索失败: ' + e.message, false));
+  }
+
+  let groups = [];
+
+  function fillGroup() {
+    const g = groups[document.getElementById('groupSel').selectedIndex];
+    if (!g) return;
+    document.getElementById('chanceScale').value = g.chanceScale;
+    document.getElementById('profileText').value = g.profileText;
+    document.getElementById('groupMeta').textContent = g.updatedAt
+      ? '上次修改 ' + fmtDate(g.updatedAt)
+      : '还没有档案文件';
+  }
+
+  function loadGroups() {
+    const sel = document.getElementById('groupSel');
+    // 保存后要重新拉一遍列表，这里记住选的是哪个群，否则会被打回第一项
+    const keep = groups[sel.selectedIndex] && groups[sel.selectedIndex].groupId;
+
+    api('/api/memory/groups').then((d) => {
+      groups = d.groups;
+      sel.textContent = '';
+      groups.forEach((g) => {
+        const opt = document.createElement('option');
+        opt.textContent = g.groupId + (g.updatedAt ? ' · 有档案' : ' · 无档案')
+          + (g.lines ? ' · ' + g.lines + ' 条记录' : '');
+        sel.appendChild(opt);
+      });
+      const at = groups.findIndex((g) => g.groupId === keep);
+      if (at >= 0) sel.selectedIndex = at;
+      fillGroup();
+    }).catch((e) => setStatus('群档案加载失败: ' + e.message, false));
+  }
+
+  document.getElementById('groupSel').onchange = fillGroup;
+  document.getElementById('saveGroup').onclick = () => {
+    const g = groups[document.getElementById('groupSel').selectedIndex];
+    if (!g) return;
+    setStatus('保存中…', true);
+    post('/api/memory/group', {
+      groupId: g.groupId,
+      chanceScale: Number(document.getElementById('chanceScale').value),
+      profileText: document.getElementById('profileText').value,
+    }).then(() => { setStatus(g.groupId + ' 档案已保存', true); loadGroups(); })
+      .catch((e) => setStatus('保存失败: ' + e.message, false));
+  };
+
+  document.getElementById('newKind').replaceWith(Object.assign(kindSelect('trait'), { id: 'newKind' }));
+  document.getElementById('search').onclick = search;
+  document.getElementById('q').addEventListener('keydown', (e) => { if (e.key === 'Enter') search(); });
+
+  document.getElementById('add').onclick = () => {
+    const text = document.getElementById('newText');
+    if (!text.value.trim() || !currentUser) return;
+    post('/api/memory/add', {
+      userId: currentUser.userId,
+      kind: document.getElementById('newKind').value,
+      text: text.value,
+      pinned: document.getElementById('newPinned').checked,
+    }).then((d) => {
+      text.value = '';
+      setStatus(d.aliasPending ? '已新增，但这人没在日志里出现过，别名要等重启才生效' : '已新增', true);
+      reloadItems();
+    }).catch((e) => setStatus('新增失败: ' + e.message, false));
+  };
+
+  loadGroups();
+  search();
+</script>
+</body>
+</html>`;
+
+function parseKind(v: unknown): MemoryKind | null {
+  return typeof v === 'string' && (KINDS as string[]).includes(v) ? v as MemoryKind : null;
+}
+
+function parseText(v: unknown): string | null {
+  if (typeof v !== 'string') return null;
+  const text = v.trim();
+  return text && text.length <= MAX_TEXT_LEN ? text : null;
+}
+
+/** 缺省或非法一律回落到 0.9：人工写的条目本来就该比 LLM 抽的更可信 */
+function parseConfidence(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 && n <= 1 ? n : 0.9;
+}
+
+function parseId(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+/**
+ * 有聊天记录的群 + 已经写过档案的群，并起来给面板。
+ * 只列前者会漏掉刚建档还没说过话的群，只列后者就没法给新群建档
+ */
+function listGroupProfiles() {
+  const known = memoryStore.listGroups();
+  const profiled = new Map(groupProfile.listProfiles().map((p) => [p.groupId, p]));
+
+  const rows = known.map((g) => ({
+    ...g,
+    ...(profiled.get(g.groupId) ?? { chanceScale: 1, profileText: '', updatedAt: 0 }),
+  }));
+
+  profiled.forEach((p, groupId) => {
+    if (!known.some((g) => g.groupId === groupId)) rows.push({ ...p, lines: 0, lastDate: 0 });
+  });
+
+  return rows;
+}
+
+/** alias 立刻并进昵称索引，返回 false 表示这人还没在日志里露过面，只能等重启 */
+function syncAlias(kind: MemoryKind, userId: number, text: string): boolean {
+  return kind !== 'alias' || aliasIndex.noteManualAlias(userId, text);
+}
+
+/** 处理记忆页和它的接口，鉴权由调用方做完。返回是否命中路由 */
+export async function handleMemoryRoute(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  url: URL,
+): Promise<boolean> {
+  if (url.pathname === '/memory' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(PAGE);
+    return true;
+  }
+
+  if (url.pathname === '/api/memory/users' && req.method === 'GET') {
+    sendJson(res, 200, { users: memoryStore.searchUsers(url.searchParams.get('q') ?? '') });
+    return true;
+  }
+
+  if (url.pathname === '/api/memory/groups' && req.method === 'GET') {
+    sendJson(res, 200, { groups: listGroupProfiles() });
+    return true;
+  }
+
+  if (url.pathname === '/api/memory/group' && req.method === 'POST') {
+    const body = await readJsonBody(req, res);
+    if (!body) return true;
+
+    const groupId = parseId(body.groupId);
+    const scale = Number(body.chanceScale);
+    const text = typeof body.profileText === 'string' ? body.profileText.trim() : null;
+    if (!groupId || !Number.isFinite(scale) || scale < 0 || scale > MAX_CHANCE_SCALE || text === null) {
+      sendJson(res, 400, { error: `群号非法，或插话系数不在 0~${MAX_CHANCE_SCALE}` });
+      return true;
+    }
+    if (text.length > MAX_PROFILE_LEN) {
+      sendJson(res, 400, { error: `群环境描述最多 ${MAX_PROFILE_LEN} 字` });
+      return true;
+    }
+
+    // 写完就生效：getProfile 按 mtime 判缓存，不用重启也不用通知 bot
+    sendJson(res, 200, { profile: groupProfile.saveProfile(groupId, scale, text) });
+    printLog(`[AdminPanel] 群 ${groupId} 档案已更新`);
+    return true;
+  }
+
+  if (url.pathname === '/api/memory/items' && req.method === 'GET') {
+    const userId = parseId(url.searchParams.get('userId'));
+    if (!userId) sendJson(res, 400, { error: 'invalid userId' });
+    else sendJson(res, 200, { items: memoryStore.listUserMemories(userId) });
+    return true;
+  }
+
+  if (url.pathname === '/api/memory/add' && req.method === 'POST') {
+    const body = await readJsonBody(req, res);
+    if (!body) return true;
+
+    const userId = parseId(body.userId);
+    const kind = parseKind(body.kind);
+    const text = parseText(body.text);
+    if (!userId || !kind || !text) {
+      sendJson(res, 400, { error: `userId / kind 非法，或内容为空、超过 ${MAX_TEXT_LEN} 字` });
+      return true;
+    }
+
+    const id = memoryStore.addMemory({
+      ownerId: userId,
+      kind,
+      text,
+      confidence: parseConfidence(body.confidence),
+      pinned: body.pinned !== false,
+      source: '管理面板',
+    });
+    enqueueEmbedding([id]);
+    printLog(`[AdminPanel] 新增记忆 #${id}（${userId} / ${kind}）：${text}`);
+
+    sendJson(res, 200, { id, aliasPending: !syncAlias(kind, userId, text) });
+    return true;
+  }
+
+  if (url.pathname === '/api/memory/update' && req.method === 'POST') {
+    const body = await readJsonBody(req, res);
+    if (!body) return true;
+
+    const id = parseId(body.id);
+    const kind = parseKind(body.kind);
+    const text = parseText(body.text);
+    if (!id || !kind || !text) {
+      sendJson(res, 400, { error: `id / kind 非法，或内容为空、超过 ${MAX_TEXT_LEN} 字` });
+      return true;
+    }
+
+    const patch: MemoryPatch = {
+      kind, text, confidence: parseConfidence(body.confidence), pinned: body.pinned === true,
+    };
+    const { ok, textChanged } = memoryStore.updateMemory(id, patch);
+    if (!ok) {
+      sendJson(res, 404, { error: '条目不存在或已被删除' });
+      return true;
+    }
+
+    if (textChanged) enqueueEmbedding([id]);
+    const item = memoryStore.getMemory(id);
+    printLog(`[AdminPanel] 修改记忆 #${id}：${text}`);
+
+    sendJson(res, 200, { ok: true, aliasPending: !item || !syncAlias(kind, item.ownerId, text) });
+    return true;
+  }
+
+  if (url.pathname === '/api/memory/delete' && req.method === 'POST') {
+    const body = await readJsonBody(req, res);
+    if (!body) return true;
+
+    const id = parseId(body.id);
+    if (!id) {
+      sendJson(res, 400, { error: 'invalid id' });
+      return true;
+    }
+
+    if (!memoryStore.removeMemory(id)) sendJson(res, 404, { error: '条目不存在或已被删除' });
+    else {
+      // 昵称索引里的旧别名要等重启才消失，删别名比加别名影响小，先不为它加重建入口
+      printLog(`[AdminPanel] 删除记忆 #${id}`);
+      sendJson(res, 200, { ok: true });
+    }
+    return true;
+  }
+
+  return false;
+}

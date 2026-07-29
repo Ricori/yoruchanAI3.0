@@ -72,6 +72,39 @@ class GroupProfileStorage {
     }
   }
 
+  /** 已有档案文件的群，管理面板用来列清单 */
+  listProfiles(): GroupProfile[] {
+    try {
+      return fs.readdirSync(PROFILE_DIR)
+        .map((f) => Number(f.replace(/\.json$/, '')))
+        .filter((id) => Number.isInteger(id) && id > 0)
+        .map((id) => this.getProfile(id))
+        .sort((a, b) => a.groupId - b.groupId);
+    } catch (e) {
+      printError(`[GroupProfile] 列出群档案失败: ${e}`);
+      return [];
+    }
+  }
+
+  /**
+   * 写档案。先写临时文件再改名，避免 bot 正好读到写了一半的 JSON。
+   * 缓存靠 mtime 判活，写完自然失效，不用手动清
+   */
+  saveProfile(groupId: number, chanceScale: number, profileText: string): GroupProfile {
+    this.ensureDir();
+    const profile: GroupProfile = {
+      groupId, chanceScale, profileText, updatedAt: Date.now(),
+    };
+
+    const file = this.getFilePath(groupId);
+    const tmp = `${file}.tmp`;
+    fs.writeFileSync(tmp, `${JSON.stringify(profile, null, 2)}\n`, 'utf-8');
+    fs.renameSync(tmp, file);
+    printLog(`[GroupProfile] 群 ${groupId} 档案已写入: chanceScale=${chanceScale}`);
+
+    return profile;
+  }
+
   /** 获取群档案，无文件时返回默认值（不自动建文件） */
   getProfile(groupId: number): GroupProfile {
     const stat = fs.statSync(this.getFilePath(groupId), { throwIfNoEntry: false });

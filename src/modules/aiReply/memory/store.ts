@@ -48,6 +48,29 @@ export interface MemoryOp {
   confidence?: number;
 }
 
+/** 管理面板的找人结果 */
+export interface UserHit {
+  userId: number;
+  nick: string | null;
+  aliases: string[];
+  count: number;
+}
+
+/** 管理面板的群清单，用聊天量判断哪些群值得写档案 */
+export interface GroupHit {
+  groupId: number;
+  lines: number;
+  lastDate: number;
+}
+
+/** 管理面板能改的字段，其余（hits、first_seen 等）由运行时自己维护 */
+export interface MemoryPatch {
+  kind?: MemoryKind;
+  text?: string;
+  confidence?: number;
+  pinned?: boolean;
+}
+
 export interface ApplyResult {
   added: number[];
   updated: number[];
@@ -144,6 +167,58 @@ class MemoryStore {
   /** 这个人有没有可注入的档案内容。认人时用来筛掉「叫得出名字但没有任何记忆」的人 */
   hasMemory(userId: number, db = this.db()): boolean {
     return this.formatMemoryLine(userId, db) !== null;
+  }
+
+  /** 有过聊天记录的群，管理面板拿来列群档案的候选 */
+  listGroups(db = this.db()): GroupHit[] {
+    return db.prepare(
+      'SELECT group_id AS groupId, count(*) AS lines, max(date_key) AS lastDate'
+      + ' FROM chat_line GROUP BY group_id ORDER BY lastDate DESC, lines DESC',
+    ).all() as GroupHit[];
+  }
+
+  /** 单条记忆，管理面板改之前要先确认它还在 */
+  getMemory(id: number, db = this.db()): MemoryItem | null {
+    const row = db.prepare('SELECT * FROM memory WHERE id = ? AND superseded_by IS NULL').get(id) as MemoryRow | undefined;
+    return row ? toItem(row) : null;
+  }
+
+  /**
+   * 管理面板找人：QQ 号精确匹配，其余按当前昵称和人工别名模糊匹配。
+   * 查询为空时给最有档案的几个人，打开页面就有东西看
+   */
+  searchUsers(query: string, db = this.db(), limit = 30): UserHit[] {
+    const q = query.trim();
+    const ids: number[] = [];
+    const push = (id: number) => { if (id && !ids.includes(id)) ids.push(id); };
+
+    if (!q) {
+      (db.prepare(
+        "SELECT owner_id FROM memory WHERE scope = 'user' AND superseded_by IS NULL"
+        + ' GROUP BY owner_id ORDER BY count(*) DESC LIMIT ?',
+      ).all(limit) as { owner_id: number }[]).forEach((r) => push(r.owner_id));
+    } else {
+      if (/^\d+$/.test(q)) push(Number(q));
+
+      // LIKE 的通配符要转义，否则昵称里的 _ 会变成「任意一个字」
+      const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      (db.prepare("SELECT user_id FROM user_profile WHERE nick LIKE ? ESCAPE '\\' LIMIT ?")
+        .all(like, limit) as { user_id: number }[]).forEach((r) => push(r.user_id));
+      (db.prepare(
+        "SELECT DISTINCT owner_id FROM memory WHERE scope = 'user' AND kind = 'alias'"
+        + " AND superseded_by IS NULL AND text LIKE ? ESCAPE '\\' LIMIT ?",
+      ).all(like, limit) as { owner_id: number }[]).forEach((r) => push(r.owner_id));
+    }
+
+    return ids.slice(0, limit).map((userId) => {
+      const items = this.listUserMemories(userId, db);
+      return {
+        userId,
+        nick: this.getNickName(userId, db),
+        aliases: items.filter((i) => i.kind === 'alias').map((i) => i.text),
+        count: items.length,
+      };
+    });
   }
 
   /**
@@ -309,6 +384,49 @@ class MemoryStore {
     })();
 
     return result;
+  }
+
+  /**
+   * 人工改一条记忆。和 applyOps 不同，这里不挡 pinned——钉住是防 LLM 的，不防人。
+   * 返回文本是否变了：变了就得让调用方重新排队算向量
+   */
+  updateMemory(id: number, patch: MemoryPatch, db = this.db()): { ok: boolean, textChanged: boolean } {
+    const current = this.getMemory(id, db);
+    if (!current) return { ok: false, textChanged: false };
+
+    const kind = patch.kind ?? current.kind;
+    const text = patch.text ?? current.text;
+    const confidence = patch.confidence ?? current.confidence;
+    const pinned = patch.pinned ?? current.pinned;
+    const textChanged = text !== current.text;
+
+    db.transaction(() => {
+      // last_seen 不动：人工改字面不代表这件事又被印证了一次
+      db.prepare(
+        'UPDATE memory SET kind = ?, text = ?, confidence = ?, pinned = ?, updated_at = ? WHERE id = ?',
+      ).run(kind, text, confidence, pinned ? 1 : 0, Date.now(), id);
+
+      if (textChanged) {
+        db.prepare('UPDATE memory_fts SET seg = ? WHERE rowid = ?').run(segment(text), id);
+        // 旧向量对应的是旧文本，留着会把这条召回到错的语境上
+        deleteEmbeddings(db, 'memory', [id]);
+      }
+    })();
+
+    return { ok: true, textChanged };
+  }
+
+  /** 人工删一条。同样只软删，判错了改回 superseded_by 就能捞回来 */
+  removeMemory(id: number, db = this.db()): boolean {
+    if (!this.getMemory(id, db)) return false;
+
+    db.transaction(() => {
+      db.prepare('UPDATE memory SET superseded_by = ?, updated_at = ? WHERE id = ?').run(DELETED, Date.now(), id);
+      db.prepare('DELETE FROM memory_fts WHERE rowid = ?').run(id);
+    })();
+
+    deleteEmbeddings(db, 'memory', [id]);
+    return true;
   }
 
   /**

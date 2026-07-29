@@ -30,7 +30,7 @@ const UPDATE_APPS = (process.env.LOG_UPDATE_APPS || 'nonoka')
 const PORT = Number(process.env.LOG_PORT || 9615);
 const HOST = process.env.LOG_HOST || '0.0.0.0';
 const TOKEN = process.env.LOG_TOKEN || '';
-const TAIL_LINES = Number(process.env.LOG_TAIL || 300);
+const TAIL_LINES = Number(process.env.LOG_TAIL || 500);
 const FILES = (process.env.LOG_FILES || 'logs/out.log,logs/error.log')
   .split(',')
   .map((f) => f.trim())
@@ -435,7 +435,7 @@ const server = http.createServer((req, res) => {
       res.writeHead(405).end('method not allowed');
       return;
     }
-    doUpdate(() => {});
+    doUpdate(() => { });
     // 立即返回，具体进度通过日志流实时查看
     res.writeHead(202, { 'Content-Type': 'text/plain; charset=utf-8' }).end('更新已触发，请查看日志');
     return;

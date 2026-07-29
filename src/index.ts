@@ -1,7 +1,7 @@
 
 import nnkbot from '@/core/nnkBot';
 import nnkSchedule from '@/core/nnkSchedule';
-import { NonokaAdmin } from '@/core/nnkAdmin';
+import { NonokaAdmin } from '@/core/admin';
 import SystemCleanupJob from '@/tasks/clean';
 import MemoryConsolidateJob from '@/tasks/memoryConsolidate';
 import TwitterPushJob from '@/tasks/twitter';
