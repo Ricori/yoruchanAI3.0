@@ -26,7 +26,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const SPEAKER_BOOST = 1.5;
 
 /** 一个话题最多展开几行原文，否则一段长对话就能把候选池灌满 */
-const TOPIC_EXPAND_LIMIT = 8;
+const TOPIC_EXPAND_LIMIT = 3;
 
 /**
  * 语义召回的相似度下限。这道闸不能省：余弦只排序不判断有无，
@@ -208,25 +208,71 @@ function literalChatLists(db: MemoryDatabase, groupId: number, query: string, si
   });
 }
 
-function semanticChatIds(db: MemoryDatabase, groupId: number, vec: Float32Array, since: number): number[] {
-  const topics = searchSimilar(db, 'topic', vec, CANDIDATE_LIMIT).filter((t) => t.score >= MIN_SIMILARITY);
+/**
+ * 本群这段时间内的话题 id。向量检索是全库扫的，不先收窄的话候选池会被别的群吃掉——
+ * 实测「有人养猫吗」的 top30 里一半是别的群的话题，过滤完本群只剩十几个
+ */
+function groupTopicIds(db: MemoryDatabase, groupId: number, since: number): Set<number> {
+  const rows = db.prepare(
+    'SELECT id FROM topic WHERE group_id = ? AND date_key >= ?',
+  ).all(groupId, since) as { id: number }[];
+  return new Set(rows.map((r) => r.id));
+}
+
+/**
+ * 话题命中之后，挑出话题里与查询最贴的几行。
+ *
+ * 取开头几行是不行的：话题跨度从几行到近百行不等，跨 58 行的「带猫看病」话题
+ * 取开头 8 行，捞回来的是同一段对话里紧挨着的加班和痛车，猫在别处。
+ * 按查询里实义字的重合度排序，跨度越大的话题收益越大
+ */
+function pickTopicLines(
+  db: MemoryDatabase,
+  topic: { line_from: number, line_to: number },
+  groupId: number,
+  chars: Set<string>,
+): number[] {
+  const rows = db.prepare(
+    'SELECT id, text FROM chat_line WHERE id BETWEEN ? AND ? AND group_id = ? AND user_id != 0 ORDER BY id',
+  ).all(topic.line_from, topic.line_to, groupId) as { id: number, text: string }[];
+
+  // 重合度相同的保持对话顺序，短话题的表现和以前一致
+  return rows
+    .map((r, i) => {
+      let hit = 0;
+      chars.forEach((c) => { if (r.text.includes(c)) hit += 1; });
+      return { id: r.id, hit, i };
+    })
+    .sort((a, b) => b.hit - a.hit || a.i - b.i)
+    .slice(0, TOPIC_EXPAND_LIMIT)
+    .map((r) => r.id);
+}
+
+function semanticChatIds(
+  db: MemoryDatabase,
+  groupId: number,
+  query: string,
+  vec: Float32Array,
+  since: number,
+): number[] {
+  const allow = groupTopicIds(db, groupId, since);
+  if (allow.size === 0) return [];
+
+  const topics = searchSimilar(db, 'topic', vec, CANDIDATE_LIMIT, allow).filter((t) => t.score >= MIN_SIMILARITY);
   if (topics.length === 0) return [];
 
   const rows = db.prepare(
-    `SELECT id, line_from, line_to FROM topic WHERE id IN (${placeholders(topics.length)}) AND group_id = ? AND date_key >= ?`,
-  ).all(...topics.map((t) => t.refId), groupId, since) as { id: number, line_from: number, line_to: number }[];
+    `SELECT id, line_from, line_to FROM topic WHERE id IN (${placeholders(topics.length)})`,
+  ).all(...topics.map((t) => t.refId)) as { id: number, line_from: number, line_to: number }[];
 
+  // 挑行用的是检索词里的字：整词匹配不上「养猫」对「带猫看病」，按字反而认得出
   const byId = new Map(rows.map((r) => [r.id, r]));
-  const expand = db.prepare(
-    'SELECT id FROM chat_line WHERE id BETWEEN ? AND ? AND group_id = ? AND user_id != 0 ORDER BY id LIMIT ?',
-  );
+  const chars = new Set(weightedTerms(query).map((t) => t.term).join(''));
 
-  // 按话题的相似度名次依次展开，同一话题内的行共享这个名次
+  // 按话题的相似度名次依次展开，同一话题内按相关性排，靠前的行拿到更好的名次
   return topics.flatMap(({ refId }) => {
     const topic = byId.get(refId);
-    if (!topic) return [];
-    const lines = expand.all(topic.line_from, topic.line_to, groupId, TOPIC_EXPAND_LIMIT) as { id: number }[];
-    return lines.map((l) => l.id);
+    return topic ? pickTopicLines(db, topic, groupId, chars) : [];
   });
 }
 
@@ -234,8 +280,11 @@ function semanticChatIds(db: MemoryDatabase, groupId: number, vec: Float32Array,
 const PLACEHOLDER_RE = /\[[^\]]*\]/g;
 const PUNCT_RE = /[\s\p{P}\p{S}]/gu;
 
-/** 至少要剩这么多个字才值得占一个注入名额 */
-const MIN_CONTENT_CHARS = 2;
+/**
+ * 至少要剩这么多个字才值得占一个注入名额。
+ * 2 个字放得太宽——「不赖」「感觉」这种附和照样进结果，白占一条
+ */
+const MIN_CONTENT_CHARS = 4;
 
 /**
  * 只发了个表情、图片或问号的行没有注入价值。
@@ -266,12 +315,15 @@ export async function recallChat(
 
   const literal = literalChatLists(db, groupId, query, since);
   const vec = await resolveQueryVec(opts);
-  const semantic = vec ? semanticChatIds(db, groupId, vec, since) : [];
+  const semantic = vec ? semanticChatIds(db, groupId, query, vec, since) : [];
   if (literal.length === 0 && semantic.length === 0) return [];
 
   const scores = rrfFuse([...literal, { ids: semantic }]);
   const lines = fetchChatLines(db, [...scores.keys()]);
   const boost = speakerIds?.length ? new Set(speakerIds) : null;
+
+  // 复读在群里很常见，「玩什么」连发三条会占掉三个名额，注入时只留最相关的那条
+  const seen = new Set<string>();
 
   return [...scores.entries()]
     .flatMap(([id, score]) => {
@@ -280,6 +332,12 @@ export async function recallChat(
       return [{ row, score: boost?.has(row.user_id) ? score * SPEAKER_BOOST : score }];
     })
     .sort((a, b) => b.score - a.score || b.row.id - a.row.id)
+    .filter(({ row }) => {
+      const body = stripSpeakerPrefix(row.text);
+      if (seen.has(body)) return false;
+      seen.add(body);
+      return true;
+    })
     .slice(0, limit)
     .map(({ row }) => ({
       id: row.id,

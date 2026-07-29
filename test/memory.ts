@@ -375,6 +375,99 @@ async function testRecall() {
   });
 }
 
+/** (群, 日期, seq) 上有唯一约束，全局递增避免几次造数据撞车 */
+let fakeSeq = 1000;
+
+/** 造一段聊天并建好全文索引，返回这些行的 id */
+function addLines(db: MemoryDatabase, groupId: number, dateKey: number, bodies: string[]): number[] {
+  const insert = db.prepare(
+    "INSERT INTO chat_line (group_id, user_id, date_key, seq, nick, text) VALUES (?, 777, ?, ?, 'qa', ?)",
+  );
+  const fts = db.prepare('INSERT INTO chat_fts (rowid, seg) VALUES (?, ?)');
+  return bodies.map((body) => {
+    fakeSeq += 1;
+    const id = Number(insert.run(groupId, dateKey, fakeSeq, `[qa]说：${body}`).lastInsertRowid);
+    fts.run(id, segment(body));
+    return id;
+  });
+}
+
+/** 造一个话题并给它一个向量 */
+function addTopic(db: MemoryDatabase, groupId: number, dateKey: number, ids: number[], vec: number[]) {
+  const info = db.prepare(
+    "INSERT INTO topic (group_id, date_key, summary, user_ids, line_from, line_to) VALUES (?, ?, '造的话题', '[777]', ?, ?)",
+  ).run(groupId, dateKey, ids[0], ids[ids.length - 1]);
+  const id = Number(info.lastInsertRowid);
+  saveEmbeddings(db, 'topic', [{ refId: id, vec }]);
+  return id;
+}
+
+/**
+ * 召回质量的回归测试。上面那些断言只管「召回得到吗」，这里管「召回的是不是那几条」——
+ * 线上翻车的样子是能召回、但召回的全是同一段对话里的边角料
+ */
+async function testRecallQuality() {
+  console.log('\n[召回质量]');
+  // 检索有时间窗，日期得落在窗口里，不能写死一个过去的日子
+  const DAY = Number(backupDateKey(new Date(Date.now() - 2 * DAY_MS)));
+
+  await withDbAsync(async (db) => {
+    const texts = (hits: { text: string }[]) => hits.map((h) => h.text.replace('[qa]说：', ''));
+    // 和已有的爬山话题（[1,0,0]）正交，互不干扰
+    const vec = Float32Array.from([0, 0, 1]);
+
+    // 一个跨 12 行的话题，猫在末尾：取开头几行的老实现会全部捞回闲聊
+    const long = addLines(db, FAKE_GROUP, DAY, [
+      '今天好热啊', '是啊出不了门', '空调开到十八度', '电费要爆了', '中午吃的什么',
+      '随便对付了一下', '下午还要开会', '又是加班的一天', '刚睡醒',
+      '我家猫昨天生病了', '带猫去医院花了两千', '猫现在好多了',
+    ]);
+    addTopic(db, FAKE_GROUP, DAY, long, [0, 0, 1]);
+
+    const picked = await recallChat(FAKE_GROUP, { query: '有人养猫吗', queryVec: vec, days: 30 }, db);
+    check('话题里挑与查询相关的行，不是取开头', texts(picked).every((t) => t.includes('猫')), true);
+    check('跨度大的话题也只给最相关的几行', picked.length, 3);
+
+    // 两个话题都相关时，名额不该被第一个话题吃光
+    const second = addLines(db, FAKE_GROUP, DAY, ['邻居也在养猫', '猫粮涨价了', '想再养一只猫']);
+    addTopic(db, FAKE_GROUP, DAY, second, [0, 0.1, 0.99]);
+
+    const spread = await recallChat(FAKE_GROUP, { query: '有人养猫吗', queryVec: vec, days: 30 }, db);
+    check('第二个相关话题也能挤进结果', spread.some((h) => second.includes(h.id)), true);
+    check('单个话题最多贡献 3 行', spread.filter((h) => long.includes(h.id)).length, 3);
+
+    // 复读和附和换一个方向，免得被上面那些话题挤出名额——那样测的就不是过滤了
+    const aside = Float32Array.from([0, 1, 0]);
+    const dup = addLines(db, FAKE_GROUP, DAY, ['一起去看猫吧', '一起去看猫吧', '一起去看猫吧']);
+    addTopic(db, FAKE_GROUP, DAY, dup, [0, 1, 0]);
+    const short = addLines(db, FAKE_GROUP, DAY, ['不赖', '猫很可爱呀']);
+    addTopic(db, FAKE_GROUP, DAY, short, [0, 0.99, 0.1]);
+
+    const filtered = await recallChat(FAKE_GROUP, { query: '有人养猫吗', queryVec: aside, days: 30 }, db);
+    check('复读只留一条', filtered.filter((h) => h.text.includes('一起去看猫吧')).length, 1);
+    check('两个字的附和不占名额', filtered.some((h) => h.text.includes('不赖')), false);
+    check('同一话题里有内容的那条留下', filtered.some((h) => h.text.includes('猫很可爱呀')), true);
+
+    // 向量检索是全库的，别的群的话题相似度再高也不能串台
+    const other = addLines(db, 99999999, DAY, ['我家的猫会开门', '猫真聪明']);
+    addTopic(db, 99999999, DAY, other, [0, 0, 1]);
+
+    const scoped = await recallChat(FAKE_GROUP, { query: '有人养猫吗', queryVec: vec, days: 30 }, db);
+    check('别的群的话题不串台', scoped.some((h) => other.includes(h.id)), false);
+
+    // 不串台只是底线。真正的问题是候选池：别的群的话题挤满 top30 后，
+    // 本群那个稍弱一点的话题连进池子的机会都没有，检索必须先按群收窄
+    for (let i = 0; i < 31; i++) {
+      addTopic(db, 99999999, DAY, addLines(db, 99999999, DAY, [`别的群聊猫 ${i}`]), [0, 1, 0]);
+    }
+    const mine = addLines(db, FAKE_GROUP, DAY, ['本群的猫在睡觉']);
+    addTopic(db, FAKE_GROUP, DAY, mine, [0, 0.9, 0.436]);
+
+    const narrowed = await recallChat(FAKE_GROUP, { query: '有人养猫吗', queryVec: aside, days: 30 }, db);
+    check('别的群灌满候选池时，本群的话题照样召回得到', narrowed.some((h) => mine.includes(h.id)), true);
+  });
+}
+
 function testStore() {
   console.log('\n[记忆存取]');
   withDb((db) => {
@@ -467,6 +560,7 @@ export async function testMemory() {
     testRrf();
     testStore();
     await testRecall();
+    await testRecallQuality();
     console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项未通过`);
   } finally {
     fixtures.forEach((f) => fs.rmSync(f, { force: true }));

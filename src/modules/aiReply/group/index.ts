@@ -68,12 +68,11 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
 
     //  -------- 固定回复逻辑 --------
     // 1. 匹配"要不要xxx"时随机回复"要"或"不要"
-    if (/要不要/.test(formattedMessage.message)) {
-      const reply = (Math.random() < 0.5) ? `${BOT_NAME}建议你 要！` : `${BOT_NAME}建议你 不要！`;
-      ctx.reply(reply);
-      return;
-    }
-
+    // if (/要不要/.test(formattedMessage.message)) {
+    //   const reply = (Math.random() < 0.5) ? `${BOT_NAME}建议你 要！` : `${BOT_NAME}建议你 不要！`;
+    //   ctx.reply(reply);
+    //   return;
+    // }
 
     // -------- AI 回复触发决策 --------
     let shouldReply = false; // 需要AI回复

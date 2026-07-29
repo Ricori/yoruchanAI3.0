@@ -10,6 +10,7 @@
     "test": "cross-env YDEBUG=true tsx ./test/index.ts",
     "memory:consolidate": "tsx ./scripts/consolidateMemory.ts",
     "memory:probe": "tsx ./scripts/recallProbe.ts",
+    "memory:eval": "tsx ./scripts/recallEval.ts",
     "lint": "eslint --ext .ts src/ --quiet",
     "lint-fix": "eslint --fix --ext .ts src/ --quiet"
   },
