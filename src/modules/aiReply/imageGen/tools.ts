@@ -4,14 +4,21 @@ import { getImgCode } from '@/utils/msgCode';
 import { randomText, sleep } from '@/utils/function';
 import { editImage, generateImage } from '@/service/imageGen';
 import type { ToolDef } from '@/service/llm';
+import messageStorage from '../storage/message';
+import { formatAssistantMessage } from '../format';
 import { sendSegmentedReply } from '../replySender';
 
 /**
  * 给模型用的画图工具。
  *
- * 出一张图要 20~90s，而群聊回复链路是同步阻塞的，所以这里**不等图**：
+ * 出一张图要 20~130s，而群聊回复链路是同步阻塞的，所以这里**不等图**：
  * 工具立刻返回「已经开始画了」，模型照常出一句文字回复先发出去，
  * 后台画完再单独发一条图片消息。
+ *
+ * 正因为出图是异步的，「图交了没有」这件事模型自己是看不见的——
+ * 后台发出去的图和翻车文案都不走 generateReply 那条会记历史的路。
+ * 所以这里必须自己把状态维护起来（drawStates）并回写会话历史，
+ * 否则模型下一轮只能靠猜，会出现「刚开始画就宣布画好了」这种前言不搭后语
  */
 
 /** 默认出图尺寸 */
@@ -31,11 +38,15 @@ const DEFAULT_COOLDOWN_SEC = 120;
  */
 const MIN_DELIVER_DELAY = 5000;
 
+/** 图已发出 / 翻车的状态还值得告诉模型多久。再久话题早过去了，重提反而突兀 */
+const NOTICE_TTL = 10 * 60 * 1000;
+
 const DRAW_IMAGE_TOOL: ToolDef = {
   name: 'draw_image',
   description: '画一张图发到群里。群友让你画点什么、或者话题聊到某个画面你想画给大家看的时候用。'
-    + '图会在稍后自动发到群里，你不需要也不可以自己描述图的内容或者贴链接，'
-    + '正常说一句话让对方稍等一下就行。',
+    + '注意图不会立刻出现：调用之后要一两分钟才画得完，画完系统会自动把图发到群里、还会自动配一句话。'
+    + '所以调完这个工具你只能说一句让对方稍等，'
+    + '不可以说图已经画好、不可以描述图的内容、不可以贴链接。',
   input_schema: {
     type: 'object',
     properties: {
@@ -52,8 +63,9 @@ const EDIT_IMAGE_TOOL: ToolDef = {
   name: 'edit_image',
   description: '以刚才那位群友发给你的那张图为底做修改，改完发到群里。'
     + '群友把图发给你（或者引用了一张图）并让你改点什么的时候用。'
-    + '底图由系统自动带上，你不用管是哪张。改完的图会自动发出来，'
-    + '你不需要也不可以自己描述图的内容或者贴链接。',
+    + '底图由系统自动带上，你不用管是哪张。'
+    + '和 draw_image 一样，改完的图要一两分钟才出来，届时会自动发出并配一句话，'
+    + '你这次回复只能让对方稍等，不可以说已经改好、也不可以描述图的内容。',
   input_schema: {
     type: 'object',
     properties: {
@@ -88,16 +100,59 @@ export function isImageGenEnabled(groupId: number): boolean {
   return !whiteGroupIds?.length || whiteGroupIds.includes(groupId);
 }
 
+/** 一个群最近一次出图走到哪一步了 */
+interface DrawState {
+  status: 'drawing' | 'done' | 'failed';
+  /** 这一张画的是什么。注入提示时给模型看，免得它自己编一套说辞 */
+  prompt: string;
+  /** 状态写入时间，done / failed 超过 NOTICE_TTL 就不再注入 */
+  at: number;
+}
+
+/** 各群的出图状态，与 nnkStorage 一样只放内存，重启清零 */
+const drawStates = new Map<number, DrawState>();
+
+/** 这个群的图是不是还在画。还在画就不接新的画图请求，也不主动插话 */
+export function isDrawing(groupId: number): boolean {
+  return drawStates.get(groupId)?.status === 'drawing';
+}
+
+function setDrawState(groupId: number, status: DrawState['status'], prompt: string) {
+  drawStates.set(groupId, { status, prompt, at: Date.now() });
+}
+
+/**
+ * 取要注入 system 的出图状态提示，没什么好说的返回 null。
+ *
+ * 「还在画」以外的两个状态也必须注入：后台发图和翻车文案都是异步发的，
+ * 模型光看会话历史分不清「图交了」还是「还在画」——
+ * 这正是它会在图还没出来时就喊「画好了」的原因
+ */
+export function getDrawNotice(groupId: number): string | null {
+  const state = drawStates.get(groupId);
+  if (!state) return null;
+
+  if (state.status === 'drawing') {
+    return '你答应要画的那张图还在画，没画完，画完了会自动发出来。'
+      + '这次回复要自然地体现出「还在画 / 马上就好」，不要再承诺一遍要画，也不要描述图里有什么。'
+      + '绝对不可以说「画好了」「画完了」「发出来了」——图现在真的还没出来，说了就穿帮。';
+  }
+
+  // 画完 / 翻车的提示只在事发后一小段时间内注入
+  if (Date.now() - state.at > NOTICE_TTL) return null;
+
+  if (state.status === 'done') {
+    return `你刚才画的那张图（${state.prompt}）已经发到群里了，大家都看得见，你也已经配过一句话了。`
+      + '所以不要再说「还在画」「马上就好」，也不要重新画一张（除非群友明确又要了一张）。'
+      + '现在就当图已经摆在眼前那样自然接话。';
+  }
+
+  return `你刚才想画的那张图（${state.prompt}）画崩了，没能发出来，你也已经跟大家说过一声了。`
+    + '不要假装图已经发出去了，也不要接着说「还在画」。群友要是还想要，可以重新画一张。';
+}
+
 /** 各群的出图额度，与 nnkStorage 一样只放内存，重启清零 */
 const quota = new Map<number, { date: string, count: number, lastAt: number }>();
-
-/** 正在出图的群。图没发出来之前不再接新的画图请求，也不主动插话 */
-const drawing = new Set<number>();
-
-/** 这个群的图是不是还在画 */
-export function isDrawing(groupId: number): boolean {
-  return drawing.has(groupId);
-}
 
 function today(): string {
   return new Date().toLocaleDateString();
@@ -124,11 +179,37 @@ function checkQuota(groupId: number): string | null {
   return null;
 }
 
-/** 真的发起了一次出图才记账 */
+/** 真的发起了一次出图才记账。先占坑，成败在 noteQuotaSettled 里结算 */
 function noteQuotaUsed(groupId: number) {
   const record = quota.get(groupId) ?? { date: today(), count: 0, lastAt: 0 };
   quota.set(groupId, { date: today(), count: record.count + 1, lastAt: Date.now() });
 }
+
+/**
+ * 一次出图收尾时结算额度与冷却。
+ *
+ * 冷却从图落地重新计时：从「开始画」算的话，一张图要画 120s、冷却也是 120s，
+ * 等于图刚发出来就能立刻再画一张，冷却形同虚设。
+ * 上游抽风（524 之类）也不该吃掉用户的日额度，失败退回去
+ */
+function noteQuotaSettled(groupId: number, ok: boolean) {
+  const record = quota.get(groupId);
+  if (!record) return;
+  quota.set(groupId, {
+    ...record,
+    count: ok ? record.count : Math.max(0, record.count - 1),
+    lastAt: Date.now(),
+  });
+}
+
+/** 图发出去时一起说的话。裸图甩出来太突兀，用人设的语气配一句才像真人交作业 */
+const DONE_TEXTS = [
+  '画好啦 || 欸嘿嘿 前辈快夸夸',
+  '铛铛 || 乃乃香的大作',
+  '喏 画完了～ || 还不错吧',
+  '出炉了 || 前辈看看这个',
+  '久等啦 || 乃乃香尽力了哦',
+];
 
 /** 出图失败时发的话。用人设的语气翻个车，比一声不吭强 */
 const FAIL_TEXTS = [
@@ -137,14 +218,23 @@ const FAIL_TEXTS = [
   '呜呜 画不出来 || 下次一定',
 ];
 
-/** 走 sendSegmentedReply 而不是直接发：翻车文案里的 `||` 是气泡分隔符，直接发会露出来 */
-function sendFailText(groupId: number) {
-  return sendSegmentedReply(randomText(FAIL_TEXTS), (msg) => nnkbot.sendGroupMsg(groupId, msg));
+/**
+ * 发一段 bot 自己的话：既发到群里，也记进会话历史。
+ *
+ * 走 sendSegmentedReply 而不是直接发：这些文案里的 `||` 是气泡分隔符，直接发会露出来。
+ * 记历史这步不能省——出图是异步的，不经过 generateReply 里那次 addGroupChatConversations，
+ * 漏记的话模型下一轮完全不知道自己交过图、道过歉，只能重新编一套说辞
+ */
+async function sayAndRemember(groupId: number, text: string) {
+  messageStorage.addGroupChatConversations(groupId, formatAssistantMessage(text));
+  await sendSegmentedReply(text, (msg) => nnkbot.sendGroupMsg(groupId, msg));
 }
 
-/** 后台跑的出图任务：画完发图，失败发翻车文案，无论如何都要解锁 */
-async function deliverImage(groupId: number, task: Promise<string | null>, label: string) {
+/** 后台跑的出图任务：画完配一句话再发图，失败发翻车文案，无论如何都要落状态 */
+async function deliverImage(groupId: number, task: Promise<string | null>, label: string, prompt: string) {
   const startedAt = Date.now();
+  let delivered = false;
+
   try {
     const file = await task;
 
@@ -152,20 +242,26 @@ async function deliverImage(groupId: number, task: Promise<string | null>, label
     const elapsed = Date.now() - startedAt;
     if (elapsed < MIN_DELIVER_DELAY) await sleep(MIN_DELIVER_DELAY - elapsed);
 
-    if (!file) {
+    if (file) {
+      printLog(`[ImageTool] ${label} 出图完成 (${groupId})，耗时 ${Math.round((Date.now() - startedAt) / 1000)}s`);
+      // 状态先落再发话：发这几条要几秒，这期间进来的回复该按「图已交」来说，
+      // 而不是读到过期的「还在画」
+      delivered = true;
+      setDrawState(groupId, 'done', prompt);
+      await sayAndRemember(groupId, randomText(DONE_TEXTS));
+      nnkbot.sendGroupMsg(groupId, getImgCode(file));
+    } else {
       printLog(`[ImageTool] ${label} 出图失败 (${groupId})`);
-      await sendFailText(groupId);
-      return;
     }
-
-    printLog(`[ImageTool] ${label} 出图完成 (${groupId})，耗时 ${Math.round((Date.now() - startedAt) / 1000)}s`);
-    nnkbot.sendGroupMsg(groupId, getImgCode(file));
   } catch (e) {
     printLog(`[ImageTool] ${label} 出图异常 (${groupId}): ${e}`);
-    await sendFailText(groupId);
   } finally {
-    // 一定要解锁，否则一次失败就把这个群永久锁死
-    drawing.delete(groupId);
+    // 一定要落状态，否则一次失败就把这个群永久锁死
+    if (!delivered) {
+      setDrawState(groupId, 'failed', prompt);
+      await sayAndRemember(groupId, randomText(FAIL_TEXTS)).catch(() => {});
+    }
+    noteQuotaSettled(groupId, delivered);
   }
 }
 
@@ -193,7 +289,7 @@ export async function runImageTool(
     return '现在画不了图，告诉对方画不了就行。';
   }
 
-  if (drawing.has(groupId)) {
+  if (isDrawing(groupId)) {
     printLog(`[ImageTool] ${name} -> 上一张还在画`);
     return '上一张图还在画，画完才能画下一张，让对方先等等。';
   }
@@ -210,7 +306,7 @@ export async function runImageTool(
     return '没有拿到要改的那张图，让对方把图重新发一遍。';
   }
 
-  drawing.add(groupId);
+  setDrawState(groupId, 'drawing', prompt);
   noteQuotaUsed(groupId);
 
   const { size = DEFAULT_SIZE } = getConfig();
@@ -219,8 +315,12 @@ export async function runImageTool(
     : generateImage(prompt, size);
 
   printLog(`[ImageTool] ${name}(${prompt}) -> 开始出图 (${groupId})`);
-  // 故意不 await：出图要 20~90s，等下去整条回复链路都得卡住
-  deliverImage(groupId, task, name);
+  // 故意不 await：出图要 20~130s，等下去整条回复链路都得卡住
+  deliverImage(groupId, task, name, prompt);
 
-  return '已经开始画了，画完会自动发到群里。现在回一句话让对方稍等一下，不要描述图的内容。';
+  // 说清楚「现在还没画完」：只靠工具描述压不住，模型被追问几轮之后
+  // 很容易顺着「不许复读」的人设要求escalate成「画好了」
+  return '已经开始画了，但是图现在还没出来，要一两分钟。画完系统会自动发到群里、还会自动配一句话，不用你操心。'
+    + '你这次回复只能说一句让对方稍等，'
+    + '绝对不能说「画好了」「画完了」「发出来了」，也不能描述图的内容或者贴链接。';
 }

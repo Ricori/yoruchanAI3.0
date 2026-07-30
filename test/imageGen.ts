@@ -2,8 +2,9 @@ import http from 'http';
 import nnkbot from '@/core/nnkBot';
 import { formatMessage } from '@/modules/aiReply/format';
 import {
-  getImageTools, isDrawing, isImageGenEnabled, runImageTool,
+  getDrawNotice, getImageTools, isDrawing, isImageGenEnabled, runImageTool,
 } from '@/modules/aiReply/imageGen/tools';
+import messageStorage from '@/modules/aiReply/storage/message';
 import { editImage, generateImage } from '@/service/imageGen';
 import { sleep } from '@/utils/function';
 
@@ -37,8 +38,11 @@ function check(name: string, ok: boolean, detail = '') {
   }
 }
 
-/** 假上游。generations 按 mode 分别返 b64_json 和 url，两条归一化分支都要走到 */
-let mode: 'b64' | 'url' = 'b64';
+/**
+ * 假上游。generations 按 mode 分别返 b64_json 和 url，两条归一化分支都要走到；
+ * fail 用来模拟线上那个 524（上游出图卡在网关超时线上）
+ */
+let mode: 'b64' | 'url' | 'fail' = 'b64';
 
 function startStub() {
   const server = http.createServer((req, res) => {
@@ -52,6 +56,11 @@ function startStub() {
         return;
       }
       if (url.pathname === '/v1/images/generations') {
+        if (mode === 'fail') {
+          res.writeHead(524);
+          res.end();
+          return;
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(mode === 'url'
           ? { data: [{ url: `${BASE}/remote.png` }] }
@@ -138,8 +147,19 @@ async function testService() {
   check('底图拉不到 -> null', badSrc === null, String(badSrc));
 }
 
+/** 后台出图那一轮跑完要多久：发图前 5s 最小延迟 + 配图文案的分段打字延迟 */
+const DELIVER_WAIT = 9000;
+
+/** 恢复默认的测试配置。每段测试都会改配置，不重置的话会污染后面的段落 */
+function resetConfig() {
+  nnkbot.config.aiReply.imageGen = {
+    enable: true, whiteGroupIds: [], dailyLimit: 2, cooldownSec: 0, size: '1024x1024',
+  };
+}
+
 async function testTools() {
   console.log('\n[tools] 工具下发与限流');
+  resetConfig();
 
   check('无底图 -> 只下发 draw_image', getImageTools(false).map((t) => t.name).join(',') === 'draw_image');
   check('有底图 -> 两个工具都下发', getImageTools(true).map((t) => t.name).join(',') === 'draw_image,edit_image');
@@ -150,19 +170,21 @@ async function testTools() {
 
   const first = await runImageTool(GROUP, 'draw_image', { prompt: '一只兔子' });
   check('第一次 -> 开始画', first.includes('已经开始画了'), first);
+  // 工具返回值必须把「现在还没画完」说死，否则模型被追问几轮就会自己宣布画好了
+  check('返回值声明图还没出来', first.includes('还没出来'), first);
   check('出图期间 isDrawing 为真', isDrawing(GROUP));
 
   const second = await runImageTool(GROUP, 'draw_image', { prompt: '再来一只' });
   check('在画时再调 -> 拒绝', second.includes('上一张图还在画'), second);
 
-  // 等后台那一轮跑完（含发图前 5s 的最小延迟）
-  await sleep(7000);
+  // 等后台那一轮跑完（含发图前 5s 的最小延迟，以及配图文案的打字延迟）
+  await sleep(DELIVER_WAIT);
   check('出图完成后解锁', !isDrawing(GROUP));
 
   // dailyLimit=2 / cooldownSec=0：第二张还能画，第三张该被日额挡下
   const third = await runImageTool(GROUP, 'draw_image', { prompt: '第二张' });
   check('第二张 -> 开始画', third.includes('已经开始画了'), third);
-  await sleep(7000);
+  await sleep(DELIVER_WAIT);
 
   const fourth = await runImageTool(GROUP, 'draw_image', { prompt: '第三张' });
   check('超日额 -> 拒绝', fourth.includes('今天画得太多了'), fourth);
@@ -184,6 +206,80 @@ async function testTools() {
   nnkbot.config.aiReply.imageGen = saved;
 }
 
+/**
+ * 出图状态注入与历史回写。
+ *
+ * 线上翻过的车：图 04:25:18 才落地，模型 04:23:19 就喊「画好了！」。
+ * 根因是后台发图和翻车文案都不走 generateReply，模型的上下文里
+ * 只看得到「还在画」，另外两个终局全丢了，被追问几轮就只能自己编
+ */
+async function testNotice() {
+  console.log('\n[notice] 出图状态注入与历史回写');
+  resetConfig();
+
+  const g = 40004;
+  check('没画过 -> 无提示', getDrawNotice(g) === null, String(getDrawNotice(g)));
+
+  await runImageTool(g, 'draw_image', { prompt: '一只兔子' });
+  const drawingNotice = getDrawNotice(g) ?? '';
+  check('画的过程中 -> 提示还在画', drawingNotice.includes('还在画'), drawingNotice);
+  check('画的过程中 -> 明确禁止说画好了', drawingNotice.includes('画好了'), drawingNotice);
+
+  await sleep(DELIVER_WAIT);
+
+  // 图交了之后模型必须知道，否则它会接着说「还在画」或者再画一张
+  const doneNotice = getDrawNotice(g) ?? '';
+  check('图发出后 -> 提示已发到群里', doneNotice.includes('已经发到群里'), doneNotice);
+  check('图发出后 -> 提示里带上画的是什么', doneNotice.includes('一只兔子'), doneNotice);
+
+  // 配图文案要进历史：这是模型下一轮判断「图已经交了」的第二重凭据
+  const history = messageStorage.getGroupChatConversations(g);
+  const lastSaid = history[history.length - 1];
+  check('配图文案写回了会话历史', lastSaid?.role === 'assistant' && lastSaid.message.length > 0, JSON.stringify(lastSaid));
+  check('配图文案不是裸图', !lastSaid?.message.includes('CQ:image'), String(lastSaid?.message));
+
+  // 翻车路径：524 之后模型同样不能假装图已经交了
+  const failGroup = 40005;
+  mode = 'fail';
+  await runImageTool(failGroup, 'draw_image', { prompt: '一只猫' });
+  await sleep(DELIVER_WAIT);
+  mode = 'b64';
+
+  const failNotice = getDrawNotice(failGroup) ?? '';
+  check('出图失败 -> 提示画崩了', failNotice.includes('画崩了'), failNotice);
+  check('出图失败 -> 解锁', !isDrawing(failGroup));
+
+  const failHistory = messageStorage.getGroupChatConversations(failGroup);
+  check('翻车文案写回了会话历史', failHistory.length === 1 && failHistory[0].role === 'assistant', JSON.stringify(failHistory));
+
+  // 上游抽风不该吃掉日额度：dailyLimit=2，失败退回后还能连画两张
+  const retry = await runImageTool(failGroup, 'draw_image', { prompt: '再来一只猫' });
+  check('失败退还日额度', retry.includes('已经开始画了'), retry);
+  await sleep(DELIVER_WAIT);
+  const retry2 = await runImageTool(failGroup, 'draw_image', { prompt: '第三只猫' });
+  check('退还后仍按 dailyLimit 计数', retry2.includes('已经开始画了'), retry2);
+  await sleep(DELIVER_WAIT);
+  const retry3 = await runImageTool(failGroup, 'draw_image', { prompt: '第四只猫' });
+  check('额度用满 -> 拒绝', retry3.includes('今天画得太多了'), retry3);
+}
+
+/** 冷却要从图落地算起，不是从开始画算起 */
+async function testCooldown() {
+  console.log('\n[cooldown] 冷却从图落地重新计时');
+  resetConfig();
+
+  const g = 60006;
+  // 线上正是 cooldownSec=120 撞上出图耗时 124s：按开始画算的话，
+  // 图刚发出来就能立刻再画一张，等于没有冷却
+  nnkbot.config.aiReply.imageGen!.cooldownSec = 30;
+
+  await runImageTool(g, 'draw_image', { prompt: '一只狗' });
+  await sleep(DELIVER_WAIT);
+
+  const next = await runImageTool(g, 'draw_image', { prompt: '再来一只狗' });
+  check('图落地后仍在冷却内 -> 拒绝', next.includes('刚画完一张还没缓过来'), next);
+}
+
 // 全部指向假上游，config.json 里的真配置不参与
 nnkbot.config.nonokaService.baseUrl = BASE;
 nnkbot.config.nonokaService.apiKey = 'testkey';
@@ -196,6 +292,8 @@ const stub = startStub();
 testFormat();
 await testService();
 await testTools();
+await testNotice();
+await testCooldown();
 
 stub.close();
 console.log(`\n通过 ${pass} / 失败 ${fail}`);

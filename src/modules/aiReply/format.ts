@@ -146,18 +146,17 @@ export function formatInitiativePromptMessage(): FormattedMessage {
 
 
 /**
- * 图还在画时注入的状态提示。
+ * 出图状态提示（还在画 / 已发出 / 画崩了），正文由 imageGen/tools.ts 的 getDrawNotice 给出。
  *
  * 不写死回复文案：交给模型自己用乃乃香的语气说，才不会每次都是同一句，
  * 也免得违反人设 prompt 里「上下文里自己说过的句子绝不原样复读」那条
  */
-export function formatDrawingPromptMessage(): FormattedMessage {
+export function formatDrawNoticeMessage(notice: string): FormattedMessage {
   return {
     role: 'user',
     userId: 0,
     isMentionMe: false,
-    message: '（System：你答应要画的那张图还在画，没画完，画完了会自动发出来。'
-      + '这次回复要自然地体现出「还在画 / 马上就好」，不要再承诺一遍要画，也不要描述图里有什么）',
+    message: `（System：${notice}）`,
   };
 }
 
