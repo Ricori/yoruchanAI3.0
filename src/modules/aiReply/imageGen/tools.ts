@@ -18,7 +18,7 @@ import { sendSegmentedReply } from '../replySender';
 const DEFAULT_SIZE = '1024x1024';
 
 /** 每群每日出图上限 */
-const DEFAULT_DAILY_LIMIT = 10;
+const DEFAULT_DAILY_LIMIT = 5;
 
 /** 同群两次出图之间的冷却（秒） */
 const DEFAULT_COOLDOWN_SEC = 120;
@@ -80,9 +80,9 @@ function getConfig() {
   return nnkbot.config.aiReply.imageGen ?? {};
 }
 
-/** 这个群能不能画图 */
+/** 这个群能不能画图。整块配置省略时默认开启，要关得显式写 enable: false */
 export function isImageGenEnabled(groupId: number): boolean {
-  const { enable, whiteGroupIds } = getConfig();
+  const { enable = true, whiteGroupIds } = getConfig();
   if (!enable) return false;
   // 白名单留空即不启用白名单机制，与 hPic 的写法一致
   return !whiteGroupIds?.length || whiteGroupIds.includes(groupId);

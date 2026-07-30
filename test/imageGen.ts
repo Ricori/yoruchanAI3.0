@@ -1,7 +1,9 @@
 import http from 'http';
 import nnkbot from '@/core/nnkBot';
 import { formatMessage } from '@/modules/aiReply/format';
-import { getImageTools, isDrawing, runImageTool } from '@/modules/aiReply/imageGen/tools';
+import {
+  getImageTools, isDrawing, isImageGenEnabled, runImageTool,
+} from '@/modules/aiReply/imageGen/tools';
 import { editImage, generateImage } from '@/service/imageGen';
 import { sleep } from '@/utils/function';
 
@@ -172,6 +174,14 @@ async function testTools() {
 
   nnkbot.config.aiReply.imageGen!.whiteGroupIds = [GROUP];
   check('不在白名单 -> 拒绝', (await runImageTool(30003, 'draw_image', { prompt: 'x' })).includes('现在画不了图'));
+
+  // 整块配置省略时默认开启，要关得显式写 enable: false
+  const saved = nnkbot.config.aiReply.imageGen;
+  nnkbot.config.aiReply.imageGen = undefined;
+  check('省略 imageGen 配置 -> 默认开启', isImageGenEnabled(50005));
+  nnkbot.config.aiReply.imageGen = { enable: false };
+  check('显式 enable:false -> 关闭', !isImageGenEnabled(50005));
+  nnkbot.config.aiReply.imageGen = saved;
 }
 
 // 全部指向假上游，config.json 里的真配置不参与

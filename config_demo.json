@@ -53,9 +53,9 @@
         }
       },
       "imageGen": {
-        "enable": false,
+        "enable": true,
         "whiteGroupIds": [],
-        "dailyLimit": 10,
+        "dailyLimit": 5,
         "cooldownSec": 120,
         "size": "1024x1024"
       }

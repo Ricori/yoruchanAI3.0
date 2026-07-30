@@ -7,8 +7,8 @@ import { printError } from '@/utils/print';
  * 图片生成，同样只是把请求转发给 nonoka API 服务（上游是 gpt-image-2）
  */
 
-/** 出一张图 20~90s 都有可能，服务端那边给到 300s，这里留 3 分钟 */
-const IMAGE_TIMEOUT = 180000;
+/** 实测出图 60~130s，留到 140s：再久基本是上游卡住了，等下去也等不到 */
+const IMAGE_TIMEOUT = 140000;
 
 /** 拉底图/取回成品图的超时，只是普通下载 */
 const FETCH_TIMEOUT = 30000;
