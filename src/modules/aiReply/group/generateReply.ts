@@ -7,11 +7,11 @@ import memoryStore from '../memory/store';
 import groupProfileStorage from '../storage/groupProfile';
 import { MEMORY_TOOLS, runMemoryTool } from '../memory/tools';
 import {
-  getImageTools, isDrawing, isImageGenEnabled, isImageTool, runImageTool,
+  getDrawNotice, getImageTools, isDrawing, isImageGenEnabled, isImageTool, runImageTool,
 } from '../imageGen/tools';
 import { getMentionedUserIds } from '../history/mention';
 import {
-  formatAssistantMessage, formatDrawingPromptMessage,
+  formatAssistantMessage, formatDrawNoticeMessage,
   formatInitiativePromptMessage, formatUserMemoryPromptMessage,
 } from '../format';
 
@@ -97,12 +97,17 @@ export async function generateGroupReply(
     messages.push(formatInitiativePromptMessage());
   }
 
-  // 图还在画的时候被提到：告诉模型一声，让它自己用人设的语气说「还在画」，
-  // 同时这一轮不给画图工具——不该排队画第二张
-  const stillDrawing = isDrawing(groupId);
-  if (stillDrawing) {
-    messages.push(formatDrawingPromptMessage());
+  // 出图状态注入。三种终局都要说给模型听：
+  // 「还在画」让它别催自己，「已发出」让它别再喊还在画、别重复画，
+  // 「画崩了」让它别假装图已经交了。后两种状态在会话历史里是看不出来的——
+  // 后台发图和翻车文案都是异步发的，不经过这里
+  const drawNotice = getDrawNotice(groupId);
+  if (drawNotice) {
+    messages.push(formatDrawNoticeMessage(drawNotice));
   }
+
+  // 还在画的这一轮不给画图工具——不该排队画第二张
+  const stillDrawing = isDrawing(groupId);
 
   const context = getGroupContext(groupId);
   const rounds = getToolRounds(isInitiativeReply);
