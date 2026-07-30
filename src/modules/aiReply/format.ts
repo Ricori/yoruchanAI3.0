@@ -30,6 +30,18 @@ function clean(rawText: string, cleanImage = false) {
 }
 
 
+/** 动画表情、以及小于 60kb 的小图都当表情看待，不算「图片」 */
+function isStickerImg(img: { file_size?: string, summary?: string }) {
+  return img.summary === '[动画表情]' || Number(img.file_size || 0) < 60 * 1024;
+}
+
+/** 取被引用消息里的图片URL。改图要拿它当底图，正文里那句 `[之前的图片]` 只是给模型看的占位 */
+function getRefImgUrl(replyMessage?: SimpleMessageData): string | undefined {
+  if (!replyMessage || !hasImage(replyMessage.message)) return undefined;
+  const img = getImgs(replyMessage.message, true)[0];
+  return isStickerImg(img) ? undefined : img.url;
+}
+
 export function formatMessage(
   params: {
     selfId: number,
@@ -53,6 +65,10 @@ export function formatMessage(
 
   let prefix = '';
 
+  // 四个 return 分支都要带上，别只加在其中一个
+  const ref = getRefImgUrl(replyMessage);
+  const refImgUrl = ref ? { refImgUrl: ref } : {};
+
   if (replyMessage) {
     const isBot = replyMessage.sender.user_id === selfId; // 是否引用自己的消息
     if (isBot) {
@@ -68,24 +84,23 @@ export function formatMessage(
 
   if (!hasImage(rawMessage)) {
     return {
-      role: 'user', userId, isMentionMe, message: prefix + clean(rawMessage),
+      role: 'user', userId, isMentionMe, message: prefix + clean(rawMessage), ...refImgUrl,
     };
   }
 
   if (cleanImage) {
     return {
-      role: 'user', userId, isMentionMe, message: prefix + clean(rawMessage, true),
+      role: 'user', userId, isMentionMe, message: prefix + clean(rawMessage, true), ...refImgUrl,
     };
   }
 
   const img = getImgs(rawMessage, true)[0];
-  const isSticker = img.summary === '[动画表情]' || Number(img.file_size || 0) < 60 * 1024;
 
-  if (isSticker) {
+  if (isStickerImg(img)) {
     // 动画表情或小于60kb的图片视为表情，降成纯文本
     const text = transformCQCodes(clean(rawMessage), (cq) => (cq.type === 'image' ? '[表情]' : null)).trim();
     return {
-      role: 'user', userId, isMentionMe, message: prefix + text,
+      role: 'user', userId, isMentionMe, message: prefix + text, ...refImgUrl,
     };
   }
 
@@ -95,6 +110,7 @@ export function formatMessage(
     isMentionMe,
     message: prefix + clean(rawMessage, true),
     imgUrl: img.url,
+    ...refImgUrl,
   };
 }
 
@@ -128,6 +144,22 @@ export function formatInitiativePromptMessage(): FormattedMessage {
   };
 }
 
+
+/**
+ * 图还在画时注入的状态提示。
+ *
+ * 不写死回复文案：交给模型自己用乃乃香的语气说，才不会每次都是同一句，
+ * 也免得违反人设 prompt 里「上下文里自己说过的句子绝不原样复读」那条
+ */
+export function formatDrawingPromptMessage(): FormattedMessage {
+  return {
+    role: 'user',
+    userId: 0,
+    isMentionMe: false,
+    message: '（System：你答应要画的那张图还在画，没画完，画完了会自动发出来。'
+      + '这次回复要自然地体现出「还在画 / 马上就好」，不要再承诺一遍要画，也不要描述图里有什么）',
+  };
+}
 
 export function formatUserMemoryPromptMessage(userMemoryContext: string): FormattedMessage | null {
   if (userMemoryContext === '') return null;

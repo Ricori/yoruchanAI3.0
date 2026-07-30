@@ -1,13 +1,18 @@
 import { getLLMReply, getLLMReplyWithTools } from '@/service/llm';
 import nnkbot from '@/core/nnkBot';
 import { printLog } from '@/utils/print';
+import type { FormattedMessage } from '@/types/message';
 import messageStorage from '../storage/message';
 import memoryStore from '../memory/store';
 import groupProfileStorage from '../storage/groupProfile';
 import { MEMORY_TOOLS, runMemoryTool } from '../memory/tools';
+import {
+  getImageTools, isDrawing, isImageGenEnabled, isImageTool, runImageTool,
+} from '../imageGen/tools';
 import { getMentionedUserIds } from '../history/mention';
 import {
-  formatAssistantMessage, formatInitiativePromptMessage, formatUserMemoryPromptMessage,
+  formatAssistantMessage, formatDrawingPromptMessage,
+  formatInitiativePromptMessage, formatUserMemoryPromptMessage,
 } from '../format';
 
 /** 会主动插话、却还没写群档案的群，先按陌生群对待，免得把主场的语气带过去 */
@@ -34,6 +39,28 @@ const DEFAULT_TOOL_ROUNDS = { mention: 1, initiative: 0 };
 function getToolRounds(isInitiativeReply: boolean): number {
   const key = isInitiativeReply ? 'initiative' : 'mention';
   return nnkbot.config.aiReply.memory?.toolRounds?.[key] ?? DEFAULT_TOOL_ROUNDS[key];
+}
+
+/**
+ * 只在这几条里找触发本次回复的那条 @。
+ *
+ * 回复有 3.5s 防抖，这期间可能又插进来几条别人的消息，所以不能只看最后一条；
+ * 但也不能翻遍整个 30 条窗口——那会把十几轮之前的旧图当成这次要改的图
+ */
+const SRC_IMG_LOOKBACK = 5;
+
+/**
+ * 取改图的底图。
+ *
+ * 只认「提到 bot 的那条消息」带的图：它自己发的图，或者它引用的那条消息里的图。
+ * 绝不拿群里别人随手发的最近一张图当底图——那不是在跟 bot 说话
+ */
+function getSrcImgUrl(history: FormattedMessage[]): string | undefined {
+  const mention = history
+    .slice(-SRC_IMG_LOOKBACK)
+    .reverse()
+    .find((m) => m.role === 'user' && m.isMentionMe);
+  return mention?.imgUrl ?? mention?.refImgUrl;
 }
 
 /** 组装群聊上下文（会话历史 + 群友记忆 + 主动插话提示）并调用 LLM 生成回复；
@@ -70,14 +97,31 @@ export async function generateGroupReply(
     messages.push(formatInitiativePromptMessage());
   }
 
+  // 图还在画的时候被提到：告诉模型一声，让它自己用人设的语气说「还在画」，
+  // 同时这一轮不给画图工具——不该排队画第二张
+  const stillDrawing = isDrawing(groupId);
+  if (stillDrawing) {
+    messages.push(formatDrawingPromptMessage());
+  }
+
   const context = getGroupContext(groupId);
   const rounds = getToolRounds(isInitiativeReply);
 
+  const srcImgUrl = getSrcImgUrl(history);
+  const canDraw = isImageGenEnabled(groupId) && !stillDrawing;
+  const tools = [
+    ...MEMORY_TOOLS,
+    // 没有底图时 edit_image 不下发，模型看不见就不会去改别人的图
+    ...(canDraw ? getImageTools(!!srcImgUrl) : []),
+  ];
+
   let toolCalls = 0;
   const aiReplyText = rounds > 0
-    ? await getLLMReplyWithTools(messages, context, MEMORY_TOOLS, (name, input) => {
+    ? await getLLMReplyWithTools(messages, context, tools, (name, input) => {
       toolCalls += 1;
-      return runMemoryTool(groupId, name, input);
+      return isImageTool(name)
+        ? runImageTool(groupId, name, input, srcImgUrl)
+        : runMemoryTool(groupId, name, input);
     }, rounds)
     // 0 轮就走原来的无工具请求：不下发 tools，缓存前缀和以前完全一致
     : await getLLMReply(messages, context);

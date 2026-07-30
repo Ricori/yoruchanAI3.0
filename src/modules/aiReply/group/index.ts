@@ -9,6 +9,7 @@ import { getTTSAudio } from '@/service/tts';
 import { translateText } from '@/service/llm';
 import messageStorage from '../storage/message';
 import memoryExtractor from '../memory/extract';
+import { isDrawing } from '../imageGen/tools';
 import aliasIndex from '../history/aliasIndex';
 import { formatMessage } from '../format';
 import { sendSegmentedReply } from '../replySender';
@@ -87,11 +88,15 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
 
     // 主动插话的群
     if (nnkbot.config.aiReply.initiativeList.includes(groupId)) {
-      const chance = this.trigger.rollInitiative(groupId, formattedMessage.message);
-      if (chance !== null) {
-        shouldReply = true;
-        isInitiativeReply = true;
-        initiativeChance = chance;
+      // 图还在画的时候不主动插话，一切等图发完再说。
+      // 判定放在掷骰之前，免得白白消耗 trigger 内部的冷却与计数状态
+      if (!isDrawing(groupId)) {
+        const chance = this.trigger.rollInitiative(groupId, formattedMessage.message);
+        if (chance !== null) {
+          shouldReply = true;
+          isInitiativeReply = true;
+          initiativeChance = chance;
+        }
       }
 
       // 群友记忆系统
@@ -116,6 +121,10 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
   /** 生成并发送 AI 回复（同一群同时只处理一次） */
   private async processReply(groupId: number, isInitiativeReply = false, initiativeChance: number | null = null) {
     if (this.processingLocks.has(groupId)) {
+      return;
+    }
+    // 掷骰到这里隔着 3.5s 防抖，期间可能已经开始画图了，主动插话再拦一道
+    if (isInitiativeReply && isDrawing(groupId)) {
       return;
     }
     this.processingLocks.add(groupId);
