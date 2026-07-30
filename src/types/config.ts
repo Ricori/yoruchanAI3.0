@@ -75,13 +75,13 @@ export interface BotConfig {
         initiative?: number;
       };
     };
-    /** 画图工具。整块可省略，省略时按代码里的默认值走（默认关闭） */
+    /** 画图工具。整块可省略，省略时按代码里的默认值走（默认开启） */
     imageGen?: {
-      /** 是否允许模型调用画图工具 */
+      /** 是否允许模型调用画图工具，默认 true，要关得显式写 false */
       enable?: boolean;
       /** 白名单群号，留空则所有开了 AI 回复的群都能画 */
       whiteGroupIds?: number[];
-      /** 每群每日出图上限，默认 10。出图要花钱，别不设上限 */
+      /** 每群每日出图上限，默认 5。出图要花钱，别不设上限 */
       dailyLimit?: number;
       /** 同群两次出图之间的冷却秒数，默认 120 */
       cooldownSec?: number;
