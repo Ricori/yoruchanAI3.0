@@ -9,6 +9,8 @@ export interface FormattedMessage {
   message: string;
   /** 图片URL */
   imgUrl?: string;
+  /** 被引用消息里的图片URL。只在 bot 本地用（改图取底图），不会下发给服务端 */
+  refImgUrl?: string;
   /** 是否添加缓存标记 */
   cacheControl?: boolean;
   /** bot 群聊发言的触发方式：true 为主动插话，false 为被 @ / 被回复后的应答 */

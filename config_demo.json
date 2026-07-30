@@ -51,6 +51,13 @@
           "mention": 1,
           "initiative": 0
         }
+      },
+      "imageGen": {
+        "enable": true,
+        "whiteGroupIds": [],
+        "dailyLimit": 5,
+        "cooldownSec": 120,
+        "size": "1024x1024"
       }
     },
     "ykhrOneDrive": {
