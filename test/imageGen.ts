@@ -181,6 +181,14 @@ async function testSanitize() {
   check('抹掉 JK 与初中', sanitizePrompt('JK 制服，初二女生') === '制服', sanitizePrompt('JK 制服，初二女生'));
   check('不含年龄的 prompt 原样不动', sanitizePrompt('夜晚的便利店门口，少女') === '夜晚的便利店门口，少女');
 
+  // 模型是随机挑语言写 prompt 的，只拦中文等于没拦——线上就是栽在整段英文上
+  const en = sanitizePrompt('A cute 15-year-old anime girl with twin-tails, wearing a high school uniform. Soft lighting.');
+  check('抹掉 15-year-old', !/15|year[\s-]?old/i.test(en), en);
+  check('抹掉 high school', !/high[\s-]?school/i.test(en), en);
+  check('英文主体没被误伤', en.includes('anime girl') && en.includes('uniform') && en.includes('Soft lighting'), en);
+  check('英文不留多余空格', !/\s{2,}|\s[,.]/.test(en), en);
+  check('抹掉 teenage / schoolgirl', sanitizePrompt('a teenage schoolgirl in a park') === 'a in a park', sanitizePrompt('a teenage schoolgirl in a park'));
+
   // 光测纯函数不够，要确认它真的接在了发请求的路上
   await generateImage('15岁高一少女，金色双马尾，水手服', '1024x1024');
   check('清理后的 prompt 才发给上游', !/15岁|高一/.test(lastGenBody), lastGenBody.slice(0, 100));

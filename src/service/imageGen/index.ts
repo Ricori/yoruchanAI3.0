@@ -52,21 +52,30 @@ function isContentBlocked(e: any): boolean {
  * 年龄和年级是内容审核最容易卡的点：人设是高中生，模型写自画像时几乎每次都带上，
  * 而画风本身就决定了角色看起来多大，写了纯属给自己找麻烦，发之前统一抹掉。
  *
+ * 中英文都要拦——模型是随机挑语言写 prompt 的，只拦中文等于没拦。
  * 「高中」这类词在别的语境下（比如「提高中间调」）会被误伤，但画图 prompt 里基本不会出现
  */
 const AGE_PATTERNS = [
   /\d+\s*[岁歳](的)?/g,
   /[高初][一二三中]\s*(的)?(女?生|学生)?/g,
   /小学生/g,
-  /\bJK\b/gi,
   /未成年/g,
+  /\bJK\b/gi,
+  /\b\d+[\s-]*(year|yr)[\s-]*old[\s-]*(girl|boy|child)?/gi,
+  /\b(high|middle|junior|senior|elementary|primary)[\s-]*school(er|s)?\b/gi,
+  /\bschool[\s-]*(girl|boy|kid|child)s?\b/gi,
+  /\b(teen|teenage|teenaged|teenager|preteen|underage|loli)s?\b/gi,
+  /\bgrade\s*\d+\b/gi,
+  /\b\d+(st|nd|rd|th)[\s-]*graders?\b/gi,
 ];
 
 export function sanitizePrompt(prompt: string): string {
   const stripped = AGE_PATTERNS.reduce((acc, re) => acc.replace(re, ''), prompt);
-  // 抹完会留下「，，」和首尾的空逗号，收拾干净再发
+  // 抹完会留下「，，」、连续空格和标点前的空档，收拾干净再发
   return stripped
     .replace(/[，,]\s*(?=[，,])/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,，.。])/g, '$1')
     .replace(/^[\s，,]+|[\s，,]+$/g, '')
     .trim();
 }

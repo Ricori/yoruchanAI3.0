@@ -52,7 +52,10 @@ const DRAW_IMAGE_TOOL: ToolDef = {
     properties: {
       prompt: {
         type: 'string',
-        description: '要画什么，尽量具体地描述画面内容、构图和风格，用中文或英文都可以',
+        description: '要画什么，尽量具体地描述画面内容、构图和风格，用中文或英文都可以。'
+          + '不要写年龄和年级（「15岁」「高一」「高中生」「15-year-old」「high school」这类），'
+          + '画风本身就决定了角色看起来多大，写了会被画图服务的内容审核拒掉，整张图都出不来。'
+          + '直接写「少女」「女孩子」「anime girl」就够了。',
       },
     },
     required: ['prompt'],
@@ -71,7 +74,8 @@ const EDIT_IMAGE_TOOL: ToolDef = {
     properties: {
       prompt: {
         type: 'string',
-        description: '要怎么改，描述改完之后画面应该是什么样子',
+        description: '要怎么改，描述改完之后画面应该是什么样子。'
+          + '和 draw_image 一样，不要写年龄和年级，会被内容审核拒掉。',
       },
     },
     required: ['prompt'],
