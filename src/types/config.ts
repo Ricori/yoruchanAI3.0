@@ -25,6 +25,15 @@ export interface BotConfig {
     lolicon: string;
     /** saucenao 搜图接口 */
     saucenao: string;
+    /** 画图上游。出图要 130s+，过 nonoka 服务会被 CF 边缘切成 524，只能直连 */
+    imageGen: {
+      /** 上游地址，如 https://api.llm-token.cn */
+      baseUrl: string;
+      /** 上游密钥 */
+      apiKey: string;
+      /** 出图模型，如 gpt-image-2 */
+      model: string;
+    };
   };
   /** 复读机功能 */
   repeater: {

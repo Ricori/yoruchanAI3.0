@@ -11,7 +11,7 @@ import { sleep } from '@/utils/function';
 /**
  * 画图工具的冒烟测试：`npx tsx ./test/imageGen.ts`
  *
- * 自带一个假的 nonoka API 服务，跑之前把 nonokaService.baseUrl 指过去，
+ * 自带一个假的上游，跑之前把 apiKeys.imageGen.baseUrl 指过去，
  * 所以不会真的去烧上游的出图额度。config.json 里的配置一概不参与。
  * 「发到群里」那步会因为没连 WS 而打一行 WS Call Error，是预期内的
  */
@@ -281,8 +281,7 @@ async function testCooldown() {
 }
 
 // 全部指向假上游，config.json 里的真配置不参与
-nnkbot.config.nonokaService.baseUrl = BASE;
-nnkbot.config.nonokaService.apiKey = 'testkey';
+nnkbot.config.apiKeys.imageGen = { baseUrl: BASE, apiKey: 'testkey', model: 'gpt-image-2' };
 nnkbot.config.aiReply.imageGen = {
   enable: true, whiteGroupIds: [], dailyLimit: 2, cooldownSec: 0, size: '1024x1024',
 };

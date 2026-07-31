@@ -15,7 +15,12 @@
     },
     "apiKeys": {
       "lolicon": "",
-      "saucenao": ""
+      "saucenao": "",
+      "imageGen": {
+        "baseUrl": "https://api.llm-token.cn",
+        "apiKey": "",
+        "model": "gpt-image-2"
+      }
     },
     "repeater": {
       "enable": true,

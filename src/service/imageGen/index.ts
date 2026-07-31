@@ -4,18 +4,31 @@ import { botConfig } from '@/core/nnkConfig';
 import { printError } from '@/utils/print';
 
 /**
- * 图片生成，同样只是把请求转发给 nonoka API 服务（上游是 gpt-image-2）
+ * 图片生成，直连上游（gpt-image-2）。
+ *
+ * 原本走 nonoka API 服务转发，但出图要 130s+，Cloudflare 边缘等不到响应就会切成 524，
+ * 流式保活也没兜住，所以这里绕开 Worker 直连——本地 Node 没有这个时间上限。
+ * Worker 上的 /v1/images/* 路由保留着，给其它调用方用
  */
 
-/** 实测出图 60~130s，留到 140s：再久基本是上游卡住了，等下去也等不到 */
-const IMAGE_TIMEOUT = 140000;
+/** 实测出图 60~150s，留到 240s。后台出图不阻塞对话，等久点没关系 */
+const IMAGE_TIMEOUT = 240000;
 
 /** 拉底图/取回成品图的超时，只是普通下载 */
 const FETCH_TIMEOUT = 30000;
 
-function getServiceUrl(path: string) {
-  const { baseUrl, apiKey } = botConfig.nonokaService;
-  return `${baseUrl}${path}?apikey=${apiKey}`;
+function getUpstreamUrl(path: string) {
+  return `${botConfig.apiKeys.imageGen.baseUrl}${path}`;
+}
+
+function getAuthHeader() {
+  return { Authorization: `Bearer ${botConfig.apiKeys.imageGen.apiKey}` };
+}
+
+/** 上游的失败原因（余额不足、内容审核等）都在 body 里，只打 message 等于什么都没说 */
+function describeError(e: any) {
+  const data = e?.response?.data;
+  return data ? `${e.message} - ${JSON.stringify(data).slice(0, 300)}` : e.message;
 }
 
 /**
@@ -25,7 +38,7 @@ function getServiceUrl(path: string) {
  * 那个域名从客户端不一定连得上，还是本地下下来再发更稳
  */
 async function normalizeToBase64(data: any): Promise<string | null> {
-  // 服务端是流式返回的，出错时状态码已经定死 200，错误只能在 body 里
+  // 上游偶尔用 200 带 error 返回失败，不拦住的话会当成「没图」静默吞掉
   if (data?.error) {
     printError(`[ImageGen] 上游返回错误: ${JSON.stringify(data.error)}`);
     return null;
@@ -61,12 +74,13 @@ async function fetchImageBuffer(imgUrl: string): Promise<Buffer | null> {
 
 /** 文生图。成功返回 `base64://xxx`，失败返回 null */
 export async function generateImage(prompt: string, size: string): Promise<string | null> {
-  const ret = await Axios.post(getServiceUrl('/v1/images/generations'), {
-    prompt, size, n: 1,
+  const ret = await Axios.post(getUpstreamUrl('/v1/images/generations'), {
+    prompt, size, n: 1, model: botConfig.apiKeys.imageGen.model,
   }, {
+    headers: getAuthHeader(),
     timeout: IMAGE_TIMEOUT,
   }).catch((e) => {
-    printError(`[ImageGen] 生成失败: ${e.message}`);
+    printError(`[ImageGen] 生成失败: ${describeError(e)}`);
     return null;
   });
 
@@ -85,12 +99,13 @@ export async function editImage(srcImgUrl: string, prompt: string, size: string)
   form.append('prompt', prompt);
   form.append('size', size);
   form.append('n', '1');
+  form.append('model', botConfig.apiKeys.imageGen.model);
 
-  const ret = await Axios.post(getServiceUrl('/v1/images/edits'), form, {
-    headers: form.getHeaders(),
+  const ret = await Axios.post(getUpstreamUrl('/v1/images/edits'), form, {
+    headers: { ...form.getHeaders(), ...getAuthHeader() },
     timeout: IMAGE_TIMEOUT,
   }).catch((e) => {
-    printError(`[ImageGen] 改图失败: ${e.message}`);
+    printError(`[ImageGen] 改图失败: ${describeError(e)}`);
     return null;
   });
 
