@@ -1,4 +1,5 @@
 import http from 'http';
+import sharp from 'sharp';
 import nnkbot from '@/core/nnkBot';
 import { formatMessage } from '@/modules/aiReply/format';
 import {
@@ -57,8 +58,12 @@ const BLOCK_BODY = JSON.stringify({
   },
 });
 
-/** 最近一次 generations 收到的请求体，用来验 prompt 到底是怎么发出去的 */
+/** 最近一次 generations / edits 收到的请求体，用来验实际发出去的是什么 */
 let lastGenBody = '';
+let lastEditBody = '';
+
+/** 超过上游 11.85MiB 上限的大图。噪点填充，保证 PNG 压不下去 */
+let hugePng: Buffer | undefined;
 
 function startStub() {
   const server = http.createServer((req, res) => {
@@ -69,6 +74,12 @@ function startStub() {
       if (url.pathname === '/src.png' || url.pathname === '/remote.png') {
         res.writeHead(200, { 'Content-Type': 'image/png' });
         res.end(Buffer.from(PNG_B64, 'base64'));
+        return;
+      }
+      // 一张真会超过上游 11.85MiB 上限的大图，用来验压缩
+      if (url.pathname === '/huge.png') {
+        res.writeHead(200, { 'Content-Type': 'image/png' });
+        res.end(hugePng!);
         return;
       }
       if (url.pathname === '/v1/images/generations') {
@@ -98,6 +109,7 @@ function startStub() {
       }
       if (url.pathname === '/v1/images/edits') {
         const text = Buffer.concat(chunks).toString('latin1');
+        lastEditBody = text;
         // 底图和 prompt 得真的进了 multipart，不然改图请求是空的
         check('edits 请求带上了底图与 prompt', text.includes('name="image"') && text.includes('name="prompt"'));
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -203,6 +215,28 @@ async function testSanitize() {
   await generateImage('15岁高一少女，金色双马尾，水手服', '1024x1024');
   check('清理后的 prompt 才发给上游', !/15岁|高一/.test(lastGenBody), lastGenBody.slice(0, 100));
   check('prompt 主体没被误伤', lastGenBody.includes('金色双马尾') && lastGenBody.includes('水手服'), lastGenBody.slice(0, 100));
+}
+
+/**
+ * 群友发的原图（尤其手机照片）经常超过上游 11.85MiB 的 body 上限，
+ * 超了要在本地压掉，而不是发出去挨一个 400
+ */
+async function testShrink() {
+  console.log('\n[shrink] 超大底图自动压缩');
+
+  const before = hugePng!.length;
+  check('测试用大图确实超限', before > 12428800, `${(before / 1024 / 1024).toFixed(1)}MB`);
+
+  lastEditBody = '';
+  const edited = await editImage(`${BASE}/huge.png`, '改成夜景', '1024x1024');
+  check('超大底图 -> 压缩后改图成功', !!edited.file?.startsWith('base64://'), String(edited.file).slice(0, 40));
+  check('实际发出去的 body 已在限制内', lastEditBody.length <= 12428800, `${(lastEditBody.length / 1024 / 1024).toFixed(1)}MB`);
+  // 上游按后缀判类型，转了 JPEG 还报 .png 会被当成损坏的 png
+  check('转 JPEG 后文件名后缀跟着改', lastEditBody.includes('filename="image.jpg"') && lastEditBody.includes('image/jpeg'));
+
+  lastEditBody = '';
+  await editImage(`${BASE}/src.png`, '改成夜景', '1024x1024');
+  check('没超限的图不动，仍按 png 送', lastEditBody.includes('filename="image.png"'));
 }
 
 /**
@@ -389,11 +423,20 @@ nnkbot.config.aiReply.imageGen = {
   enable: true, whiteGroupIds: [], dailyLimit: 2, cooldownSec: 0, size: '1024x1024',
 };
 
+// 噪点图，PNG 压不动，才能真的做出一张超过 11.85MiB 的图
+const NOISE = 2600;
+hugePng = await sharp({
+  create: {
+    width: NOISE, height: NOISE, channels: 3, background: '#000', noise: { type: 'gaussian', mean: 128, sigma: 80 },
+  },
+}).png({ compressionLevel: 0 }).toBuffer();
+
 const stub = startStub();
 
 testFormat();
 await testService();
 await testSanitize();
+await testShrink();
 await testRetry();
 await testTools();
 await testNotice();

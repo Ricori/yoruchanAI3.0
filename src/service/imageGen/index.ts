@@ -1,5 +1,6 @@
 import Axios from 'axios';
 import FormData from 'form-data';
+import sharp from 'sharp';
 import { botConfig } from '@/core/nnkConfig';
 import { sleep } from '@/utils/function';
 import { printError, printLog } from '@/utils/print';
@@ -157,6 +158,49 @@ async function fetchImageBuffer(imgUrl: string): Promise<Buffer | null> {
   return ret ? Buffer.from(ret.data) : null;
 }
 
+/**
+ * 超过4MB就压缩
+ */
+const MAX_SRC_BYTES = 4 * 1024 * 1024;
+
+/** 压过头会糊，长边 2048 对出图来说够用了 */
+const MAX_SRC_EDGE = 2048;
+
+/**
+ * 底图太大就压到能发的尺寸。
+ *
+ * 转 JPEG 是因为 PNG 对照片几乎压不动，而这里超限的基本都是照片；
+ * 压完还超（比如超长图）就再降一档质量，两次都不行只能放弃
+ */
+async function shrinkIfNeeded(buffer: Buffer): Promise<{ buffer: Buffer, jpeg: boolean } | null> {
+  if (buffer.length <= MAX_SRC_BYTES) return { buffer, jpeg: false };
+
+  const mb = (n: number) => (n / 1024 / 1024).toFixed(1);
+
+  for (const quality of [82, 60]) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const out = await sharp(buffer)
+        .rotate() // 按 EXIF 摆正，否则压完方向会变
+        .resize({
+          width: MAX_SRC_EDGE, height: MAX_SRC_EDGE, fit: 'inside', withoutEnlargement: true,
+        })
+        .jpeg({ quality })
+        .toBuffer();
+      if (out.length <= MAX_SRC_BYTES) {
+        printLog(`[ImageGen] 底图 ${mb(buffer.length)}MB 超限，压到 ${mb(out.length)}MB (q${quality})`);
+        return { buffer: out, jpeg: true };
+      }
+    } catch (e: any) {
+      printError(`[ImageGen] 底图压缩失败: ${e.message}`);
+      return null;
+    }
+  }
+
+  printError(`[ImageGen] 底图 ${mb(buffer.length)}MB 压不到限制以内，放弃`);
+  return null;
+}
+
 /** 清理 prompt，改动了就打一行，不然线上看不出发出去的到底是什么 */
 function prepare(prompt: string): string {
   const safe = sanitizePrompt(prompt);
@@ -184,16 +228,21 @@ export async function generateImage(prompt: string, size: string): Promise<Image
 
 /** 图生图：以 srcImgUrl 为底改图 */
 export async function editImage(srcImgUrl: string, prompt: string, size: string): Promise<ImageResult> {
-  const srcBuffer = await fetchImageBuffer(srcImgUrl);
-  if (!srcBuffer) return { file: null, blocked: false };
+  const raw = await fetchImageBuffer(srcImgUrl);
+  if (!raw) return { file: null, blocked: false };
+
+  const src = await shrinkIfNeeded(raw);
+  if (!src) return { file: null, blocked: false };
 
   const safe = prepare(prompt);
 
   // FormData 是流，发一次就读空了，重试必须重新拼一份
   const post = () => {
     const form = new FormData();
-    // 上游按文件名后缀判类型，QQ 的图片链接常常不带后缀，统一按 png 送
-    form.append('image', srcBuffer, { filename: 'image.png', contentType: 'image/png' });
+    // 上游按文件名后缀判类型，QQ 的图片链接常常不带后缀，得自己把后缀报对
+    form.append('image', src.buffer, src.jpeg
+      ? { filename: 'image.jpg', contentType: 'image/jpeg' }
+      : { filename: 'image.png', contentType: 'image/png' });
     form.append('prompt', safe);
     form.append('size', size);
     form.append('n', '1');
