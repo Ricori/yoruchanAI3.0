@@ -25,6 +25,12 @@ function getServiceUrl(path: string) {
  * 那个域名从客户端不一定连得上，还是本地下下来再发更稳
  */
 async function normalizeToBase64(data: any): Promise<string | null> {
+  // 服务端是流式返回的，出错时状态码已经定死 200，错误只能在 body 里
+  if (data?.error) {
+    printError(`[ImageGen] 上游返回错误: ${JSON.stringify(data.error)}`);
+    return null;
+  }
+
   const first = data?.data?.[0];
   if (!first) return null;
 
