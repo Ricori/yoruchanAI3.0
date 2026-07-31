@@ -147,9 +147,7 @@ export function formatInitiativePromptMessage(): FormattedMessage {
 
 /**
  * 出图状态提示（还在画 / 已发出 / 画崩了），正文由 imageGen/tools.ts 的 getDrawNotice 给出。
- *
- * 不写死回复文案：交给模型自己用乃乃香的语气说，才不会每次都是同一句，
- * 也免得违反人设 prompt 里「上下文里自己说过的句子绝不原样复读」那条
+ * 不写死回复文案，交给模型自己用乃乃香的语气说
  */
 export function formatDrawNoticeMessage(notice: string): FormattedMessage {
   return {

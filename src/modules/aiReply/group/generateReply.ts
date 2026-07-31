@@ -52,8 +52,7 @@ const SRC_IMG_LOOKBACK = 5;
 /**
  * 取改图的底图。
  *
- * 只认「提到 bot 的那条消息」带的图：它自己发的图，或者它引用的那条消息里的图。
- * 绝不拿群里别人随手发的最近一张图当底图——那不是在跟 bot 说话
+ * 只认「提到 bot 的那条消息」带的图：它自己发的图，或者它引用的那条消息里的图
  */
 function getSrcImgUrl(history: FormattedMessage[]): string | undefined {
   const mention = history
@@ -97,10 +96,7 @@ export async function generateGroupReply(
     messages.push(formatInitiativePromptMessage());
   }
 
-  // 出图状态注入。三种终局都要说给模型听：
-  // 「还在画」让它别催自己，「已发出」让它别再喊还在画、别重复画，
-  // 「画崩了」让它别假装图已经交了。后两种状态在会话历史里是看不出来的——
-  // 后台发图和翻车文案都是异步发的，不经过这里
+  // 出图状态注入。「还在画」让它别催自己，「已发出」让它别再喊还在画、别重复画，「画崩了」让它别假装图已经交了
   const drawNotice = getDrawNotice(groupId);
   if (drawNotice) {
     messages.push(formatDrawNoticeMessage(drawNotice));

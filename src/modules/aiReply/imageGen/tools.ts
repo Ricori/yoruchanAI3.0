@@ -39,7 +39,7 @@ const DEFAULT_COOLDOWN_SEC = 120;
 const MIN_DELIVER_DELAY = 5000;
 
 /** 图已发出 / 翻车的状态还值得告诉模型多久。再久话题早过去了，重提反而突兀 */
-const NOTICE_TTL = 10 * 60 * 1000;
+const NOTICE_TTL = 6 * 60 * 1000;
 
 const DRAW_IMAGE_TOOL: ToolDef = {
   name: 'draw_image',
@@ -122,11 +122,7 @@ function setDrawState(groupId: number, status: DrawState['status'], prompt: stri
 }
 
 /**
- * 取要注入 system 的出图状态提示，没什么好说的返回 null。
- *
- * 「还在画」以外的两个状态也必须注入：后台发图和翻车文案都是异步发的，
- * 模型光看会话历史分不清「图交了」还是「还在画」——
- * 这正是它会在图还没出来时就喊「画好了」的原因
+ * 取要注入 system 的出图状态提示
  */
 export function getDrawNotice(groupId: number): string | null {
   const state = drawStates.get(groupId);
@@ -190,7 +186,7 @@ function noteQuotaUsed(groupId: number) {
  *
  * 冷却从图落地重新计时：从「开始画」算的话，一张图要画 120s、冷却也是 120s，
  * 等于图刚发出来就能立刻再画一张，冷却形同虚设。
- * 上游抽风（524 之类）也不该吃掉用户的日额度，失败退回去
+ * 上游错误也不该吃掉用户的日额度，失败退回去
  */
 function noteQuotaSettled(groupId: number, ok: boolean) {
   const record = quota.get(groupId);
@@ -259,7 +255,7 @@ async function deliverImage(groupId: number, task: Promise<string | null>, label
     // 一定要落状态，否则一次失败就把这个群永久锁死
     if (!delivered) {
       setDrawState(groupId, 'failed', prompt);
-      await sayAndRemember(groupId, randomText(FAIL_TEXTS)).catch(() => {});
+      await sayAndRemember(groupId, randomText(FAIL_TEXTS)).catch(() => { });
     }
     noteQuotaSettled(groupId, delivered);
   }

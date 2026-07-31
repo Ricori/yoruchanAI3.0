@@ -53,7 +53,7 @@
         }
       },
       "imageGen": {
-        "enable": true,
+        "enable": false,
         "whiteGroupIds": [],
         "dailyLimit": 5,
         "cooldownSec": 120,
