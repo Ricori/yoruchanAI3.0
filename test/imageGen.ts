@@ -42,7 +42,10 @@ function check(name: string, ok: boolean, detail = '') {
  * 假上游。generations 按 mode 分别返 b64_json 和 url，两条归一化分支都要走到；
  * fail 用来模拟线上那个 524（上游出图卡在网关超时线上）
  */
-let mode: 'b64' | 'url' | 'fail' | 'blocked' = 'b64';
+let mode: 'b64' | 'url' | 'fail' | 'blocked' | 'flaky502' = 'b64';
+
+/** generations 收到过几次请求，用来验重试到底发生了没有 */
+let genHits = 0;
 
 /** 上游内容审核拒收时的真实返回 */
 const BLOCK_BODY = JSON.stringify({
@@ -69,6 +72,13 @@ function startStub() {
         return;
       }
       if (url.pathname === '/v1/images/generations') {
+        genHits += 1;
+        // 第一发 502、第二发正常，模拟上游偶发抽风
+        if (mode === 'flaky502' && genHits === 1) {
+          res.writeHead(502, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: 'Upstream service temporarily unavailable' } }));
+          return;
+        }
         if (mode === 'fail') {
           res.writeHead(524);
           res.end();
@@ -193,6 +203,38 @@ async function testSanitize() {
   await generateImage('15岁高一少女，金色双马尾，水手服', '1024x1024');
   check('清理后的 prompt 才发给上游', !/15岁|高一/.test(lastGenBody), lastGenBody.slice(0, 100));
   check('prompt 主体没被误伤', lastGenBody.includes('金色双马尾') && lastGenBody.includes('水手服'), lastGenBody.slice(0, 100));
+}
+
+/**
+ * 上游偶发 502，隔几秒重来一次基本就好了；但确定性的失败重试没有意义，
+ * 而且上游对连发的出图请求会直接 ban，多打一次是有代价的
+ */
+async function testRetry() {
+  console.log('\n[retry] 上游抽风时自动重试一次');
+
+  mode = 'flaky502';
+  genHits = 0;
+  const recovered = await generateImage('一只兔子', '1024x1024');
+  mode = 'b64';
+  check('502 之后重试成功拿到图', !!recovered.file?.startsWith('base64://'), String(recovered.file).slice(0, 40));
+  check('502 只重试一次（共 2 发）', genHits === 2, `genHits=${genHits}`);
+
+  // 524 不带 body，走的也是 5xx 分支，同样该重试
+  mode = 'fail';
+  genHits = 0;
+  const stillFailed = await generateImage('一只兔子', '1024x1024');
+  mode = 'b64';
+  check('一直 5xx -> 重试一次后放弃', genHits === 2, `genHits=${genHits}`);
+  check('一直 5xx -> 返回 null', stillFailed.file === null);
+  check('5xx 不算内容拦截', stillFailed.blocked === false);
+
+  // 内容拦截是确定性的，重来一次只会再被拒一次
+  mode = 'blocked';
+  genHits = 0;
+  const blocked = await generateImage('一只兔子', '1024x1024');
+  mode = 'b64';
+  check('内容拦截 -> 不重试（只 1 发）', genHits === 1, `genHits=${genHits}`);
+  check('内容拦截 -> blocked 为真', blocked.blocked === true);
 }
 
 /** 后台出图那一轮跑完要多久：发图前 5s 最小延迟 + 配图文案的分段打字延迟 */
@@ -352,6 +394,7 @@ const stub = startStub();
 testFormat();
 await testService();
 await testSanitize();
+await testRetry();
 await testTools();
 await testNotice();
 await testCooldown();

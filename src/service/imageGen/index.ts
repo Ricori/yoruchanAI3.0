@@ -1,6 +1,7 @@
 import Axios from 'axios';
 import FormData from 'form-data';
 import { botConfig } from '@/core/nnkConfig';
+import { sleep } from '@/utils/function';
 import { printError, printLog } from '@/utils/print';
 
 /**
@@ -46,6 +47,38 @@ const BLOCK_PATTERNS = /安全政策|内容政策|审核|拦截|不适合|safety
 function isContentBlocked(e: any): boolean {
   if (e?.response?.status !== 400) return false;
   return BLOCK_PATTERNS.test(JSON.stringify(e.response.data ?? ''));
+}
+
+/** 重试前先等一会儿。上游对连发的出图请求会直接 ban，贴着重试等于自找封禁 */
+const RETRY_DELAY = 5000;
+
+/**
+ * 值不值得重试。
+ *
+ * 只认 5xx 和网络层错误：4xx 都是确定性的（内容拦截、鉴权、额度），重来一次还是同样的结果。
+ * 超时也不重试——已经等了 240s，再来一轮群友早就散了
+ */
+function isRetryable(e: any): boolean {
+  const status = e?.response?.status;
+  if (status) return status >= 500;
+  return e?.code !== 'ECONNABORTED';
+}
+
+/**
+ * 跑一次请求，失败且值得重试就隔几秒再来一次，只重一次。
+ *
+ * send 每次都要重新构造请求：改图那条路 FormData 是流，
+ * 同一个实例发第二次时内容已经被读空了
+ */
+async function withRetry<T>(send: () => Promise<T>, label: string): Promise<T> {
+  try {
+    return await send();
+  } catch (e: any) {
+    if (!isRetryable(e)) throw e;
+    printLog(`[ImageGen] ${label}上游抽风(${e?.response?.status ?? e?.code ?? e.message})，${RETRY_DELAY / 1000}s 后重试一次`);
+    await sleep(RETRY_DELAY);
+    return send();
+  }
 }
 
 /**
@@ -133,13 +166,15 @@ function prepare(prompt: string): string {
 
 /** 文生图 */
 export async function generateImage(prompt: string, size: string): Promise<ImageResult> {
+  const safe = prepare(prompt);
+
   try {
-    const res = await Axios.post(getUpstreamUrl('/v1/images/generations'), {
-      prompt: prepare(prompt), size, n: 1, model: botConfig.apiKeys.imageGen.model,
+    const res = await withRetry(() => Axios.post(getUpstreamUrl('/v1/images/generations'), {
+      prompt: safe, size, n: 1, model: botConfig.apiKeys.imageGen.model,
     }, {
       headers: getAuthHeader(),
       timeout: IMAGE_TIMEOUT,
-    });
+    }), '生成');
     return await toResult(res.data);
   } catch (e: any) {
     printError(`[ImageGen] 生成失败: ${describeError(e)}`);
@@ -152,19 +187,26 @@ export async function editImage(srcImgUrl: string, prompt: string, size: string)
   const srcBuffer = await fetchImageBuffer(srcImgUrl);
   if (!srcBuffer) return { file: null, blocked: false };
 
-  const form = new FormData();
-  // 上游按文件名后缀判类型，QQ 的图片链接常常不带后缀，统一按 png 送
-  form.append('image', srcBuffer, { filename: 'image.png', contentType: 'image/png' });
-  form.append('prompt', prepare(prompt));
-  form.append('size', size);
-  form.append('n', '1');
-  form.append('model', botConfig.apiKeys.imageGen.model);
+  const safe = prepare(prompt);
 
-  try {
-    const res = await Axios.post(getUpstreamUrl('/v1/images/edits'), form, {
+  // FormData 是流，发一次就读空了，重试必须重新拼一份
+  const post = () => {
+    const form = new FormData();
+    // 上游按文件名后缀判类型，QQ 的图片链接常常不带后缀，统一按 png 送
+    form.append('image', srcBuffer, { filename: 'image.png', contentType: 'image/png' });
+    form.append('prompt', safe);
+    form.append('size', size);
+    form.append('n', '1');
+    form.append('model', botConfig.apiKeys.imageGen.model);
+
+    return Axios.post(getUpstreamUrl('/v1/images/edits'), form, {
       headers: { ...form.getHeaders(), ...getAuthHeader() },
       timeout: IMAGE_TIMEOUT,
     });
+  };
+
+  try {
+    const res = await withRetry(post, '改图');
     return await toResult(res.data);
   } catch (e: any) {
     printError(`[ImageGen] 改图失败: ${describeError(e)}`);
