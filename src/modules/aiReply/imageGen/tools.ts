@@ -2,7 +2,7 @@ import nnkbot from '@/core/nnkBot';
 import { printLog } from '@/utils/print';
 import { getImgCode } from '@/utils/msgCode';
 import { randomText, sleep } from '@/utils/function';
-import { editImage, generateImage } from '@/service/imageGen';
+import { editImage, generateImage, type ImageResult } from '@/service/imageGen';
 import type { ToolDef } from '@/service/llm';
 import messageStorage from '../storage/message';
 import { formatAssistantMessage } from '../format';
@@ -102,7 +102,8 @@ export function isImageGenEnabled(groupId: number): boolean {
 
 /** 一个群最近一次出图走到哪一步了 */
 interface DrawState {
-  status: 'drawing' | 'done' | 'failed';
+  /** blocked 要和 failed 分开：原样重画一定还是被拦，得让模型知道该换说法 */
+  status: 'drawing' | 'done' | 'failed' | 'blocked';
   /** 这一张画的是什么。注入提示时给模型看，免得它自己编一套说辞 */
   prompt: string;
   /** 状态写入时间，done / failed 超过 NOTICE_TTL 就不再注入 */
@@ -141,6 +142,12 @@ export function getDrawNotice(groupId: number): string | null {
     return `你刚才画的那张图（${state.prompt}）已经发到群里了，大家都看得见，你也已经配过一句话了。`
       + '所以不要再说「还在画」「马上就好」，也不要重新画一张（除非群友明确又要了一张）。'
       + '现在就当图已经摆在眼前那样自然接话。';
+  }
+
+  if (state.status === 'blocked') {
+    return `你刚才想画的那张图（${state.prompt}）被画图服务拒绝了，说这个内容不能画，你也已经跟大家说过一声了。`
+      + '不要假装图已经发出去了，也不要接着说「还在画」。'
+      + '要是还想画，必须换个画面或换种描述——原样再来一次照样会被拒。';
   }
 
   return `你刚才想画的那张图（${state.prompt}）画崩了，没能发出来，你也已经跟大家说过一声了。`
@@ -214,6 +221,13 @@ const FAIL_TEXTS = [
   '呜呜 画不出来 || 下次一定',
 ];
 
+/** 被内容审核拦下时发的话。跟画崩了不是一回事，说法也得不一样 */
+const BLOCKED_TEXTS = [
+  '欸 这个画不了 || 换一个嘛',
+  '呜 这张被拦下来了 || 乃乃香也没办法',
+  '这个不让画诶 || 前辈换个说法试试',
+];
+
 /**
  * 发一段 bot 自己的话：既发到群里，也记进会话历史。
  *
@@ -227,35 +241,37 @@ async function sayAndRemember(groupId: number, text: string) {
 }
 
 /** 后台跑的出图任务：画完配一句话再发图，失败发翻车文案，无论如何都要落状态 */
-async function deliverImage(groupId: number, task: Promise<string | null>, label: string, prompt: string) {
+async function deliverImage(groupId: number, task: Promise<ImageResult>, label: string, prompt: string) {
   const startedAt = Date.now();
   let delivered = false;
+  let blocked = false;
 
   try {
-    const file = await task;
+    const result = await task;
+    blocked = result.blocked;
 
     // 图不能比文字回复先到，不够 MIN_DELIVER_DELAY 就补上
     const elapsed = Date.now() - startedAt;
     if (elapsed < MIN_DELIVER_DELAY) await sleep(MIN_DELIVER_DELAY - elapsed);
 
-    if (file) {
+    if (result.file) {
       printLog(`[ImageTool] ${label} 出图完成 (${groupId})，耗时 ${Math.round((Date.now() - startedAt) / 1000)}s`);
       // 状态先落再发话：发这几条要几秒，这期间进来的回复该按「图已交」来说，
       // 而不是读到过期的「还在画」
       delivered = true;
       setDrawState(groupId, 'done', prompt);
       await sayAndRemember(groupId, randomText(DONE_TEXTS));
-      nnkbot.sendGroupMsg(groupId, getImgCode(file));
+      nnkbot.sendGroupMsg(groupId, getImgCode(result.file));
     } else {
-      printLog(`[ImageTool] ${label} 出图失败 (${groupId})`);
+      printLog(`[ImageTool] ${label} ${blocked ? '被内容审核拦下' : '出图失败'} (${groupId})`);
     }
   } catch (e) {
     printLog(`[ImageTool] ${label} 出图异常 (${groupId}): ${e}`);
   } finally {
     // 一定要落状态，否则一次失败就把这个群永久锁死
     if (!delivered) {
-      setDrawState(groupId, 'failed', prompt);
-      await sayAndRemember(groupId, randomText(FAIL_TEXTS)).catch(() => { });
+      setDrawState(groupId, blocked ? 'blocked' : 'failed', prompt);
+      await sayAndRemember(groupId, randomText(blocked ? BLOCKED_TEXTS : FAIL_TEXTS)).catch(() => { });
     }
     noteQuotaSettled(groupId, delivered);
   }

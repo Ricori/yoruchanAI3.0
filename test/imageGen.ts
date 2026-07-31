@@ -5,7 +5,7 @@ import {
   getDrawNotice, getImageTools, isDrawing, isImageGenEnabled, runImageTool,
 } from '@/modules/aiReply/imageGen/tools';
 import messageStorage from '@/modules/aiReply/storage/message';
-import { editImage, generateImage } from '@/service/imageGen';
+import { editImage, generateImage, sanitizePrompt } from '@/service/imageGen';
 import { sleep } from '@/utils/function';
 
 /**
@@ -42,7 +42,20 @@ function check(name: string, ok: boolean, detail = '') {
  * 假上游。generations 按 mode 分别返 b64_json 和 url，两条归一化分支都要走到；
  * fail 用来模拟线上那个 524（上游出图卡在网关超时线上）
  */
-let mode: 'b64' | 'url' | 'fail' = 'b64';
+let mode: 'b64' | 'url' | 'fail' | 'blocked' = 'b64';
+
+/** 上游内容审核拒收时的真实返回 */
+const BLOCK_BODY = JSON.stringify({
+  error: {
+    message: '您的请求无法用于生成图像。该请求可能因安全政策被拦截，或不适合进行图像生成。',
+    type: 'invalid_request_error',
+    param: '',
+    code: 400,
+  },
+});
+
+/** 最近一次 generations 收到的请求体，用来验 prompt 到底是怎么发出去的 */
+let lastGenBody = '';
 
 function startStub() {
   const server = http.createServer((req, res) => {
@@ -61,6 +74,12 @@ function startStub() {
           res.end();
           return;
         }
+        if (mode === 'blocked') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(BLOCK_BODY);
+          return;
+        }
+        lastGenBody = Buffer.concat(chunks).toString();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(mode === 'url'
           ? { data: [{ url: `${BASE}/remote.png` }] }
@@ -133,18 +152,39 @@ async function testService() {
   console.log('\n[service] 上游返回归一化');
 
   const generated = await generateImage('一只兔耳朵的动漫女孩', '1024x1024');
-  check('返 b64_json -> base64://', !!generated?.startsWith('base64://'), String(generated).slice(0, 40));
+  check('返 b64_json -> base64://', !!generated.file?.startsWith('base64://'), String(generated.file).slice(0, 40));
 
   mode = 'url';
   const fromUrl = await generateImage('一只兔耳朵的动漫女孩', '1024x1024');
-  check('只返 url -> 下载后转 base64://', !!fromUrl?.startsWith('base64://'), String(fromUrl).slice(0, 40));
+  check('只返 url -> 下载后转 base64://', !!fromUrl.file?.startsWith('base64://'), String(fromUrl.file).slice(0, 40));
   mode = 'b64';
 
   const edited = await editImage(`${BASE}/src.png`, '改成夜景', '1024x1024');
-  check('editImage -> base64://', !!edited?.startsWith('base64://'), String(edited).slice(0, 40));
+  check('editImage -> base64://', !!edited.file?.startsWith('base64://'), String(edited.file).slice(0, 40));
 
   const badSrc = await editImage(`${BASE}/404.png`, '改成夜景', '1024x1024');
-  check('底图拉不到 -> null', badSrc === null, String(badSrc));
+  check('底图拉不到 -> null', badSrc.file === null, String(badSrc.file));
+  check('底图拉不到不算内容拦截', badSrc.blocked === false);
+}
+
+/**
+ * prompt 里的年龄/年级要在送到上游之前抹掉。
+ *
+ * 人设是高中生，模型写自画像时几乎每次都会带上「15岁高一」，
+ * 而这正是内容审核最容易卡的点，线上已经因此翻过车
+ */
+async function testSanitize() {
+  console.log('\n[sanitize] 年龄与年级清理');
+
+  check('抹掉岁数与年级', sanitizePrompt('动画风格，15岁高一少女，金色双马尾') === '动画风格，少女，金色双马尾', sanitizePrompt('动画风格，15岁高一少女，金色双马尾'));
+  check('抹掉「高中生」', sanitizePrompt('一个高中生，站在天台') === '一个，站在天台', sanitizePrompt('一个高中生，站在天台'));
+  check('抹掉 JK 与初中', sanitizePrompt('JK 制服，初二女生') === '制服', sanitizePrompt('JK 制服，初二女生'));
+  check('不含年龄的 prompt 原样不动', sanitizePrompt('夜晚的便利店门口，少女') === '夜晚的便利店门口，少女');
+
+  // 光测纯函数不够，要确认它真的接在了发请求的路上
+  await generateImage('15岁高一少女，金色双马尾，水手服', '1024x1024');
+  check('清理后的 prompt 才发给上游', !/15岁|高一/.test(lastGenBody), lastGenBody.slice(0, 100));
+  check('prompt 主体没被误伤', lastGenBody.includes('金色双马尾') && lastGenBody.includes('水手服'), lastGenBody.slice(0, 100));
 }
 
 /** 后台出图那一轮跑完要多久：发图前 5s 最小延迟 + 配图文案的分段打字延迟 */
@@ -252,6 +292,19 @@ async function testNotice() {
   const failHistory = messageStorage.getGroupChatConversations(failGroup);
   check('翻车文案写回了会话历史', failHistory.length === 1 && failHistory[0].role === 'assistant', JSON.stringify(failHistory));
 
+  // 内容拦截跟画崩了不是一回事：原样重画一定还是被拦，提示必须让模型换说法
+  const blockGroup = 40006;
+  mode = 'blocked';
+  await runImageTool(blockGroup, 'draw_image', { prompt: '一只兔子' });
+  await sleep(DELIVER_WAIT);
+  mode = 'b64';
+
+  const blockNotice = getDrawNotice(blockGroup) ?? '';
+  check('内容拦截 -> 提示不能画', blockNotice.includes('不能画'), blockNotice);
+  check('内容拦截 -> 要求换说法', blockNotice.includes('换个画面') || blockNotice.includes('换种描述'), blockNotice);
+  check('内容拦截 -> 不说成画崩了', !blockNotice.includes('画崩了'), blockNotice);
+  check('内容拦截 -> 解锁', !isDrawing(blockGroup));
+
   // 上游抽风不该吃掉日额度：dailyLimit=2，失败退回后还能连画两张
   const retry = await runImageTool(failGroup, 'draw_image', { prompt: '再来一只猫' });
   check('失败退还日额度', retry.includes('已经开始画了'), retry);
@@ -290,6 +343,7 @@ const stub = startStub();
 
 testFormat();
 await testService();
+await testSanitize();
 await testTools();
 await testNotice();
 await testCooldown();
