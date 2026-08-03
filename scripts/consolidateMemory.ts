@@ -1,5 +1,5 @@
 import { botConfig } from '@/core/nnkConfig';
-import { consolidateMemory } from '@/modules/aiReply/memory/consolidate';
+import { consolidateMemory, dayProgressKey, topicWatermarkKey } from '@/modules/aiReply/memory/consolidate';
 import {
   getMemoryDb, getMeta, setMeta, type MemoryDatabase,
 } from '@/modules/aiReply/memory/db';
@@ -49,13 +49,13 @@ interface Progress {
 /** 还剩多少天、多少段没切。天内断点（topic:群:日期）记着当天已完成的段数 */
 function remaining(): Progress {
   return groupIds.reduce((acc, groupId) => {
-    const done = Number(getMeta(db, `topic:${groupId}`) ?? 0);
+    const done = Number(getMeta(db, topicWatermarkKey(groupId)) ?? 0);
     const rows = db.prepare(
       'SELECT date_key AS k, count(*) AS n FROM chat_line WHERE group_id = ? AND date_key > ? AND date_key < ? GROUP BY date_key',
     ).all(groupId, done, today) as { k: number, n: number }[];
 
     rows.forEach(({ k, n }) => {
-      const partial = Number(getMeta(db, `topic:${groupId}:${k}`) ?? 0);
+      const partial = Number(getMeta(db, dayProgressKey(groupId, k)) ?? 0);
       acc.chunks += Math.max(0, Math.ceil(n / TOPIC_CHUNK) - partial);
       acc.days += 1;
     });
@@ -65,7 +65,7 @@ function remaining(): Progress {
 
 function printPending() {
   groupIds.forEach((groupId) => {
-    const done = Number(getMeta(db, `topic:${groupId}`) ?? 0);
+    const done = Number(getMeta(db, topicWatermarkKey(groupId)) ?? 0);
     const rows = db.prepare(
       'SELECT date_key AS k, count(*) AS n FROM chat_line WHERE group_id = ? AND date_key > ? AND date_key < ? GROUP BY date_key ORDER BY date_key',
     ).all(groupId, done, today) as { k: number, n: number }[];
@@ -79,8 +79,8 @@ function printPending() {
 // 更早的历史直接放弃：把水位推到 DAYS 天前，pendingDays 就不会再捞它们
 if (DAYS > 0) {
   const cutoff = Number(backupDateKey(new Date(Date.now() - DAYS * 86400000)));
-  const moved = groupIds.filter((groupId) => Number(getMeta(db, `topic:${groupId}`) ?? 0) < cutoff - 1);
-  moved.forEach((groupId) => setMeta(db, `topic:${groupId}`, String(cutoff - 1)));
+  const moved = groupIds.filter((groupId) => Number(getMeta(db, topicWatermarkKey(groupId)) ?? 0) < cutoff - 1);
+  moved.forEach((groupId) => setMeta(db, topicWatermarkKey(groupId), String(cutoff - 1)));
   console.log(`只处理最近 ${DAYS} 天（${cutoff} 起）${moved.length ? `，${moved.length} 个群的水位已前移` : ''}`);
 }
 

@@ -1,5 +1,5 @@
 import {
-  embedTexts, segmentTopics, TOPIC_REJECTED, type TopicSegment,
+  embedTexts, segmentTopics, TOPIC_REJECTED, type TopicLine, type TopicSegment,
 } from '@/service/llm';
 import { printError, printLog } from '@/utils/print';
 import { backupDateKey } from '../storage/message';
@@ -7,6 +7,7 @@ import {
   delMeta, getMemoryDb, getMeta, setMeta, type MemoryDatabase,
 } from './db';
 import { ingestChatBackups } from './ingest';
+import { stripSpeakerPrefix } from './segment';
 import memoryStore from './store';
 import { saveEmbeddings, type RefKind } from './vector';
 
@@ -45,16 +46,31 @@ const SEGMENT_RETRY = 2;
 const RETRY_DELAY = 5000;
 
 /** 每群已经切完话题的最后一天 */
-const topicWatermarkKey = (groupId: number) => `topic:${groupId}`;
+export const topicWatermarkKey = (groupId: number) => `topic:${groupId}`;
 
-/** 某天已经切完的段数，用于天内断点续跑 */
-const dayProgressKey = (groupId: number, dateKey: number) => `topic:${groupId}:${dateKey}`;
+/** 某天已经切完的段数，用于天内断点续跑。
+ *  段数是按过滤后的行数算的，改了 isNoise 的判据就得换 key，否则老断点会落在错的位置 */
+export const dayProgressKey = (groupId: number, dateKey: number) => `topic:v2:${groupId}:${dateKey}`;
+
+/** 过滤噪声行之前的断点，认不出来就当没切过，这一天会整天重切 */
+const legacyDayProgressKey = (groupId: number, dateKey: number) => `topic:${groupId}:${dateKey}`;
 
 const sleep = (ms: number) => new Promise((r) => { setTimeout(r, ms); });
 
+/** `[表情]` `[图片]` 这类占位符 */
+const PLACEHOLDER_RE = /\[[^\]]{1,10}\]/g;
+
+/**
+ * 剥掉占位符和空白后没剩几个字的行。prompt 本来就要求跳过这些，
+ * 但它们占全库四分之一，发过去纯烧 token
+ */
+function isNoise(body: string): boolean {
+  return body.replace(PLACEHOLDER_RE, '').replace(/\s+/g, '').length <= 2;
+}
+
 /** 切一段，暂时失败就重试；被内容审核拒收的不重试，重试永远还是拒收 */
 async function segmentWithRetry(
-  slice: { id: number, userId: number, text: string }[],
+  slice: TopicLine[],
   groupId: number,
   dateKey: number,
 ) {
@@ -112,9 +128,18 @@ async function segmentDay(
   concurrency: number,
 ): Promise<{ topics: number, chunks: number, embedded: number, skipped: number, complete: boolean }> {
   // bot 自己的发言也带上：少了它对话就不完整，概括容易跑偏
-  const lines = db.prepare(
-    'SELECT id, user_id AS userId, text FROM chat_line WHERE group_id = ? AND date_key = ? ORDER BY id',
-  ).all(groupId, dateKey) as { id: number, userId: number, text: string }[];
+  const rows = db.prepare(
+    'SELECT id, user_id AS userId, nick, text FROM chat_line WHERE group_id = ? AND date_key = ? ORDER BY id',
+  ).all(groupId, dateKey) as { id: number, userId: number, nick: string | null, text: string }[];
+
+  // 噪声行不发给模型。它们夹在话题中间，lineFrom/lineTo 的区间照样覆盖得到，
+  // 只有正好落在片段首尾的会被漏掉，无所谓
+  const lines: TopicLine[] = rows.flatMap((r) => {
+    const body = r.userId === 0 ? r.text : stripSpeakerPrefix(r.text);
+    return isNoise(body) ? [] : [{
+      id: r.id, userId: r.userId, nick: r.nick, body,
+    }];
+  });
   if (lines.length === 0) {
     return {
       topics: 0, chunks: 0, embedded: 0, skipped: 0, complete: true,
@@ -126,6 +151,7 @@ async function segmentDay(
   const doneKey = dayProgressKey(groupId, dateKey);
   const doneChunks = Number(getMeta(db, doneKey) ?? 0);
   if (doneChunks === 0) {
+    delMeta(db, legacyDayProgressKey(groupId, dateKey));
     const stale = db.prepare('SELECT id FROM topic WHERE group_id = ? AND date_key = ?')
       .all(groupId, dateKey) as { id: number }[];
     if (stale.length > 0) {

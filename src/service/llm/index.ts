@@ -1,4 +1,5 @@
 import Axios from 'axios';
+import { BOT_NAME } from '@/constants';
 import { botConfig } from '@/core/nnkConfig';
 import { printError } from '@/utils/print';
 import type { FormattedMessage } from '@/types/message';
@@ -123,19 +124,50 @@ export interface TopicSegment {
   lineTo: number;
 }
 
+/** 送去切话题的一行 */
+export interface TopicLine {
+  id: number;
+  userId: number;
+  /** 群友昵称，bot 自己的行是 null */
+  nick: string | null;
+  /** 已剥掉 `[昵称]说：` 前缀的正文 */
+  body: string;
+}
+
+/** 单行正文的长度上限。转发的长公告整段发过去不划算，截断不影响概括 */
+const MAX_LINE_CHARS = 200;
+
 /**
  * 这一段被上游内容审核拒收了。和 null（暂时失败）区分开：
  * 拒收是确定性的，重试多少次都一样，调用方跳过这段继续即可
  */
 export const TOPIC_REJECTED = Symbol('topicRejected');
 
-/** 把日志切成话题片段，每段一句概括，供每日巩固任务向量化 */
+/**
+ * 把日志切成话题片段，每段一句概括，供每日巩固任务向量化。
+ *
+ * 行号和 QQ 号在 prompt 里换成这一段内的局部编号，昵称抽成一张表只出现一次：
+ * 原样发的话它们要占掉六成字符，而正文长度的中位数只有八个字
+ */
 export async function segmentTopics(
-  lines: { id: number, userId: number, text: string }[],
+  lines: TopicLine[],
 ): Promise<TopicSegment[] | typeof TOPIC_REJECTED | null> {
   if (lines.length === 0) return [];
 
-  const ret = await Axios.post(getServiceUrl('/llm/topic'), { lines }, {
+  const userIds: number[] = [];
+  const speakers: string[] = [];
+  const payload = lines.map((l): [number, string] => {
+    let s = userIds.indexOf(l.userId);
+    if (s < 0) {
+      s = userIds.push(l.userId) - 1;
+      // bot 自己的行没有昵称，用本名而不是「你自己」：概括是拿去做语义检索的，
+      // 写「你自己」的话问「乃乃香说过什么」就检索不到了
+      speakers.push(l.userId === 0 ? BOT_NAME : l.nick || String(l.userId));
+    }
+    return [s, l.body.slice(0, MAX_LINE_CHARS)];
+  });
+
+  const ret = await Axios.post(getServiceUrl('/llm/topic'), { speakers, lines: payload }, {
     timeout: COMMON_TIMEOUT * 2,
   }).catch((e) => {
     printError(`[LLM topic error] ${e.message}`);
@@ -145,7 +177,20 @@ export async function segmentTopics(
   if (ret?.data?.rejected) return TOPIC_REJECTED;
 
   const topics = ret?.data?.topics;
-  return Array.isArray(topics) ? topics : null;
+  if (!Array.isArray(topics)) return null;
+
+  // 局部编号映射回真实的行 id 和 QQ 号
+  return topics.flatMap((t): TopicSegment[] => {
+    // 服务端还没更新到新协议时会返回真实行号，越界的丢掉，别把 undefined 写进库
+    if (!lines[t.lineFrom] || !lines[t.lineTo]) return [];
+    const ids = Array.isArray(t.speakers) ? t.speakers : [];
+    return [{
+      summary: t.summary,
+      userIds: ids.map((s: number) => userIds[s]).filter((u: number) => u !== undefined),
+      lineFrom: lines[t.lineFrom].id,
+      lineTo: lines[t.lineTo].id,
+    }];
+  });
 }
 
 export interface MemoryOpDTO {

@@ -13,8 +13,8 @@ import { printError, printLog } from '@/utils/print';
  * Worker 上的 /v1/images/* 路由保留着，给其它调用方用
  */
 
-/** 实测出图 60~150s，留到 240s。后台出图不阻塞对话，等久点没关系 */
-const IMAGE_TIMEOUT = 240000;
+/** 实测出图 60~150s，留到 300s。后台出图不阻塞对话，等久点没关系 */
+const IMAGE_TIMEOUT = 300000;
 
 /** 拉底图/取回成品图的超时，只是普通下载 */
 const FETCH_TIMEOUT = 30000;
