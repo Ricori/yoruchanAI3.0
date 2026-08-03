@@ -31,6 +31,9 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
   /** 正在回复的群的锁 */
   private processingLocks = new Set<number>();
 
+  /** 防抖窗口内被 @ 过的群，定时器触发时消费 */
+  private pendingMentions = new Set<number>();
+
   match(ctx: ModuleContext<GroupMessageData>) {
     if (!nnkbot.config.aiReply.enable) {
       return false;
@@ -84,13 +87,14 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
       // 被提到了
       shouldReply = true;
       this.trigger.noteMention(groupId);
+      this.pendingMentions.add(groupId);
     }
 
     // 主动插话的群
     if (nnkbot.config.aiReply.initiativeList.includes(groupId)) {
-      // 图还在画的时候不主动插话，一切等图发完再说。
+      // 被 @ 的这条不掷骰：掷中会把这次回复降级成主动插话，而主动插话不下发工具
       // 判定放在掷骰之前，免得白白消耗 trigger 内部的冷却与计数状态
-      if (!isDrawing(groupId)) {
+      if (!formattedMessage.isMentionMe && !isDrawing(groupId)) {
         const chance = this.trigger.rollInitiative(groupId, formattedMessage.message);
         if (chance !== null) {
           shouldReply = true;
@@ -113,7 +117,10 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
 
     const timer = setTimeout(() => {
       this.sessionTimers.set(groupId, null);
-      this.processReply(groupId, isInitiativeReply, initiativeChance);
+      // 定时器只带最后一条消息的标志，防抖期间被 @ 过就整体按被 @ 处理，
+      // 否则别人随后插一句掷中，@ 过来的那次请求会被当成主动插话而失去工具
+      const mentioned = this.pendingMentions.delete(groupId);
+      this.processReply(groupId, isInitiativeReply && !mentioned, mentioned ? null : initiativeChance);
     }, 3500);
     this.sessionTimers.set(groupId, timer);
   }
