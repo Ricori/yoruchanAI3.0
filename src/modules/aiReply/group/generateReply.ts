@@ -9,6 +9,9 @@ import { MEMORY_TOOLS, runMemoryTool } from '../memory/tools';
 import {
   getDrawNotice, getImageTools, isDrawing, isImageGenEnabled, isImageTool, runImageTool,
 } from '../imageGen/tools';
+import {
+  SEARCH_TOOLS, isSearchEnabled, isSearchTool, runSearchTool,
+} from '../search/tools';
 import { getMentionedUserIds } from '../history/mention';
 import {
   formatAssistantMessage, formatDrawNoticeMessage,
@@ -114,15 +117,16 @@ export async function generateGroupReply(
     ...MEMORY_TOOLS,
     // 没有底图时 edit_image 不下发，模型看不见就不会去改别人的图
     ...(canDraw ? getImageTools(!!srcImgUrl) : []),
+    ...(isSearchEnabled(groupId) ? SEARCH_TOOLS : []),
   ];
 
   let toolCalls = 0;
   const aiReplyText = rounds > 0
     ? await getLLMReplyWithTools(messages, context, tools, (name, input) => {
       toolCalls += 1;
-      return isImageTool(name)
-        ? runImageTool(groupId, name, input, srcImgUrl)
-        : runMemoryTool(groupId, name, input);
+      if (isImageTool(name)) return runImageTool(groupId, name, input, srcImgUrl);
+      if (isSearchTool(name)) return runSearchTool(groupId, name, input);
+      return runMemoryTool(groupId, name, input);
     }, rounds)
     // 0 轮就走原来的无工具请求：不下发 tools，缓存前缀和以前完全一致
     : await getLLMReply(messages, context);

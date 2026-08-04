@@ -63,6 +63,12 @@
         "dailyLimit": 5,
         "cooldownSec": 120,
         "size": "1024x1024"
+      },
+      "search": {
+        "enable": true,
+        "whiteGroupIds": [],
+        "dailyLimit": 20,
+        "count": 5
       }
     },
     "ykhrOneDrive": {

@@ -97,6 +97,17 @@ export interface BotConfig {
       /** 出图尺寸，默认 1024x1024 */
       size?: string;
     };
+    /** 联网搜索工具。整块可省略，省略时按代码里的默认值走（默认开启） */
+    search?: {
+      /** 是否允许模型调用搜索工具，默认 true，要关得显式写 false */
+      enable?: boolean;
+      /** 白名单群号，留空则所有开了 AI 回复的群都能搜 */
+      whiteGroupIds?: number[];
+      /** 每群每日搜索上限，默认 20。上游免费额度是每月 1000 次，别不设上限 */
+      dailyLimit?: number;
+      /** 单次返回的结果条数，默认 5，上限 8 */
+      count?: number;
+    };
   },
   /** YKHR OneDrive 文件转存功能 */
   ykhrOneDrive: {
