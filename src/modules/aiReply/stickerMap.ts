@@ -5,20 +5,21 @@ const STICKER_DIR = path.resolve('data/sticker');
 
 // 定义表情路径映射
 const STICKER_MAP: Record<string, string> = {
-  乖巧: 'maomao.jpg',
-  疑问: 'yiwen.jpg',
-  好: 'hao.png',
-  不行: 'no.jpg',
-  没事吧: 'meishiba.png',
-  救救: 'jiu.png',
   得意: 'deyi.jpg',
-  这是假的: 'jia.png',
-  好耶: 'haoye.png',
+  观察: 'guancha.gif',
+  害羞: 'haixiu.jpg',
+  好: 'hao.png',
+  我没意见: 'hao2.jpg',
   惊讶: 'jinya.gif',
+  救救: 'jiu.png',
   可怜: 'kelian.gif',
-  哭哭: 'ku.gif',
+  哭哭: 'kuku2.gif',
+  乖巧: 'maomao.jpg',
+  没办法: 'meibanfa.jpg',
+  ohno: 'ohno.jpg',
+  贫穷: 'pinqiong.jpg',
   完了: 'wanle.png',
-  走了: 'zoule.png',
+  疑问: 'yiwen.jpg',
 };
 
 // 匹配 [表情: 关键词] 格式
