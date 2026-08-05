@@ -30,9 +30,17 @@ function clean(rawText: string, cleanImage = false) {
 }
 
 
-/** 动画表情、以及小于 60kb 的小图都当表情看待，不算「图片」 */
-function isStickerImg(img: { file_size?: string, summary?: string }) {
-  return img.summary === '[动画表情]' || Number(img.file_size || 0) < 60 * 1024;
+type ImgInfo = { file?: string, file_size?: string, summary?: string, sub_type?: string };
+
+/** 表情判定：光看大小不够，大于60kb的动图/商城表情也得算表情，不算「图片」 */
+function isStickerImg(img: ImgInfo) {
+  // sub_type 非 0 即表情包/商城表情/收藏表情/贴图，正常照片是 0（或没这字段）
+  if (img.sub_type && img.sub_type !== '0') return true;
+  // QQ 只给表情带 summary（[动画表情]、商城表情名等），正常图片是空或 [图片]
+  if (img.summary && img.summary !== '[图片]') return true;
+  // 动图基本都是表情，体积再大也一样
+  if (/\.gif$/i.test(img.file || '')) return true;
+  return Number(img.file_size || 0) < 60 * 1024;
 }
 
 /** 取被引用消息里的图片URL。改图要拿它当底图，正文里那句 `[之前的图片]` 只是给模型看的占位 */
@@ -97,7 +105,7 @@ export function formatMessage(
   const img = getImgs(rawMessage, true)[0];
 
   if (isStickerImg(img)) {
-    // 动画表情或小于60kb的图片视为表情，降成纯文本
+    // 判定为表情的降成纯文本
     const text = transformCQCodes(clean(rawMessage), (cq) => (cq.type === 'image' ? '[表情]' : null)).trim();
     return {
       role: 'user', userId, isMentionMe, message: prefix + text, ...refImgUrl,
