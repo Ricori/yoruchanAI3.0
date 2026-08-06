@@ -1,4 +1,4 @@
-import { getLLMReply, getLLMReplyWithTools } from '@/service/llm';
+import { getLLMReply, getLLMReplyWithTools, type ToolDef } from '@/service/llm';
 import nnkbot from '@/core/nnkBot';
 import { printLog } from '@/utils/print';
 import type { FormattedMessage } from '@/types/message';
@@ -17,6 +17,24 @@ import {
   formatAssistantMessage, formatDrawNoticeMessage,
   formatInitiativePromptMessage, formatUserMemoryPromptMessage,
 } from '../format';
+
+/**
+ * 按当前状态裁剪要下发的工具。
+ *
+ * 5 个工具全下发是 1271 token，占整条 prompt 的 16%，而当前中转不做 prompt caching，
+ * 每次请求都按全价重算——能不发的一律不发。等哪天换成真会缓存的上游，
+ * 这里要反过来改成恒定集合，届时前缀稳定比省这点 token 值钱得多
+ */
+function buildTools(groupId: number, srcImgUrl?: string): ToolDef[] {
+  // 还在画的这一轮不给画图工具——不该排队画第二张
+  const canDraw = isImageGenEnabled(groupId) && !isDrawing(groupId);
+  return [
+    ...MEMORY_TOOLS,
+    // 没有底图时 edit_image 不下发，模型看不见就不会去改别人的图
+    ...(canDraw ? getImageTools(!!srcImgUrl) : []),
+    ...(isSearchEnabled(groupId) ? SEARCH_TOOLS : []),
+  ];
+}
 
 /** 会主动插话、却还没写群档案的群，先按陌生群对待，免得把主场的语气带过去 */
 const DEFAULT_PROFILE_TEXT = '陌生群，关系空白：少说话，语气收敛，优先只回应直接向你说话的人';
@@ -105,30 +123,19 @@ export async function generateGroupReply(
     messages.push(formatDrawNoticeMessage(drawNotice));
   }
 
-  // 还在画的这一轮不给画图工具——不该排队画第二张
-  const stillDrawing = isDrawing(groupId);
-
   const context = getGroupContext(groupId);
   const rounds = getToolRounds(isInitiativeReply);
-
   const srcImgUrl = getSrcImgUrl(history);
-  const canDraw = isImageGenEnabled(groupId) && !stillDrawing;
-  const tools = [
-    ...MEMORY_TOOLS,
-    // 没有底图时 edit_image 不下发，模型看不见就不会去改别人的图
-    ...(canDraw ? getImageTools(!!srcImgUrl) : []),
-    ...(isSearchEnabled(groupId) ? SEARCH_TOOLS : []),
-  ];
 
   let toolCalls = 0;
   const aiReplyText = rounds > 0
-    ? await getLLMReplyWithTools(messages, context, tools, (name, input) => {
+    ? await getLLMReplyWithTools(messages, context, buildTools(groupId, srcImgUrl), (name, input) => {
       toolCalls += 1;
       if (isImageTool(name)) return runImageTool(groupId, name, input, srcImgUrl);
       if (isSearchTool(name)) return runSearchTool(groupId, name, input);
       return runMemoryTool(groupId, name, input);
     }, rounds)
-    // 0 轮就走原来的无工具请求：不下发 tools，缓存前缀和以前完全一致
+    // 0 轮不下发 tools，省下 1200+ token
     : await getLLMReply(messages, context);
 
   if (aiReplyText) {

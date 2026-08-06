@@ -95,7 +95,8 @@ export async function getLLMReplyWithTools(
     const data = await postReply({
       messages,
       context,
-      // 最后一轮不再给工具，逼模型必须出文本，否则可能一直要求调用下去
+      // 最后一轮抽掉 tools，既逼模型必须出文本，又省下 1200+ token——
+      // 当前中转不做 prompt caching，工具定义每次都按全价重算
       ...(canUseTools ? { tools } : {}),
       ...(rounds.length ? { toolRounds: rounds } : {}),
     }, canUseTools ? TOOL_ROUND_TIMEOUT : REPLY_TIMEOUT);
