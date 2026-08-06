@@ -32,20 +32,6 @@ function backupTriggerMark(msg: FormattedMessage): string {
   return marks.join('');
 }
 
-/**
- * 把缓存断点挪到窗口末尾，并清掉所有旧标记。
- *
- * 必须先清：标记只加不减会突破 Anthropic 的 4 个断点上限（服务端人设块还占一个，
- * 中转也会注入），超了直接 400。放末尾是因为裁剪砍队头会让整段前缀作废，
- * 留在中段的旧断点照样命中不了
- */
-/* eslint-disable no-param-reassign -- 就地改窗口本身，与下面裁剪图片的写法一致 */
-function markCacheBreakpoint(history: FormattedMessage[]) {
-  history.forEach((m) => { delete m.cacheControl; });
-  history[history.length - 1].cacheControl = true;
-}
-/* eslint-enable no-param-reassign */
-
 class MessageStorage {
   /** 私聊消息对话记录 (key: qq) */
   private privateChatConversations = new Map<number, FormattedMessage[]>();
@@ -87,10 +73,6 @@ class MessageStorage {
     const history = store.get(key)!;
 
     history.push(msg);
-    // 攒够 20 条打第一个断点，之后每次裁剪重新打
-    if (history.length === 20) {
-      markCacheBreakpoint(history);
-    }
 
     // 触到裁剪阈值就备份一次群聊记录：首轮攒满 40 条，之后每裁剪回 30 条再攒 10 条触发一次
     if (store === this.groupChatConversations) {
@@ -106,19 +88,16 @@ class MessageStorage {
       while (history.length > 0 && history[0].role === 'assistant') {
         history.shift();
       }
-      if (history.length > 0) {
-        // 倒序遍历消息，修剪早期图片
-        let imageCount = 0;
-        for (let i = history.length - 1; i >= 0; i--) {
-          const m = history[i];
-          if (m.imgUrl) {
-            imageCount++;
-            if (imageCount > 1) {
-              history[i] = { ...m, imgUrl: undefined };
-            }
+      // 倒序遍历消息，修剪早期图片
+      let imageCount = 0;
+      for (let i = history.length - 1; i >= 0; i--) {
+        const m = history[i];
+        if (m.imgUrl) {
+          imageCount++;
+          if (imageCount > 1) {
+            history[i] = { ...m, imgUrl: undefined };
           }
         }
-        markCacheBreakpoint(history);
       }
     }
   }

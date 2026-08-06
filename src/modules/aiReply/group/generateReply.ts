@@ -1,4 +1,4 @@
-import { getLLMReply, getLLMReplyWithTools, type ToolDef } from '@/service/llm';
+import { getLLMReplyWithTools, type ToolDef } from '@/service/llm';
 import nnkbot from '@/core/nnkBot';
 import { printLog } from '@/utils/print';
 import type { FormattedMessage } from '@/types/message';
@@ -7,7 +7,7 @@ import memoryStore from '../memory/store';
 import groupProfileStorage from '../storage/groupProfile';
 import { MEMORY_TOOLS, runMemoryTool } from '../memory/tools';
 import {
-  getDrawNotice, getImageTools, isDrawing, isImageGenEnabled, isImageTool, runImageTool,
+  getDrawNotice, IMAGE_TOOLS, isImageGenEnabled, isImageTool, runImageTool,
 } from '../imageGen/tools';
 import {
   SEARCH_TOOLS, isSearchEnabled, isSearchTool, runSearchTool,
@@ -19,19 +19,15 @@ import {
 } from '../format';
 
 /**
- * 按当前状态裁剪要下发的工具。
- *
- * 5 个工具全下发是 1271 token，占整条 prompt 的 16%，而当前中转不做 prompt caching，
- * 每次请求都按全价重算——能不发的一律不发。等哪天换成真会缓存的上游，
- * 这里要反过来改成恒定集合，届时前缀稳定比省这点 token 值钱得多
+ * 要下发的工具集。只按群配置分支，同一个群每次都必须一模一样：
+ * 工具排在缓存前缀最前面，集合一变整段人设（8000+ token）就得全价重算，
+ * 而多发一个工具定义命中缓存后只要 0.1 倍价。
+ * 「还在画」「没底图」这类临时状态改在 runImageTool 里兜底，不再靠不下发来拦
  */
-function buildTools(groupId: number, srcImgUrl?: string): ToolDef[] {
-  // 还在画的这一轮不给画图工具——不该排队画第二张
-  const canDraw = isImageGenEnabled(groupId) && !isDrawing(groupId);
+function buildTools(groupId: number): ToolDef[] {
   return [
     ...MEMORY_TOOLS,
-    // 没有底图时 edit_image 不下发，模型看不见就不会去改别人的图
-    ...(canDraw ? getImageTools(!!srcImgUrl) : []),
+    ...(isImageGenEnabled(groupId) ? IMAGE_TOOLS : []),
     ...(isSearchEnabled(groupId) ? SEARCH_TOOLS : []),
   ];
 }
@@ -106,8 +102,7 @@ export async function generateGroupReply(
   const userMemoryContext = memoryStore.getMemoryContext([...recentUserIds, ...mentionedUserIds]);
   const userMemoryPrompt = formatUserMemoryPromptMessage(userMemoryContext);
 
-  // 档案行接在会话历史之后：稳定内容在前、易变内容在后，
-  // 不动 history 里已有的 cacheControl 断点（见 storage/message.ts）
+  // 档案行接在会话历史之后：稳定内容在前、易变内容在后，缓存前缀才不会被顶掉
   const messages = [
     ...history,
     ...(userMemoryPrompt ? [userMemoryPrompt] : []),
@@ -128,15 +123,14 @@ export async function generateGroupReply(
   const srcImgUrl = getSrcImgUrl(history);
 
   let toolCalls = 0;
-  const aiReplyText = rounds > 0
-    ? await getLLMReplyWithTools(messages, context, buildTools(groupId, srcImgUrl), (name, input) => {
-      toolCalls += 1;
-      if (isImageTool(name)) return runImageTool(groupId, name, input, srcImgUrl);
-      if (isSearchTool(name)) return runSearchTool(groupId, name, input);
-      return runMemoryTool(groupId, name, input);
-    }, rounds)
-    // 0 轮不下发 tools，省下 1200+ token
-    : await getLLMReply(messages, context);
+  // 0 轮（主动插话）也走这条路：tools 照发、只是不许调用，
+  // 这样和被动回复共用同一段缓存前缀，不会各写各的
+  const aiReplyText = await getLLMReplyWithTools(messages, context, buildTools(groupId), (name, input) => {
+    toolCalls += 1;
+    if (isImageTool(name)) return runImageTool(groupId, name, input, srcImgUrl);
+    if (isSearchTool(name)) return runSearchTool(groupId, name, input);
+    return runMemoryTool(groupId, name, input);
+  }, rounds);
 
   if (aiReplyText) {
     // 记忆自己的回复，并带上触发方式供备份日志标注

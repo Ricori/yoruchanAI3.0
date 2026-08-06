@@ -24,18 +24,17 @@ function getServiceUrl(path: string) {
   return `${baseUrl}${path}?apikey=${apiKey}`;
 }
 
+/** 只保留服务端认的字段，别把 userId、isMentionMe 这些本地状态发出去 */
+function toDTO(formattedMessage: FormattedMessage[]) {
+  return formattedMessage.map(({ role, message, imgUrl }) => ({ role, message, imgUrl }));
+}
+
 /** context 为当前群聊环境描述，服务端会作为 system 附加段落注入 */
 export async function getLLMReply(
   formattedMessage: FormattedMessage[],
   context?: string,
 ): Promise<string | null> {
-  const messages = formattedMessage.map(({
-    role, message, imgUrl, cacheControl,
-  }) => ({
-    role, message, imgUrl, cacheControl,
-  }));
-
-  const data = await postReply({ messages, context }, REPLY_TIMEOUT);
+  const data = await postReply({ messages: toDTO(formattedMessage), context }, REPLY_TIMEOUT);
   return data?.text ?? null;
 }
 
@@ -73,7 +72,7 @@ async function postReply(body: object, timeout: number) {
  * 不能让服务端反向依赖 bot。
  *
  * 服务端无状态，所以每轮都要把之前的 tool_use 和执行结果一起带回去重建对话。
- * maxRounds 为 0 时等价于普通回复
+ * maxRounds 为 0 时只发一轮且不许调工具
  */
 export async function getLLMReplyWithTools(
   formattedMessage: FormattedMessage[],
@@ -82,12 +81,7 @@ export async function getLLMReplyWithTools(
   runTool: ToolRunner,
   maxRounds: number,
 ): Promise<string | null> {
-  const messages = formattedMessage.map(({
-    role, message, imgUrl, cacheControl,
-  }) => ({
-    role, message, imgUrl, cacheControl,
-  }));
-
+  const messages = toDTO(formattedMessage);
   const rounds: ToolRound[] = [];
 
   for (let round = 0; round <= maxRounds; round++) {
@@ -95,9 +89,10 @@ export async function getLLMReplyWithTools(
     const data = await postReply({
       messages,
       context,
-      // 最后一轮抽掉 tools，既逼模型必须出文本，又省下 1200+ token——
-      // 当前中转不做 prompt caching，工具定义每次都按全价重算
-      ...(canUseTools ? { tools } : {}),
+      // tools 每轮都照发：它排在缓存前缀最前面，末轮抽掉会让整段人设全价重算，
+      // 省下的 1500 token 远不抵重写的 8000。改用 allowTools 逼模型出文本
+      tools,
+      allowTools: canUseTools,
       ...(rounds.length ? { toolRounds: rounds } : {}),
     }, canUseTools ? TOOL_ROUND_TIMEOUT : REPLY_TIMEOUT);
 
