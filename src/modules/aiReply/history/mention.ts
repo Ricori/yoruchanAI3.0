@@ -9,12 +9,13 @@ const MENTION_SCAN_COUNT = 5;
 const MAX_MENTIONED_USERS = 2;
 
 /**
- * 找出「被提到但这轮没发言」的群友
+ * 找出被点到名、值得额外注入全量档案的群友。
+ * alreadyFull 是已经注了全量的人（说话的对象），不用再占名额
  */
 export function getMentionedUserIds(
   groupId: number,
   history: FormattedMessage[],
-  loaded: Set<number>,
+  alreadyFull: Set<number>,
 ): number[] {
   // 倒序：bot 要回的是最后那条，它提到的人得先占名额
   const recent = history
@@ -26,7 +27,7 @@ export function getMentionedUserIds(
   recent.forEach((m) => {
     aliasIndex.resolve(groupId, m.message).forEach((userId) => {
       // 认出了名字但这个人没有任何档案可注入，占名额也没意义
-      if (!loaded.has(userId) && memoryStore.hasMemory(userId)) ids.add(userId);
+      if (!alreadyFull.has(userId) && memoryStore.hasMemory(userId)) ids.add(userId);
     });
   });
 

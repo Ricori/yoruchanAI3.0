@@ -6,9 +6,8 @@ import { deleteEmbeddings } from './vector';
 /**
  * 结构化记忆的存取。
  *
- * 取代原来「每人一个 JSON、6 条裸字符串 trait、每 30 句整体重生成」的做法：
  * 每条记忆是一行，带时间、来源、置信度和被印证次数，能单独更新、过期和软删。
- * 长期事实（在读研究生）和短期热点（最近在打黑神话）不再抢同一批格子。
+ * 长期事实（在读研究生）和短期热点（最近在打黑神话）分离。
  */
 
 /** 软删的哨兵值。写真实 id 表示被某条新记忆取代，写 -1 表示直接失效 */
@@ -246,16 +245,22 @@ class MemoryStore {
   /**
    * 根据当前对话中出现的用户ID，生成注入 prompt 的记忆上下文。
    * 仅返回有记忆数据的用户；关系是人工确认过的，排在 LLM 总结的印象之前。
+   *
+   * briefIds 只注叫法和关系：认人必需，印象交给 recall_memory 按需查——
+   * 全员注全量是每轮几百 token 的固定开销，而多数回复根本不涉及那些人
    */
-  getMemoryContext(userIds: number[], db = this.db()): string {
-    return userIds
-      .map((userId) => this.formatMemoryLine(userId, db))
+  getMemoryContext(fullIds: number[], briefIds: number[] = [], db = this.db()): string {
+    const full = new Set(fullIds);
+    return [
+      ...fullIds.map((userId) => this.formatMemoryLine(userId, db)),
+      ...briefIds.filter((id) => !full.has(id)).map((userId) => this.formatMemoryLine(userId, db, true)),
+    ]
       .filter((line): line is string => line !== null)
       .join('\n');
   }
 
-  /** 单个群友的一行档案文本，没有可用内容时返回 null */
-  formatMemoryLine(userId: number, db = this.db()): string | null {
+  /** 单个群友的一行档案文本，没有可用内容时返回 null。brief 只保留叫法和关系 */
+  formatMemoryLine(userId: number, db = this.db(), brief = false): string | null {
     const nickName = this.getNickName(userId, db);
     const items = this.listUserMemories(userId, db);
     if (!nickName && items.length === 0) return null;
@@ -264,7 +269,7 @@ class MemoryStore {
     const aliases = pick('alias');
     const relations = pick('relation');
     // trait 和 episode 都是「印象」，已经按分数排过序，取前几条
-    const traitList = items
+    const traitList = brief ? [] : items
       .filter((i) => i.kind === 'trait' || i.kind === 'episode')
       .slice(0, MAX_INJECT_TRAITS)
       .map((i) => i.text);

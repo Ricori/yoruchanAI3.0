@@ -486,6 +486,18 @@ function testStore() {
     check('档案行：关系在前、印象在后、叫法进名字', memoryStore.formatMemoryLine(U, db),
       '[雨漫]（也叫：桃子姐） 关系：是乃乃香的同桌｜印象：在读研究生、最近在打黑神话');
 
+    // 这轮回复不涉及的人只注认人必需的部分，印象留给 recall_memory 按需查
+    const W = 556;
+    memoryStore.noteNickName(W, '阿岩', db);
+    memoryStore.addMemory({ ownerId: W, kind: 'trait', text: '爱吃辣' }, db);
+
+    check('brief 档案行只留叫法和关系', memoryStore.formatMemoryLine(U, db, true),
+      '[雨漫]（也叫：桃子姐） 关系：是乃乃香的同桌');
+    check('brief 下只有印象的人整行省掉', memoryStore.formatMemoryLine(W, db, true), null);
+    check('两档注入：full 全量、brief 精简、重复的人只出现一次',
+      memoryStore.getMemoryContext([U], [U, W], db),
+      '[雨漫]（也叫：桃子姐） 关系：是乃乃香的同桌｜印象：在读研究生、最近在打黑神话');
+
     console.log('\n[ops 应用]');
     const r1 = memoryStore.applyOps(U, FAKE_GROUP, [
       { op: 'ADD', kind: 'trait', text: '住在广州', confidence: 0.9 },

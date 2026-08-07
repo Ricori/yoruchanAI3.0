@@ -68,9 +68,7 @@ async function postReply(body: object, timeout: number) {
 }
 
 /**
- * 带工具的回复。工具循环跑在 bot 这边——记忆数据都在本地，
- * 不能让服务端反向依赖 bot。
- *
+ * 带工具的回复。工具循环跑在 bot 这边——记忆数据都在本地
  * 服务端无状态，所以每轮都要把之前的 tool_use 和执行结果一起带回去重建对话。
  * maxRounds 为 0 时只发一轮且不许调工具
  */
@@ -90,8 +88,6 @@ export async function getLLMReplyWithTools(
       messages,
       context,
       // 最后一轮抽掉 tools，既逼模型必须出文本
-      // 中转不做 prompt caching，工具定义每次都按全价重算。
-      // 服务端据此把讲工具用法的那段人设也一并省掉
       ...(canUseTools ? { tools } : {}),
       ...(rounds.length ? { toolRounds: rounds } : {}),
     }, canUseTools ? TOOL_ROUND_TIMEOUT : REPLY_TIMEOUT);
@@ -177,7 +173,7 @@ export async function segmentTopics(
 
   // 局部编号映射回真实的行 id 和 QQ 号
   return topics.flatMap((t): TopicSegment[] => {
-    // 服务端还没更新到新协议时会返回真实行号，越界的丢掉，别把 undefined 写进库
+    // 越界的丢掉，别把 undefined 写进库
     if (!lines[t.lineFrom] || !lines[t.lineTo]) return [];
     const ids = Array.isArray(t.speakers) ? t.speakers : [];
     return [{

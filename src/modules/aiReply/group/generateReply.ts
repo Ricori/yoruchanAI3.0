@@ -64,7 +64,7 @@ function getToolRounds(isInitiativeReply: boolean): number {
  * 回复有 3.5s 防抖，这期间可能又插进来几条别人的消息，所以不能只看最后一条；
  * 但也不能翻遍整个 30 条窗口——那会把十几轮之前的旧图当成这次要改的图
  */
-const SRC_IMG_LOOKBACK = 5;
+const TRIGGER_LOOKBACK = 5;
 
 /**
  * 取改图的底图。
@@ -73,10 +73,26 @@ const SRC_IMG_LOOKBACK = 5;
  */
 function getSrcImgUrl(history: FormattedMessage[]): string | undefined {
   const mention = history
-    .slice(-SRC_IMG_LOOKBACK)
+    .slice(-TRIGGER_LOOKBACK)
     .reverse()
     .find((m) => m.role === 'user' && m.isMentionMe);
   return mention?.imgUrl ?? mention?.refImgUrl;
+}
+
+/** 主动插话没有说话对象，又不给工具轮（`DEFAULT_TOOL_ROUNDS.initiative`），
+ *  查不了 recall_memory，只能靠预注入：最近这几个发言的人都给全量档案 */
+const INITIATIVE_FULL_USERS = 5;
+
+/**
+ * 这轮回复是冲着谁说的：防抖窗口里 @ 过 bot 的人，都算。
+ * @ 已经被挤出窗口时退回到最后一个发言的人
+ */
+function getTriggerUserIds(history: FormattedMessage[]): number[] {
+  const recent = history.slice(-TRIGGER_LOOKBACK).filter((m) => m.role === 'user' && m.userId !== 0);
+  const mentionMe = recent.filter((m) => m.isMentionMe).map((m) => m.userId);
+  if (mentionMe.length) return [...new Set(mentionMe)];
+  const last = recent.at(-1);
+  return last ? [last.userId] : [];
 }
 
 /** 组装群聊上下文（会话历史 + 群友记忆 + 主动插话提示）并调用 LLM 生成回复；
@@ -88,18 +104,24 @@ export async function generateGroupReply(
 ): Promise<string | null> {
   const history = messageStorage.getGroupChatConversations(groupId);
 
-  // 近期发言用户的记忆上下文
+  // 近期发言的人只注认人必需的部分（叫法、关系），印象让模型用 recall_memory 按需查
   const recentUserIds = [...new Set(
     history.slice(-10).filter((m) => m.role === 'user').map((m) => m.userId),
   )];
 
-  // 再补上被点到名却没发言的人，他们的档案不补就永远查不到
-  const mentionedUserIds = getMentionedUserIds(groupId, history, new Set(recentUserIds));
+  // 全量档案只给这轮真正相关的人：说话的对象（主动插话没有，改成最近几个发言的人），加上被点到名的人
+  const fullUserIds = isInitiativeReply
+    ? recentUserIds.slice(-INITIATIVE_FULL_USERS)
+    : getTriggerUserIds(history);
+  const mentionedUserIds = getMentionedUserIds(groupId, history, new Set(fullUserIds));
   if (mentionedUserIds.length > 0) {
     printLog(`[GenerateReply] ${groupId} 认出被提到的群友: ${mentionedUserIds.join(', ')}`);
   }
 
-  const userMemoryContext = memoryStore.getMemoryContext([...recentUserIds, ...mentionedUserIds]);
+  const userMemoryContext = memoryStore.getMemoryContext(
+    [...fullUserIds, ...mentionedUserIds],
+    recentUserIds,
+  );
   const userMemoryPrompt = formatUserMemoryPromptMessage(userMemoryContext);
 
   // 档案行接在会话历史之后：稳定内容在前、易变内容在后，缓存前缀才不会被顶掉
