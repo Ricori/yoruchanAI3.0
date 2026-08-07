@@ -19,8 +19,7 @@ import {
 } from '../format';
 
 /**
- * 按当前状态裁剪要下发的工具。
- * 中转不做真正的 prompt caching，每次请求都按全价重算——能不发的一律不发
+ * 按当前状态裁剪要下发的工具
  */
 function buildTools(groupId: number, srcImgUrl?: string): ToolDef[] {
   // 还在画的这一轮不给画图工具——不该排队画第二张
