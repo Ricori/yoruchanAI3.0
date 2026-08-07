@@ -4,7 +4,9 @@ import { CHAT_BACKUP_DIR, backupDateKey } from '@/modules/aiReply/storage/messag
 import { matchAlias, normalizeAlias, normalizeText } from '@/modules/aiReply/history/nameMatch';
 import aliasIndex from '@/modules/aiReply/history/aliasIndex';
 import { getMentionedUserIds } from '@/modules/aiReply/history/mention';
-import userMemoryStorage from '@/modules/aiReply/storage/userMemory';
+import memoryStore from '@/modules/aiReply/memory/store';
+import { getMemoryDb } from '@/modules/aiReply/memory/db';
+import { ingestChatBackups } from '@/modules/aiReply/memory/ingest';
 import type { FormattedMessage } from '@/types/message';
 
 /** 用绝不会撞上真实群的号造样本，跑完就删 */
@@ -180,7 +182,55 @@ function testIndex() {
   );
 }
 
-const MEMORY_DIR = path.resolve(process.cwd(), 'data/memory/user');
+/** 档案已经搬进 SQLite，样本直接写记忆库，跑完按 userId 清掉 */
+const ALL_PROFILES = [111, 222, 333, 777];
+
+function seedProfile(userId: number, nickName: string, trait: string, aliases: string[] = []) {
+  memoryStore.noteNickName(userId, nickName);
+  memoryStore.addMemory({ ownerId: userId, kind: 'trait', text: trait });
+  // 人工别名在新结构里就是 pinned 的 alias 条目
+  aliases.forEach((text) => memoryStore.addMemory({
+    ownerId: userId, kind: 'alias', text, pinned: true,
+  }));
+}
+
+function profileRowCount(): number {
+  const ph = ALL_PROFILES.map(() => '?').join(', ');
+  const { n } = getMemoryDb().prepare(
+    `SELECT count(*) AS n FROM memory WHERE owner_id IN (${ph})`,
+  ).get(...ALL_PROFILES) as { n: number };
+  return n;
+}
+
+function clearProfiles() {
+  const db = getMemoryDb();
+  const ph = ALL_PROFILES.map(() => '?').join(', ');
+  db.prepare(`DELETE FROM memory_fts WHERE rowid IN (SELECT id FROM memory WHERE owner_id IN (${ph}))`).run(...ALL_PROFILES);
+  db.prepare(`DELETE FROM memory WHERE owner_id IN (${ph})`).run(...ALL_PROFILES);
+  db.prepare(`DELETE FROM user_profile WHERE user_id IN (${ph})`).run(...ALL_PROFILES);
+}
+
+/** 昵称索引现在读 chat_line 而不是备份文件，样本得先导进库 */
+const TEST_GROUPS = [FAKE_GROUP, OTHER_GROUP];
+
+function chatRowCount(): number {
+  const { n } = getMemoryDb().prepare(
+    'SELECT count(*) AS n FROM chat_line WHERE group_id IN (?, ?)',
+  ).get(...TEST_GROUPS) as { n: number };
+  return n;
+}
+
+function clearChatLines() {
+  const db = getMemoryDb();
+  db.transaction(() => {
+    db.prepare('DELETE FROM chat_fts WHERE rowid IN (SELECT id FROM chat_line WHERE group_id IN (?, ?))').run(...TEST_GROUPS);
+    db.prepare('DELETE FROM chat_line WHERE group_id IN (?, ?)').run(...TEST_GROUPS);
+    // 水位不清掉的话，下次跑同名样本文件会被当成「已导入过」直接跳过。
+    // 模式必须在 JS 里拼好：群号绑进 SQL 再用 || 拼会被当成浮点，拼出 'ingest:88888887.0:%'
+    const delMeta = db.prepare('DELETE FROM meta WHERE key LIKE ?');
+    TEST_GROUPS.forEach((g) => delMeta.run(`ingest:${g}:%`));
+  })();
+}
 /** 这几个假号要有档案，hasMemory 才会放行 */
 const FAKE_PROFILES = [111, 222, 333];
 /** 777 只有档案、日志里从没出现过，用来验证「没露过面的人不硬加进索引」 */
@@ -212,13 +262,13 @@ function testManualAlias() {
   // 认出人只是一半：叫法不跟着注入，LLM 就不知道这份档案对应问句里的哪个外号
   check(
     '人工别名会写进注入的档案行',
-    userMemoryStorage.getMemoryContext([111]),
+    memoryStore.getMemoryContext([111]),
     `[测试111]（也叫：${MANUAL_ALIAS}） 测试用档案`,
   );
 
   check(
     '没填别名的人档案行不变',
-    userMemoryStorage.getMemoryContext([222]),
+    memoryStore.getMemoryContext([222]),
     '[测试222] 测试用档案',
   );
 }
@@ -267,13 +317,19 @@ function testMention() {
 
 export function testNameResolve() {
   fs.mkdirSync(CHAT_BACKUP_DIR, { recursive: true });
-  fs.mkdirSync(MEMORY_DIR, { recursive: true });
   const files = Object.keys(FIXTURES).map((f) => path.join(CHAT_BACKUP_DIR, f));
-  const profiles = [...FAKE_PROFILES, ORPHAN_PROFILE].map((id) => path.join(MEMORY_DIR, `${id}.json`));
 
-  const existing = [...files, ...profiles].filter((f) => fs.existsSync(f));
+  const existing = files.filter((f) => fs.existsSync(f));
   if (existing.length > 0) {
     console.error(`样本文件已存在，先手动清理再跑：\n${existing.join('\n')}`);
+    return;
+  }
+  if (profileRowCount() > 0) {
+    console.error(`记忆库里已经有测试 userId(${ALL_PROFILES.join(', ')}) 的记录，先手动清理再跑`);
+    return;
+  }
+  if (chatRowCount() > 0) {
+    console.error(`记忆库里已经有测试群(${TEST_GROUPS.join(', ')}) 的聊天记录，先手动清理再跑`);
     return;
   }
 
@@ -281,20 +337,11 @@ export function testNameResolve() {
     Object.entries(FIXTURES).forEach(([name, content]) => {
       fs.writeFileSync(path.join(CHAT_BACKUP_DIR, name), content, 'utf-8');
     });
-    FAKE_PROFILES.forEach((id) => {
-      const data = {
-        userId: id,
-        nickName: `测试${id}`,
-        traits: ['测试用档案'],
-        // 只给 111 配人工别名
-        ...(id === 111 ? { aliases: [MANUAL_ALIAS] } : {}),
-        updatedAt: Date.now(),
-      };
-      fs.writeFileSync(path.join(MEMORY_DIR, `${id}.json`), JSON.stringify(data), 'utf-8');
-    });
-    fs.writeFileSync(path.join(MEMORY_DIR, `${ORPHAN_PROFILE}.json`), JSON.stringify({
-      userId: ORPHAN_PROFILE, nickName: '孤儿档案', traits: ['没在日志里出现过'], aliases: ['孤儿档案'], updatedAt: Date.now(),
-    }), 'utf-8');
+    // 昵称索引读的是 chat_line，样本文件得先导进库
+    ingestChatBackups(getMemoryDb(), TEST_GROUPS);
+    // 只给 111 配人工别名
+    FAKE_PROFILES.forEach((id) => seedProfile(id, `测试${id}`, '测试用档案', id === 111 ? [MANUAL_ALIAS] : []));
+    seedProfile(ORPHAN_PROFILE, '孤儿档案', '没在日志里出现过', ['孤儿档案']);
 
     testMatch();
     testIndex();
@@ -302,7 +349,9 @@ export function testNameResolve() {
     testMention();
     console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项未通过`);
   } finally {
-    [...files, ...profiles].forEach((f) => fs.rmSync(f, { force: true }));
+    files.forEach((f) => fs.rmSync(f, { force: true }));
+    clearProfiles();
+    clearChatLines();
   }
 }
 

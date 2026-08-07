@@ -8,7 +8,8 @@ import { getRecordCode } from '@/utils/msgCode';
 import { getTTSAudio } from '@/service/tts';
 import { translateText } from '@/service/llm';
 import messageStorage from '../storage/message';
-import userMemoryStorage from '../storage/userMemory';
+import memoryExtractor from '../memory/extract';
+import { isDrawing } from '../imageGen/tools';
 import aliasIndex from '../history/aliasIndex';
 import { formatMessage } from '../format';
 import { sendSegmentedReply } from '../replySender';
@@ -29,6 +30,9 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
 
   /** 正在回复的群的锁 */
   private processingLocks = new Set<number>();
+
+  /** 防抖窗口内被 @ 过的群，定时器触发时消费 */
+  private pendingMentions = new Set<number>();
 
   match(ctx: ModuleContext<GroupMessageData>) {
     if (!nnkbot.config.aiReply.enable) {
@@ -68,12 +72,11 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
 
     //  -------- 固定回复逻辑 --------
     // 1. 匹配"要不要xxx"时随机回复"要"或"不要"
-    if (/要不要/.test(formattedMessage.message)) {
-      const reply = (Math.random() < 0.5) ? `${BOT_NAME}建议你 要！` : `${BOT_NAME}建议你 不要！`;
-      ctx.reply(reply);
-      return;
-    }
-
+    // if (/要不要/.test(formattedMessage.message)) {
+    //   const reply = (Math.random() < 0.5) ? `${BOT_NAME}建议你 要！` : `${BOT_NAME}建议你 不要！`;
+    //   ctx.reply(reply);
+    //   return;
+    // }
 
     // -------- AI 回复触发决策 --------
     let shouldReply = false; // 需要AI回复
@@ -84,19 +87,24 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
       // 被提到了
       shouldReply = true;
       this.trigger.noteMention(groupId);
+      this.pendingMentions.add(groupId);
     }
 
     // 主动插话的群
     if (nnkbot.config.aiReply.initiativeList.includes(groupId)) {
-      const chance = this.trigger.rollInitiative(groupId, formattedMessage.message);
-      if (chance !== null) {
-        shouldReply = true;
-        isInitiativeReply = true;
-        initiativeChance = chance;
+      // 被 @ 的这条不掷骰：掷中会把这次回复降级成主动插话，而主动插话不下发工具
+      // 判定放在掷骰之前，免得白白消耗 trigger 内部的冷却与计数状态
+      if (!formattedMessage.isMentionMe && !isDrawing(groupId)) {
+        const chance = this.trigger.rollInitiative(groupId, formattedMessage.message);
+        if (chance !== null) {
+          shouldReply = true;
+          isInitiativeReply = true;
+          initiativeChance = chance;
+        }
       }
 
       // 群友记忆系统
-      userMemoryStorage.onMessage(userId, nickName, formattedMessage.message, formattedMessage.isMentionMe);
+      memoryExtractor.onMessage(groupId, userId, nickName, formattedMessage.message, formattedMessage.isMentionMe);
     }
 
     // 没有命中触发条件直接返回
@@ -109,7 +117,10 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
 
     const timer = setTimeout(() => {
       this.sessionTimers.set(groupId, null);
-      this.processReply(groupId, isInitiativeReply, initiativeChance);
+      // 定时器只带最后一条消息的标志，防抖期间被 @ 过就整体按被 @ 处理，
+      // 否则别人随后插一句掷中，@ 过来的那次请求会被当成主动插话而失去工具
+      const mentioned = this.pendingMentions.delete(groupId);
+      this.processReply(groupId, isInitiativeReply && !mentioned, mentioned ? null : initiativeChance);
     }, 3500);
     this.sessionTimers.set(groupId, timer);
   }
@@ -117,6 +128,10 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
   /** 生成并发送 AI 回复（同一群同时只处理一次） */
   private async processReply(groupId: number, isInitiativeReply = false, initiativeChance: number | null = null) {
     if (this.processingLocks.has(groupId)) {
+      return;
+    }
+    // 掷骰到这里隔着 3.5s 防抖，期间可能已经开始画图了，主动插话再拦一道
+    if (isInitiativeReply && isDrawing(groupId)) {
       return;
     }
     this.processingLocks.add(groupId);

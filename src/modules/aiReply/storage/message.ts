@@ -16,16 +16,18 @@ export function backupDateKey(date = new Date()): string {
 }
 
 /**
- * bot 自己的发言在备份日志里额外标注触发方式、旧账注入条数与点名注入条数：
- * `[0][主动 0.12]内容`、`[0][被动][旧账 2][点名 1]内容`。
- * 供离线统计区分主动插话与被 @ 应答，以及核对旧账/点名的注入频率
+ * bot 自己的发言在备份日志里额外标注触发方式、工具调用次数与点名注入条数：
+ * `[0][主动 0.12]内容`、`[0][被动][工具 2][点名 1]内容`。
+ * 供离线统计区分主动插话与被 @ 应答，以及核对工具/点名的触发频率。
+ *
+ * 旧日志里的 `[旧账 N]` 是同一个位置上的前身（关键词预注入时代），解析侧仍然认它
  */
 function backupTriggerMark(msg: FormattedMessage): string {
   const marks: string[] = [];
   if (msg.initiative !== undefined) {
     marks.push(msg.initiative ? `[主动 ${msg.chance ?? 0}]` : '[被动]');
   }
-  if (msg.historyHits) marks.push(`[旧账 ${msg.historyHits}]`);
+  if (msg.toolCalls) marks.push(`[工具 ${msg.toolCalls}]`);
   if (msg.mentionHits) marks.push(`[点名 ${msg.mentionHits}]`);
   return marks.join('');
 }
@@ -70,12 +72,7 @@ class MessageStorage {
     }
     const history = store.get(key)!;
 
-    // 第20条消息标记 Cache（窗口 30，断点放在中段，后 10 条留给增量）
-    if (history.length === 19) {
-      history.push({ ...msg, cacheControl: true });
-    } else {
-      history.push(msg);
-    }
+    history.push(msg);
 
     // 触到裁剪阈值就备份一次群聊记录：首轮攒满 40 条，之后每裁剪回 30 条再攒 10 条触发一次
     if (store === this.groupChatConversations) {
@@ -91,20 +88,16 @@ class MessageStorage {
       while (history.length > 0 && history[0].role === 'assistant') {
         history.shift();
       }
-      if (history.length > 0) {
-        // 倒序遍历消息，修剪早期图片
-        let imageCount = 0;
-        for (let i = history.length - 1; i >= 0; i--) {
-          const m = history[i];
-          if (m.imgUrl) {
-            imageCount++;
-            if (imageCount > 1) {
-              history[i] = { ...m, imgUrl: undefined };
-            }
+      // 倒序遍历消息，修剪早期图片
+      let imageCount = 0;
+      for (let i = history.length - 1; i >= 0; i--) {
+        const m = history[i];
+        if (m.imgUrl) {
+          imageCount++;
+          if (imageCount > 1) {
+            history[i] = { ...m, imgUrl: undefined };
           }
         }
-        // 清理后最后一条消息标记 Cache
-        history[history.length - 1].cacheControl = true;
       }
     }
   }

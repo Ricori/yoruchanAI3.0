@@ -1,3 +1,4 @@
+import { printError } from '@/utils/print';
 import saucenaoSearch from './saucenao';
 import whatAnimeSearch from './whatanime';
 import ascii2dSearch from './ascii2d';
@@ -55,7 +56,7 @@ const searchImage = async (imgUrls: string[]) => {
     // 为空时返回兜底文案
     return [searchImageText.error];
   } catch (err) {
-    console.error(`${new Date().toLocaleString()} [searchImage Error]\n${err}`);
+    printError(`[SearchImage Error]\n${err}`);
     return [searchImageText.error];
   }
 };

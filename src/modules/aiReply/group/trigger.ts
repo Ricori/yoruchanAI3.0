@@ -10,7 +10,7 @@ const BASE_CHANCE = 0.015;
 const RECENT_AT_CHANCE = 0.12;
 
 /** 获取消息相关性附加概率 */
-export function getAdditionalChance(text: string): number {
+function getAdditionalChance(text: string): number {
   let score = 0;
   // 核心人设词第一梯队
   const coreInterests = /写作|小说|文学部|投稿|稿子|可爱|数学|算数/;

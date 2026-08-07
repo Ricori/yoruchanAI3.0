@@ -1,8 +1,9 @@
 
 import nnkbot from '@/core/nnkBot';
 import nnkSchedule from '@/core/nnkSchedule';
-import { NonokaAdmin } from '@/core/nnkAdmin';
+import { NonokaAdmin } from '@/core/admin';
 import SystemCleanupJob from '@/tasks/clean';
+import MemoryConsolidateJob from '@/tasks/memoryConsolidate';
 import TwitterPushJob from '@/tasks/twitter';
 import YtLivePushJob from '@/tasks/youtube';
 import RequestFriendModule from '@/modules/request/requestFriend';
@@ -15,6 +16,7 @@ import GroupAIReplyModule from '@/modules/aiReply/group';
 import RepeaterModule from '@/modules/group/repeater';
 import LocalPictureModule from '@/modules/group/localPic';
 import GroupCommandModule from '@/modules/group/command';
+import { ingestOnStartup } from '@/modules/aiReply/memory/ingest';
 
 // 加载模块
 nnkbot.loadModules([
@@ -43,10 +45,14 @@ nnkbot.loadModules([
 // 加载定时任务
 nnkSchedule.loadJob([
   SystemCleanupJob,
+  MemoryConsolidateJob,
   // BilibiliNewSharedJob,
   TwitterPushJob,
   YtLivePushJob,
 ]);
+
+// 聊天备份导入记忆检索索引，跑完再接消息，避免刚启动时检索空转
+ingestOnStartup();
 
 // 启动管理面板
 new NonokaAdmin(nnkbot).start();

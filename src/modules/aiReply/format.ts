@@ -3,7 +3,6 @@ import { hasAtUser, transformCQCodes } from '@/utils/msgCode';
 import { BOT_NAME_ALIASES } from '@/constants';
 import { SimpleMessageData } from '@/types/event';
 import { FormattedMessage } from '../../types/message';
-import type { HistoryHit } from './history/search';
 
 /** 将消息中的CQ码转换为对 LLM 友好的占位文本 */
 function clean(rawText: string, cleanImage = false) {
@@ -31,6 +30,26 @@ function clean(rawText: string, cleanImage = false) {
 }
 
 
+type ImgInfo = { file?: string, file_size?: string, summary?: string, sub_type?: string };
+
+/** 表情判定：光看大小不够，大于60kb的动图/商城表情也得算表情，不算「图片」 */
+function isStickerImg(img: ImgInfo) {
+  // sub_type 非 0 即表情包/商城表情/收藏表情/贴图，正常照片是 0（或没这字段）
+  if (img.sub_type && img.sub_type !== '0') return true;
+  // QQ 只给表情带 summary（[动画表情]、商城表情名等），正常图片是空或 [图片]
+  if (img.summary && img.summary !== '[图片]') return true;
+  // 动图基本都是表情，体积再大也一样
+  if (/\.gif$/i.test(img.file || '')) return true;
+  return Number(img.file_size || 0) < 60 * 1024;
+}
+
+/** 取被引用消息里的图片URL。改图要拿它当底图，正文里那句 `[之前的图片]` 只是给模型看的占位 */
+function getRefImgUrl(replyMessage?: SimpleMessageData): string | undefined {
+  if (!replyMessage || !hasImage(replyMessage.message)) return undefined;
+  const img = getImgs(replyMessage.message, true)[0];
+  return isStickerImg(img) ? undefined : img.url;
+}
+
 export function formatMessage(
   params: {
     selfId: number,
@@ -54,6 +73,10 @@ export function formatMessage(
 
   let prefix = '';
 
+  // 四个 return 分支都要带上，别只加在其中一个
+  const ref = getRefImgUrl(replyMessage);
+  const refImgUrl = ref ? { refImgUrl: ref } : {};
+
   if (replyMessage) {
     const isBot = replyMessage.sender.user_id === selfId; // 是否引用自己的消息
     if (isBot) {
@@ -69,24 +92,23 @@ export function formatMessage(
 
   if (!hasImage(rawMessage)) {
     return {
-      role: 'user', userId, isMentionMe, message: prefix + clean(rawMessage),
+      role: 'user', userId, isMentionMe, message: prefix + clean(rawMessage), ...refImgUrl,
     };
   }
 
   if (cleanImage) {
     return {
-      role: 'user', userId, isMentionMe, message: prefix + clean(rawMessage, true),
+      role: 'user', userId, isMentionMe, message: prefix + clean(rawMessage, true), ...refImgUrl,
     };
   }
 
   const img = getImgs(rawMessage, true)[0];
-  const isSticker = img.summary === '[动画表情]' || Number(img.file_size || 0) < 60 * 1024;
 
-  if (isSticker) {
-    // 动画表情或小于60kb的图片视为表情，降成纯文本
+  if (isStickerImg(img)) {
+    // 判定为表情的降成纯文本
     const text = transformCQCodes(clean(rawMessage), (cq) => (cq.type === 'image' ? '[表情]' : null)).trim();
     return {
-      role: 'user', userId, isMentionMe, message: prefix + text,
+      role: 'user', userId, isMentionMe, message: prefix + text, ...refImgUrl,
     };
   }
 
@@ -96,6 +118,7 @@ export function formatMessage(
     isMentionMe,
     message: prefix + clean(rawMessage, true),
     imgUrl: img.url,
+    ...refImgUrl,
   };
 }
 
@@ -104,7 +127,7 @@ export function formatAssistantMessage(
   text: string,
   initiative?: boolean,
   chance?: number | null,
-  historyHits = 0,
+  toolCalls = 0,
   mentionHits = 0,
 ): FormattedMessage {
   return {
@@ -115,7 +138,7 @@ export function formatAssistantMessage(
     ...(initiative === undefined ? {} : { initiative }),
     // 概率是浮点乘出来的，截断到 4 位免得日志里全是长尾数
     ...(chance === undefined || chance === null ? {} : { chance: Number(chance.toFixed(4)) }),
-    ...(historyHits > 0 ? { historyHits } : {}),
+    ...(toolCalls > 0 ? { toolCalls } : {}),
     ...(mentionHits > 0 ? { mentionHits } : {}),
   };
 }
@@ -130,18 +153,18 @@ export function formatInitiativePromptMessage(): FormattedMessage {
 }
 
 
-export function formatHistoryPromptMessage(hits: HistoryHit[]): FormattedMessage | null {
-  if (hits.length === 0) return null;
-  // hit.text 自带 [昵称]说： 前缀，补个日期就是完整的一条旧账
-  const lines = hits.map((h) => `${h.date} ${h.text}`).join('\n');
+/**
+ * 出图状态提示（还在画 / 已发出 / 画崩了），正文由 imageGen/tools.ts 的 getDrawNotice 给出。
+ * 不写死回复文案，交给模型自己用乃乃香的语气说
+ */
+export function formatDrawNoticeMessage(notice: string): FormattedMessage {
   return {
     role: 'user',
     userId: 0,
     isMentionMe: false,
-    message: `（System：【旧账参考】以下是从群历史记录里检索到的这位群友以前说过的话，仅当与当前话题确实相关时才化用，可以带上日期；不相关就完全无视，不要硬引用：\n${lines}\n）`,
+    message: `（System：${notice}）`,
   };
 }
-
 
 export function formatUserMemoryPromptMessage(userMemoryContext: string): FormattedMessage | null {
   if (userMemoryContext === '') return null;

@@ -23,8 +23,8 @@ export function hasImage(msg: string) {
 export function getImgs(msg: string, extra = false) {
   const cqimgs = extractCQCodes(msg).filter((cq) => cq.type === 'image');
   return cqimgs.map((cq) => {
-    const data = cq.pickData(extra ? ['file', 'url', 'file_size', 'summary'] : ['file', 'url']);
-    return data as { file: string, url: string, file_size?: string, summary?: string };
+    const data = cq.pickData(extra ? ['file', 'url', 'file_size', 'summary', 'sub_type'] : ['file', 'url']);
+    return data as { file: string, url: string, file_size?: string, summary?: string, sub_type?: string };
   });
 }
 

@@ -1,31 +1,26 @@
-import fs from 'fs';
-import path from 'path';
 import { printError, printLog } from '@/utils/print';
-import { CHAT_BACKUP_DIR, backupDateKey } from '../storage/message';
-import userMemoryStorage from '../storage/userMemory';
+import { backupDateKey } from '../storage/message';
+import { getMemoryDb } from '../memory/db';
+import memoryStore from '../memory/store';
+import { stripSpeakerPrefix } from '../memory/segment';
 import { matchAlias, normalizeAlias, normalizeText } from './nameMatch';
-import { stripSpeakerPrefix } from './keywords';
 
 /**
  * 昵称索引：userId -> 这个人用过的全部名字。
  *
  * 群友问「XXX是谁」时，光靠「最近发过言的人」永远找不到 XXX——他此刻很可能没在说话。
- * 这里从聊天备份日志反推出「名字 -> userId」的映射，让被提到的人也能被认出来。
+ * 这里从聊天记录反推出「名字 -> userId」的映射，让被提到的人也能被认出来。
  *
- * 别名全自动派生，不需要人工维护：备份日志每行都是 `[userId][昵称]内容`，
- * 扫一遍就能拿到每个人的历史昵称，连改名前的旧名一起收进来——
- * 这恰恰是只存当前昵称的档案文件做不到的（改了名，旧名就永远对不上了）。
+ * 别名全自动派生，不需要人工维护：每条记录都带发言时的昵称，
+ * 归一下就能拿到每个人的历史昵称，连改名前的旧名一起收进来——
+ * 这恰恰是只存当前昵称的档案做不到的（改了名，旧名就永远对不上了）。
+ *
+ * 数据源是 `chat_line` 表而不是备份文件：同样的内容，一条 GROUP BY 就出来了，
+ * 不用把几百个文件逐行读一遍
  */
 
-/** 备份文件名 `{groupId}_{yyyymmdd}.txt` */
-const FILE_RE = /^(\d+)_(\d{8})\.txt$/;
-
-/** 备份行首的 `[userId][昵称]` */
-const LINE_RE = /^\[(\d+)\]\[([^\]]*)\]/;
-
 /**
- * 只扫这么多天内的备份。更早的昵称基本没人再叫了，留着只会扩大误命中面，
- * 也免得日志目录逐年增长后启动扫描越来越慢
+ * 只看这么多天内的记录。更早的昵称基本没人再叫了，留着只会扩大误命中面
  */
 const INDEX_DAYS = 180;
 
@@ -72,13 +67,6 @@ class AliasIndex {
     }
   }
 
-  private scanFile(file: string, groupId: number, date: number) {
-    const lines = fs.readFileSync(path.join(CHAT_BACKUP_DIR, file), 'utf-8').split('\n');
-    lines.forEach((line) => {
-      const m = LINE_RE.exec(line);
-      if (m) this.note(groupId, Number(m[1]), m[2], date);
-    });
-  }
 
   /**
    * 并入人工写在 data/memory/user/{userId}.json 的 aliases。
@@ -92,7 +80,7 @@ class AliasIndex {
     const today = Number(backupDateKey());
     let added = 0;
 
-    userMemoryStorage.getManualAliases().forEach((aliases, userId) => {
+    memoryStore.getManualAliases().forEach((aliases, userId) => {
       const entry = this.byUser.get(userId);
       if (!entry) return;
       aliases.forEach((raw) => {
@@ -107,21 +95,39 @@ class AliasIndex {
     return added;
   }
 
-  /** 扫聊天备份建底，失败不致命：索引空着只是认不出人，不影响回复 */
+  /**
+   * 管理面板加完别名后立刻并进索引，省得为一条别名重启 bot。
+   * 返回 false 表示这人在日志里一次都没露过面，无从判断属于哪个群，只能等下次建底
+   */
+  noteManualAlias(userId: number, raw: string): boolean {
+    // 还没建底就什么都不用做，build() 会连人工别名一起读进来
+    if (!this.built) return true;
+
+    const entry = this.byUser.get(userId);
+    const alias = normalizeAlias(raw);
+    if (!entry || !alias) return false;
+
+    entry.aliases.set(alias, Number(backupDateKey()));
+    return true;
+  }
+
+  /** 查 chat_line 建底，失败不致命：索引空着只是认不出人，不影响回复 */
   private build() {
     this.built = true;
     const oldest = Number(backupDateKey(new Date(Date.now() - INDEX_DAYS * 24 * 60 * 60 * 1000)));
 
     try {
-      fs.readdirSync(CHAT_BACKUP_DIR).forEach((file) => {
-        const m = FILE_RE.exec(file);
-        if (m && Number(m[2]) >= oldest) {
-          this.scanFile(file, Number(m[1]), Number(m[2]));
-        }
-      });
+      // 每个「群 + 人 + 昵称」只出一行，顺带把最后一次用这个名字的日期带出来
+      const rows = getMemoryDb().prepare(`
+        SELECT group_id, user_id, nick, max(date_key) AS date_key FROM chat_line
+        WHERE date_key >= ? AND user_id != 0 AND nick IS NOT NULL AND nick != ''
+        GROUP BY group_id, user_id, nick
+      `).all(oldest) as { group_id: number, user_id: number, nick: string, date_key: number }[];
+
+      rows.forEach((r) => this.note(r.group_id, r.user_id, r.nick, r.date_key));
       const manual = this.addManualAliases();
       const aliasCount = [...this.byUser.values()].reduce((n, e) => n + e.aliases.size, 0);
-      printLog(`[AliasIndex] 已从聊天记录建立 ${this.byUser.size} 人 / ${aliasCount} 个昵称的索引`
+      printLog(`[AliasIndex] 已从 ${rows.length} 条昵称记录建立 ${this.byUser.size} 人 / ${aliasCount} 个昵称的索引`
         + `（其中 ${manual} 个来自档案里人工填的 aliases）`);
     } catch (e) {
       printError(`[AliasIndex] 建立昵称索引失败: ${e}`);

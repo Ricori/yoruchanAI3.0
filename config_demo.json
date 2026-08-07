@@ -15,7 +15,12 @@
     },
     "apiKeys": {
       "lolicon": "",
-      "saucenao": ""
+      "saucenao": "",
+      "imageGen": {
+        "baseUrl": "https://api.llm-token.cn",
+        "apiKey": "",
+        "model": "gpt-image-2"
+      }
     },
     "repeater": {
       "enable": true,
@@ -45,7 +50,26 @@
     "aiReply": {
       "enable": true,
       "blackList": [],
-      "initiativeList": []
+      "initiativeList": [],
+      "memory": {
+        "toolRounds": {
+          "mention": 1,
+          "initiative": 0
+        }
+      },
+      "imageGen": {
+        "enable": false,
+        "whiteGroupIds": [],
+        "dailyLimit": 5,
+        "cooldownSec": 120,
+        "size": "1024x1024"
+      },
+      "search": {
+        "enable": true,
+        "whiteGroupIds": [],
+        "dailyLimit": 20,
+        "count": 5
+      }
     },
     "ykhrOneDrive": {
       "groupIds": []

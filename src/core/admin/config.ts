@@ -1,13 +1,12 @@
-import http from 'http';
 import fs from 'fs';
+import http from 'http';
 import path from 'path';
-import crypto from 'crypto';
-import { printError, printLog } from '@/utils/print';
+import { printLog } from '@/utils/print';
 import { NonokaConfig } from '@/types/config';
-import { NonokaCore } from './nnkCore';
+import { NonokaCore } from '../nnkCore';
+import { readBody } from './http';
 
 const CONFIG_PATH = path.resolve('config.json');
-const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === 'object' && !Array.isArray(v);
@@ -45,24 +44,6 @@ function writeConfigFile(config: NonokaConfig) {
   fs.renameSync(tmpPath, CONFIG_PATH);
 }
 
-function readBody(req: http.IncomingMessage): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let size = 0;
-    const chunks: Buffer[] = [];
-    req.on('data', (chunk: Buffer) => {
-      size += chunk.length;
-      if (size > MAX_BODY_BYTES) {
-        reject(new Error('body too large'));
-        req.destroy();
-        return;
-      }
-      chunks.push(chunk);
-    });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-    req.on('error', reject);
-  });
-}
-
 const PAGE = `<!doctype html>
 <html lang="zh">
 <head>
@@ -78,6 +59,8 @@ const PAGE = `<!doctype html>
            padding: 12px 16px; background: #161b22; border-bottom: 1px solid #30363d; }
   header b { color: #58a6ff; }
   header .sp { flex: 1; }
+  header a { color: #8b949e; text-decoration: none; }
+  header a:hover { color: #58a6ff; }
   #status { font-size: 13px; }
   #status.ok { color: #3fb950; }
   #status.err { color: #f85149; }
@@ -112,6 +95,7 @@ const PAGE = `<!doctype html>
   <b>Nonoka</b> 管理面板
   <span class="sp"></span>
   <span id="status"></span>
+  <a id="memoryLink" href="#">记忆管理 →</a>
   <button id="reload">刷新</button>
   <button id="save" class="primary">保存并生效</button>
 </header>
@@ -191,6 +175,7 @@ const PAGE = `<!doctype html>
 </main>
 <script>
   const token = new URLSearchParams(location.search).get('token') || '';
+  document.getElementById('memoryLink').href = '/memory?token=' + encodeURIComponent(token);
 
   function api(pathname, opts) {
     const url = pathname + (pathname.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token);
@@ -338,126 +323,78 @@ const PAGE = `<!doctype html>
 </body>
 </html>`;
 
-export class NonokaAdmin {
-  private server?: http.Server;
-
-  constructor(private readonly bot: NonokaCore) {}
-
-  start() {
-    const port = Number(process.env.ADMIN_PORT || 9616);
-    const host = process.env.ADMIN_HOST || '127.0.0.1';
-    const envToken = process.env.ADMIN_TOKEN;
-    const isLocal = host === '127.0.0.1' || host === 'localhost';
-
-    if (!envToken && !isLocal) {
-      printError('[AdminPanel] 拒绝启动：绑定非本地地址时必须通过 ADMIN_TOKEN 环境变量设置固定令牌。');
-      return;
-    }
-
-    const token = envToken || crypto.randomBytes(16).toString('hex');
-    if (!envToken) {
-      printLog(`[AdminPanel] 未设置 ADMIN_TOKEN，已生成临时令牌（重启后失效）: ${token}`);
-    }
-
-    this.server = http.createServer((req, res) => {
-      this.handle(req, res, token).catch((error) => {
-        printError('[AdminPanel Error]', error);
-        if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'internal error' }));
-      });
-    });
-    this.server.listen(port, host, () => {
-      printLog(`[AdminPanel] http://${host}:${port}/?token=${token}`);
-    });
+/** 处理配置页和它的接口，鉴权由调用方做完。返回是否命中路由 */
+export async function handleConfigRoute(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  url: URL,
+  bot: NonokaCore,
+): Promise<boolean> {
+  if (url.pathname === '/' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(PAGE);
+    return true;
   }
 
-  stop() {
-    this.server?.close();
+  if (url.pathname === '/api/config' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(redactConfig(readConfigFile())));
+    return true;
   }
 
-  private checkAuth(req: http.IncomingMessage, url: URL, token: string) {
-    const headerToken = req.headers['x-admin-token'];
-    const queryToken = url.searchParams.get('token');
-    return headerToken === token || queryToken === token;
+  if (url.pathname === '/api/config' && req.method === 'POST') {
+    let body: string;
+    try {
+      body = await readBody(req);
+    } catch {
+      res.writeHead(413, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'body too large' }));
+      return true;
+    }
+
+    let submitted: unknown;
+    try {
+      submitted = JSON.parse(body);
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'invalid json' }));
+      return true;
+    }
+
+    if (!isPlainObject(submitted) || !isPlainObject(submitted.botConfig)) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'invalid config shape' }));
+      return true;
+    }
+
+    // wsConfig、nonokaService 与 apiKeys 不允许通过管理面板读取或修改，无论提交了什么，都强制沿用磁盘上的现有值；
+    // 先展开 existing.botConfig，保留面板未管理的配置节（ykhrOneDrive 等），避免保存时被丢弃
+    const existing = readConfigFile();
+    const parsed = {
+      ...submitted,
+      wsConfig: existing.wsConfig,
+      botConfig: {
+        ...existing.botConfig,
+        ...submitted.botConfig,
+        nonokaService: existing.botConfig.nonokaService,
+        apiKeys: existing.botConfig.apiKeys,
+      },
+    };
+
+    if (!validateConfig(parsed)) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'invalid config shape' }));
+      return true;
+    }
+
+    writeConfigFile(parsed);
+    Object.assign(bot.config, parsed.botConfig);
+    printLog('[AdminPanel] 配置已通过管理面板更新');
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
+    return true;
   }
 
-  private async handle(req: http.IncomingMessage, res: http.ServerResponse, token: string) {
-    const url = new URL(req.url || '/', 'http://x');
-
-    if (!this.checkAuth(req, url, token)) {
-      res.writeHead(401, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'unauthorized' }));
-      return;
-    }
-
-    if (url.pathname === '/' && req.method === 'GET') {
-      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(PAGE);
-      return;
-    }
-
-    if (url.pathname === '/api/config' && req.method === 'GET') {
-      const config = readConfigFile();
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(redactConfig(config)));
-      return;
-    }
-
-    if (url.pathname === '/api/config' && req.method === 'POST') {
-      let body: string;
-      try {
-        body = await readBody(req);
-      } catch {
-        res.writeHead(413, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'body too large' }));
-        return;
-      }
-
-      let submitted: unknown;
-      try {
-        submitted = JSON.parse(body);
-      } catch {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'invalid json' }));
-        return;
-      }
-
-      if (!isPlainObject(submitted) || !isPlainObject(submitted.botConfig)) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'invalid config shape' }));
-        return;
-      }
-
-      // wsConfig、nonokaService 与 apiKeys 不允许通过管理面板读取或修改，无论提交了什么，都强制沿用磁盘上的现有值；
-      // 先展开 existing.botConfig，保留面板未管理的配置节（ykhrOneDrive 等），避免保存时被丢弃
-      const existing = readConfigFile();
-      const parsed = {
-        ...submitted,
-        wsConfig: existing.wsConfig,
-        botConfig: {
-          ...existing.botConfig,
-          ...submitted.botConfig,
-          nonokaService: existing.botConfig.nonokaService,
-          apiKeys: existing.botConfig.apiKeys,
-        },
-      };
-
-      if (!validateConfig(parsed)) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'invalid config shape' }));
-        return;
-      }
-
-      writeConfigFile(parsed);
-      Object.assign(this.bot.config, parsed.botConfig);
-      printLog('[AdminPanel] 配置已通过管理面板更新');
-
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: true }));
-      return;
-    }
-
-    res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'not found' }));
-  }
+  return false;
 }

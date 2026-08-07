@@ -25,6 +25,15 @@ export interface BotConfig {
     lolicon: string;
     /** saucenao 搜图接口 */
     saucenao: string;
+    /** 画图上游。出图要 130s+，过 nonoka 服务会被 CF 边缘切成 524，只能直连 */
+    imageGen: {
+      /** 上游地址，如 https://api.llm-token.cn */
+      baseUrl: string;
+      /** 上游密钥 */
+      apiKey: string;
+      /** 出图模型，如 gpt-image-2 */
+      model: string;
+    };
   };
   /** 复读机功能 */
   repeater: {
@@ -64,6 +73,41 @@ export interface BotConfig {
     blackList: number[];
     /** 主动发起对话的群名单 */
     initiativeList: number[];
+    /** 记忆系统。整块可省略，省略时按代码里的默认值走 */
+    memory?: {
+      /**
+       * 每次回复允许模型调几轮召回工具。
+       * 主动插话默认 0：本来就是随口一句，不值得多花一次网络往返
+       */
+      toolRounds?: {
+        mention?: number;
+        initiative?: number;
+      };
+    };
+    /** 画图工具。整块可省略，省略时按代码里的默认值走（默认开启） */
+    imageGen?: {
+      /** 是否允许模型调用画图工具，默认 true，要关得显式写 false */
+      enable?: boolean;
+      /** 白名单群号，留空则所有开了 AI 回复的群都能画 */
+      whiteGroupIds?: number[];
+      /** 每群每日出图上限，默认 5。出图要花钱，别不设上限 */
+      dailyLimit?: number;
+      /** 同群两次出图之间的冷却秒数，默认 120 */
+      cooldownSec?: number;
+      /** 出图尺寸，默认 1024x1024 */
+      size?: string;
+    };
+    /** 联网搜索工具。整块可省略，省略时按代码里的默认值走（默认开启） */
+    search?: {
+      /** 是否允许模型调用搜索工具，默认 true，要关得显式写 false */
+      enable?: boolean;
+      /** 白名单群号，留空则所有开了 AI 回复的群都能搜 */
+      whiteGroupIds?: number[];
+      /** 每群每日搜索上限，默认 20。上游免费额度是每月 1000 次，别不设上限 */
+      dailyLimit?: number;
+      /** 单次返回的结果条数，默认 5，上限 8 */
+      count?: number;
+    };
   },
   /** YKHR OneDrive 文件转存功能 */
   ykhrOneDrive: {
