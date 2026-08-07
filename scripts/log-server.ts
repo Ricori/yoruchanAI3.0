@@ -3,19 +3,26 @@
  * 纯 Node 内置模块，不加任何依赖。独立于机器人进程运行（机器人崩了也能看日志）。
  *
  * 用法：
- *   node scripts/log-server.cjs
+ *   npx tsx scripts/log-server.ts
  * 环境变量：
  *   LOG_PORT   监听端口，默认 9615
  *   LOG_HOST   绑定地址，默认 0.0.0.0（对外可访问）
  *   LOG_TOKEN  访问令牌，建议设置；设置后需用 ?token=xxx 访问
  *   LOG_FILES  要 tail 的文件，逗号分隔，默认 logs/nonoka.log
  *   LOG_TAIL   初次连接回放的行数，默认 300
+ *
+ * pm2-logrotate 配置为 retain all 后旧日志会一直保留（见 scripts/setup-logrotate.sh），
+ * 切分出来的归档文件（<name>__<时间戳>.log[.gz]）不会再被 tail，但可以通过
+ * GET /archives 列出、GET /archive?file=xxx 读取（网页上也有下拉框可以切换查看）。
  */
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
-const zlib = require('zlib');
-const { spawn } = require('child_process');
+import http from 'http';
+import fs from 'fs';
+import path from 'path';
+import zlib from 'zlib';
+import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** 程序主目录（scripts 的上一级） */
 const ROOT = path.resolve(__dirname, '..');
@@ -38,10 +45,10 @@ const FILES = (process.env.LOG_FILES || 'logs/out.log,logs/error.log')
   .map((f) => path.resolve(__dirname, '..', f));
 
 /** 当前连接的 SSE 客户端 */
-const clients = new Set();
+const clients = new Set<http.ServerResponse>();
 
 /** 广播一条日志到所有客户端 */
-function broadcast(line) {
+function broadcast(line: string) {
   const payload = `data: ${line.replace(/\n/g, '\\n')}\n\n`;
   for (const res of clients) res.write(payload);
 }
@@ -49,9 +56,14 @@ function broadcast(line) {
 /** 是否正在执行更新，避免并发点击重复触发 */
 let updating = false;
 
+interface UpdateStep {
+  cmd: string;
+  args: string[];
+}
+
 /** 顺序执行一组命令，输出实时广播到日志页面（带 [update] 标签） */
-function runSteps(steps, done) {
-  const line = (s) => broadcast(`[update] ${s}`);
+function runSteps(steps: UpdateStep[], done: (ok: boolean) => void) {
+  const line = (s: string) => broadcast(`[update] ${s}`);
   let idx = 0;
   const next = () => {
     if (idx >= steps.length) {
@@ -82,7 +94,7 @@ function runSteps(steps, done) {
 }
 
 /** 执行「git pull + pm2 reload」，全过程输出广播到日志页面 */
-function doUpdate(done) {
+function doUpdate(done: (ok: boolean) => void) {
   if (updating) {
     broadcast('[update] ⚠️ 已有更新任务在执行中，忽略本次请求');
     done(false);
@@ -90,7 +102,7 @@ function doUpdate(done) {
   }
   updating = true;
   broadcast('[update] 🚀 开始更新代码…');
-  const steps = [
+  const steps: UpdateStep[] = [
     { cmd: 'git', args: ['pull'] },
     ...UPDATE_APPS.map((app) => ({ cmd: 'pm2', args: ['reload', app] })),
   ];
@@ -100,32 +112,89 @@ function doUpdate(done) {
   });
 }
 
-/** 读取文件最后 n 行（用于初次连接回放） */
-function readLastLines(file, n) {
+/** 读取一个文件的全部文本行，自动识别 .gz（pm2-logrotate 压缩后的归档） */
+function readAllLines(file: string): string[] {
   try {
-    const content = fs.readFileSync(file, 'utf8');
-    const lines = content.split(/\r?\n/);
-    return lines.slice(-n - 1, -1); // 去掉结尾空行
+    const buf = fs.readFileSync(file);
+    const text = file.endsWith('.gz') ? zlib.gunzipSync(buf).toString('utf8') : buf.toString('utf8');
+    return text.split(/\r?\n/).filter((l) => l.length > 0);
   } catch {
     return [];
   }
 }
 
+/** 读取文件最后 n 行（用于初次连接回放） */
+function readLastLines(file: string, n: number): string[] {
+  return readAllLines(file).slice(-n);
+}
+
+interface ArchiveEntry {
+  name: string;
+  abs: string;
+  tag: string;
+  mtime: number;
+}
+
+/** 列出某个实时日志文件对应的归档（pm2-logrotate 切分出来的旧文件），新的排前面 */
+function listArchives(file: string): ArchiveEntry[] {
+  const dir = path.dirname(file);
+  const base = path.basename(file, '.log');
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(dir);
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((name) => name.startsWith(`${base}__`) && (name.endsWith('.log') || name.endsWith('.log.gz')))
+    .map((name) => {
+      const abs = path.join(dir, name);
+      let mtime = 0;
+      try {
+        mtime = fs.statSync(abs).mtimeMs;
+      } catch {
+        /* 文件可能刚好被删，忽略 */
+      }
+      return { name, abs, tag: path.basename(file), mtime };
+    })
+    .sort((a, b) => b.mtime - a.mtime);
+}
+
+/** 凑够最近 n 行：实时文件不够时，往前翻归档补齐（避免刚切分完看起来突然没日志了） */
+function readLastLinesWithHistory(file: string, n: number): string[] {
+  let lines = readLastLines(file, n);
+  const archives = listArchives(file); // 新的在前
+  for (const { abs } of archives) {
+    if (lines.length >= n) break;
+    const need = n - lines.length;
+    lines = readAllLines(abs).slice(-need).concat(lines);
+  }
+  return lines;
+}
+
 /** 从一行日志里提取时间戳（配合 pm2 的 log_date_format），提取不到返回 null */
-function extractTime(line) {
+function extractTime(line: string): number | null {
   const m = line.match(/^(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?)/);
   if (!m) return null;
   const t = Date.parse(m[1].replace(' ', 'T'));
   return Number.isNaN(t) ? null : t;
 }
 
+interface MergedLine {
+  tag: string;
+  line: string;
+  time: number | null;
+  fileIdx: number;
+  idx: number;
+}
+
 /** 汇总所有文件最近的日志行，按时间排序后只保留最近 n 条（跨文件合计，而非每个文件各 n 条） */
-function readMergedTail(files, n) {
-  const merged = [];
+function readMergedTail(files: string[], n: number): MergedLine[] {
+  const merged: MergedLine[] = [];
   files.forEach((file, fileIdx) => {
     const tag = path.basename(file);
-    let lastTime = null;
-    readLastLines(file, n).forEach((line, idx) => {
+    let lastTime: number | null = null;
+    readLastLinesWithHistory(file, n).forEach((line, idx) => {
       // 没有时间戳的行（如多行堆栈续行）沿用同文件上一行的时间，跟在其后而不是被甩到最前
       const time = extractTime(line) ?? lastTime;
       if (time != null) lastTime = time;
@@ -153,23 +222,28 @@ const CRC_TABLE = (() => {
   }
   return table;
 })();
-function crc32(buf) {
+function crc32(buf: Buffer): number {
   let c = 0xffffffff;
   for (let i = 0; i < buf.length; i++) c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
   return (c ^ 0xffffffff) >>> 0;
 }
 
 /** JS Date -> DOS 日期/时间（zip 头部字段要求的格式） */
-function toDosTime(date) {
+function toDosTime(date: Date): { time: number; dosDate: number } {
   const time = ((date.getHours() & 0x1f) << 11) | ((date.getMinutes() & 0x3f) << 5) | ((date.getSeconds() >> 1) & 0x1f);
   const dosDate = (((date.getFullYear() - 1980) & 0x7f) << 9) | (((date.getMonth() + 1) & 0xf) << 5) | (date.getDate() & 0x1f);
   return { time, dosDate };
 }
 
+interface WalkedFile {
+  abs: string;
+  rel: string;
+}
+
 /** 递归收集目录下所有文件，返回相对路径列表 */
-function walkFiles(dir, base = dir) {
-  const out = [];
-  let entries;
+function walkFiles(dir: string, base: string = dir): WalkedFile[] {
+  const out: WalkedFile[] = [];
+  let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
   } catch {
@@ -187,10 +261,10 @@ function walkFiles(dir, base = dir) {
 }
 
 /** 用内置 zlib（deflate raw）手写一个最小可用的 zip 打包器，避免引入第三方依赖 */
-function buildZip(dir) {
+function buildZip(dir: string): Buffer {
   const files = walkFiles(dir);
-  const chunks = [];
-  const centralRecords = [];
+  const chunks: Buffer[] = [];
+  const centralRecords: Buffer[] = [];
   let offset = 0;
 
   for (const { abs, rel } of files) {
@@ -253,7 +327,7 @@ function buildZip(dir) {
 }
 
 /** 监听单个文件的增量内容 */
-function watchFile(file) {
+function watchFile(file: string) {
   let size = 0;
   try {
     size = fs.statSync(file).size;
@@ -268,7 +342,7 @@ function watchFile(file) {
   const onChange = () => {
     // fs.watch 和轮询可能同时触发；正在读时直接跳过，避免重复读同一段
     if (reading) return;
-    let stat;
+    let stat: fs.Stats;
     try {
       stat = fs.statSync(file);
     } catch {
@@ -327,7 +401,7 @@ const PAGE = `<!doctype html>
            padding: 10px 14px; background: #161b22; border-bottom: 1px solid #30363d; }
   header b { color: #58a6ff; }
   header .sp { flex: 1; }
-  header button, header input { font: inherit; color: #c9d1d9; background: #21262d;
+  header button, header input, header select { font: inherit; color: #c9d1d9; background: #21262d;
            border: 1px solid #30363d; border-radius: 6px; padding: 4px 10px; }
   header button { cursor: pointer; }
   #status { font-size: 12px; }
@@ -344,6 +418,7 @@ const PAGE = `<!doctype html>
   <span id="status" class="off">● 连接中…</span>
   <span class="sp"></span>
   <input id="filter" placeholder="过滤关键字…" />
+  <select id="archiveSelect"><option value="">实时</option></select>
   <button id="update">更新代码</button>
   <button id="memoryBackup">下载记忆备份</button>
   <button id="autoscroll">自动滚动: 开</button>
@@ -406,25 +481,82 @@ const PAGE = `<!doctype html>
     if (auto) window.scrollTo(0, document.body.scrollHeight);
   }
 
+  /** 静态展示一份归档日志的全部内容（不受 5000 行裁剪限制，只读不追加） */
+  function renderArchive(lines) {
+    logEl.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    for (const text of lines) {
+      const div = document.createElement('div');
+      div.className = 'line' + (/error|fail|exception/i.test(text) ? ' err' : '');
+      div.textContent = text;
+      div.dataset.text = text.toLowerCase();
+      if (filter && !div.dataset.text.includes(filter)) div.style.display = 'none';
+      frag.appendChild(div);
+    }
+    logEl.appendChild(frag);
+    window.scrollTo(0, document.body.scrollHeight);
+  }
+
+  let es = null;
   function connect() {
-    const es = new EventSource('/stream' + (token ? '?token=' + encodeURIComponent(token) : ''));
+    es = new EventSource('/stream' + (token ? '?token=' + encodeURIComponent(token) : ''));
     es.onopen = () => { statusEl.textContent = '● 已连接'; statusEl.className = 'ok'; };
     es.onmessage = (e) => append(e.data.replace(/\\\\n/g, '\\n'));
     es.onerror = () => { statusEl.textContent = '● 断开，重连中…'; statusEl.className = 'off'; };
   }
+
+  const archiveSelect = document.getElementById('archiveSelect');
+  async function loadArchives() {
+    try {
+      const res = await fetch('/archives' + (token ? '?token=' + encodeURIComponent(token) : ''));
+      const list = await res.json();
+      const cur = archiveSelect.value;
+      archiveSelect.innerHTML = '<option value="">实时</option>';
+      for (const a of list) {
+        const opt = document.createElement('option');
+        opt.value = a.name;
+        opt.textContent = '[' + a.tag + '] ' + a.name;
+        archiveSelect.appendChild(opt);
+      }
+      archiveSelect.value = cur;
+    } catch {
+      /* 归档列表加载失败不影响实时日志，忽略 */
+    }
+  }
+  archiveSelect.onchange = async () => {
+    const name = archiveSelect.value;
+    if (!name) {
+      logEl.innerHTML = '';
+      if (!es) connect();
+      return;
+    }
+    if (es) { es.close(); es = null; }
+    statusEl.textContent = '● 历史日志（只读）';
+    statusEl.className = 'off';
+    try {
+      const res = await fetch('/archive?file=' + encodeURIComponent(name) + (token ? '&token=' + encodeURIComponent(token) : ''));
+      if (!res.ok) { alert('加载失败: ' + res.status + ' ' + (await res.text())); return; }
+      const text = await res.text();
+      renderArchive(text.split(/\\r?\\n/).filter(Boolean));
+    } catch (e) {
+      alert('加载失败: ' + e.message);
+    }
+  };
+
+  loadArchives();
   connect();
 </script>
 </body>
 </html>`;
 
-function checkAuth(req) {
+function checkAuth(req: http.IncomingMessage): boolean {
   if (!TOKEN) return true;
-  const url = new URL(req.url, 'http://x');
+  const url = new URL(req.url ?? '', 'http://x');
   return url.searchParams.get('token') === TOKEN;
 }
 
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url, 'http://x');
+  const url = new URL(req.url ?? '', 'http://x');
 
   if (url.pathname === '/update') {
     if (!checkAuth(req)) {
@@ -450,11 +582,11 @@ const server = http.createServer((req, res) => {
       res.writeHead(404).end('data/memory 目录不存在');
       return;
     }
-    let zipBuf;
+    let zipBuf: Buffer;
     try {
       zipBuf = buildZip(MEMORY_DIR);
     } catch (err) {
-      res.writeHead(500).end('打包失败: ' + err.message);
+      res.writeHead(500).end(`打包失败: ${err}`);
       return;
     }
     const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
@@ -464,6 +596,34 @@ const server = http.createServer((req, res) => {
       'Content-Length': zipBuf.length,
     });
     res.end(zipBuf);
+    return;
+  }
+
+  if (url.pathname === '/archives') {
+    if (!checkAuth(req)) {
+      res.writeHead(401).end('unauthorized');
+      return;
+    }
+    const list = FILES.flatMap(listArchives)
+      .sort((a, b) => b.mtime - a.mtime)
+      .map(({ name, tag, mtime }) => ({ name, tag, mtime }));
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' }).end(JSON.stringify(list));
+    return;
+  }
+
+  if (url.pathname === '/archive') {
+    if (!checkAuth(req)) {
+      res.writeHead(401).end('unauthorized');
+      return;
+    }
+    const name = url.searchParams.get('file') || '';
+    // 只允许读取 listArchives 枚举出来的归档文件，防止路径穿越
+    const found = FILES.flatMap(listArchives).find((a) => a.name === name);
+    if (!found) {
+      res.writeHead(404).end('未找到该归档日志');
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' }).end(readAllLines(found.abs).join('\n'));
     return;
   }
 
