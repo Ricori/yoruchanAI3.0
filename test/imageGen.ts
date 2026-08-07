@@ -3,7 +3,7 @@ import sharp from 'sharp';
 import nnkbot from '@/core/nnkBot';
 import { formatMessage } from '@/modules/aiReply/format';
 import {
-  getDrawNotice, IMAGE_TOOLS, isDrawing, isImageGenEnabled, runImageTool,
+  getDrawNotice, getImageTools, isDrawing, isImageGenEnabled, runImageTool,
 } from '@/modules/aiReply/imageGen/tools';
 import messageStorage from '@/modules/aiReply/storage/message';
 import { editImage, generateImage, sanitizePrompt } from '@/service/imageGen';
@@ -285,8 +285,8 @@ async function testTools() {
   console.log('\n[tools] 工具下发与限流');
   resetConfig();
 
-  // 恒定下发：集合一变整段缓存前缀作废，没底图的情况由 runImageTool 挡
-  check('工具集恒定', IMAGE_TOOLS.map((t) => t.name).join(',') === 'draw_image,edit_image');
+  check('无底图 -> 只下发 draw_image', getImageTools(false).map((t) => t.name).join(',') === 'draw_image');
+  check('有底图 -> 两个工具都下发', getImageTools(true).map((t) => t.name).join(',') === 'draw_image,edit_image');
 
   check('缺 prompt -> 拒绝', (await runImageTool(GROUP, 'draw_image', {})).includes('缺少 prompt'));
   check('edit 无底图 -> 拒绝', (await runImageTool(GROUP, 'edit_image', { prompt: 'x' })).includes('没有拿到要改的那张图'));

@@ -82,8 +82,10 @@ const EDIT_IMAGE_TOOL: ToolDef = {
   },
 };
 
-/** 恒定下发，不按有没有底图裁剪——工具集一变缓存前缀就作废。没底图的情况在 runImageTool 里挡 */
-export const IMAGE_TOOLS: ToolDef[] = [DRAW_IMAGE_TOOL, EDIT_IMAGE_TOOL];
+/** 有底图时才把 edit_image 一起下发；没底图就只给 draw_image */
+export function getImageTools(hasSrcImg: boolean): ToolDef[] {
+  return hasSrcImg ? [DRAW_IMAGE_TOOL, EDIT_IMAGE_TOOL] : [DRAW_IMAGE_TOOL];
+}
 
 /** 这个工具名是不是画图工具（generateReply 里分派用） */
 export function isImageTool(name: string): boolean {
@@ -314,7 +316,7 @@ export async function runImageTool(
   }
 
   if (name === 'edit_image' && !srcImgUrl) {
-    // edit_image 恒定下发，没底图是正常分支，靠这里挡住
+    // 正常情况下没底图就不会下发这个工具，走到这里说明模型硬调了
     printLog('[ImageTool] edit_image -> 没有底图');
     return '没有拿到要改的那张图，让对方把图重新发一遍。';
   }

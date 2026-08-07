@@ -7,7 +7,7 @@ import memoryStore from '../memory/store';
 import groupProfileStorage from '../storage/groupProfile';
 import { MEMORY_TOOLS, runMemoryTool } from '../memory/tools';
 import {
-  getDrawNotice, IMAGE_TOOLS, isImageGenEnabled, isImageTool, runImageTool,
+  getDrawNotice, getImageTools, isDrawing, isImageGenEnabled, isImageTool, runImageTool,
 } from '../imageGen/tools';
 import {
   SEARCH_TOOLS, isSearchEnabled, isSearchTool, runSearchTool,
@@ -19,15 +19,16 @@ import {
 } from '../format';
 
 /**
- * 要下发的工具集。只按群配置分支，同一个群每次都必须一模一样：
- * 工具排在缓存前缀最前面，集合一变整段人设（8000+ token）就得全价重算，
- * 而多发一个工具定义命中缓存后只要 0.1 倍价。
- * 「还在画」「没底图」这类临时状态改在 runImageTool 里兜底，不再靠不下发来拦
+ * 按当前状态裁剪要下发的工具。
+ * 中转不做真正的 prompt caching，每次请求都按全价重算——能不发的一律不发
  */
-function buildTools(groupId: number): ToolDef[] {
+function buildTools(groupId: number, srcImgUrl?: string): ToolDef[] {
+  // 还在画的这一轮不给画图工具——不该排队画第二张
+  const canDraw = isImageGenEnabled(groupId) && !isDrawing(groupId);
   return [
     ...MEMORY_TOOLS,
-    ...(isImageGenEnabled(groupId) ? IMAGE_TOOLS : []),
+    // 没有底图时 edit_image 不下发，模型看不见就不会去改别人的图
+    ...(canDraw ? getImageTools(!!srcImgUrl) : []),
     ...(isSearchEnabled(groupId) ? SEARCH_TOOLS : []),
   ];
 }
@@ -123,14 +124,19 @@ export async function generateGroupReply(
   const srcImgUrl = getSrcImgUrl(history);
 
   let toolCalls = 0;
-  // 0 轮（主动插话）也走这条路：tools 照发、只是不许调用，
-  // 这样和被动回复共用同一段缓存前缀，不会各写各的
-  const aiReplyText = await getLLMReplyWithTools(messages, context, buildTools(groupId), (name, input) => {
-    toolCalls += 1;
-    if (isImageTool(name)) return runImageTool(groupId, name, input, srcImgUrl);
-    if (isSearchTool(name)) return runSearchTool(groupId, name, input);
-    return runMemoryTool(groupId, name, input);
-  }, rounds);
+  // 0 轮（主动插话）走同一条路，只是一轮都不许调工具，服务端也就不会下发工具定义
+  const aiReplyText = await getLLMReplyWithTools(
+    messages,
+    context,
+    buildTools(groupId, srcImgUrl),
+    (name, input) => {
+      toolCalls += 1;
+      if (isImageTool(name)) return runImageTool(groupId, name, input, srcImgUrl);
+      if (isSearchTool(name)) return runSearchTool(groupId, name, input);
+      return runMemoryTool(groupId, name, input);
+    },
+    rounds,
+  );
 
   if (aiReplyText) {
     // 记忆自己的回复，并带上触发方式供备份日志标注

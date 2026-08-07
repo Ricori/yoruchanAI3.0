@@ -89,10 +89,10 @@ export async function getLLMReplyWithTools(
     const data = await postReply({
       messages,
       context,
-      // tools 每轮都照发：它排在缓存前缀最前面，末轮抽掉会让整段人设全价重算，
-      // 省下的 1500 token 远不抵重写的 8000。改用 allowTools 逼模型出文本
-      tools,
-      allowTools: canUseTools,
+      // 最后一轮抽掉 tools，既逼模型必须出文本
+      // 中转不做 prompt caching，工具定义每次都按全价重算。
+      // 服务端据此把讲工具用法的那段人设也一并省掉
+      ...(canUseTools ? { tools } : {}),
       ...(rounds.length ? { toolRounds: rounds } : {}),
     }, canUseTools ? TOOL_ROUND_TIMEOUT : REPLY_TIMEOUT);
 
