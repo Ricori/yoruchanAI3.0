@@ -99,6 +99,34 @@ export interface ConsolidateStats {
   skipped: number;
 }
 
+export interface ConsolidationBacklog {
+  days: number;
+  chunks: number;
+  lines: number;
+  oldestDate: number | null;
+}
+
+export interface ConsolidationRun {
+  id: number;
+  startedAt: number;
+  finishedAt: number | null;
+  status: 'running' | 'success' | 'failed';
+  pendingDaysBefore: number;
+  pendingChunksBefore: number;
+  pendingLinesBefore: number;
+  pendingDaysAfter: number | null;
+  pendingChunksAfter: number | null;
+  pendingLinesAfter: number | null;
+  oldestPendingDate: number | null;
+  ingestedLines: number;
+  processedDays: number;
+  topics: number;
+  embedded: number;
+  evicted: number;
+  skipped: number;
+  error: string | null;
+}
+
 /** 分批向量化并入库，返回成功条数 */
 async function embedAll(
   db: MemoryDatabase,
@@ -229,6 +257,39 @@ function pendingDays(db: MemoryDatabase, groupId: number, limit: number): number
   return rows.map((r) => r.date_key);
 }
 
+/** Current topic backlog across configured groups. Partial-day progress is deducted approximately by chunk size. */
+export function getConsolidationBacklog(
+  groupIds: number[],
+  db: MemoryDatabase = getMemoryDb(),
+): ConsolidationBacklog {
+  const today = Number(backupDateKey());
+  const result: ConsolidationBacklog = {
+    days: 0, chunks: 0, lines: 0, oldestDate: null,
+  };
+
+  [...new Set(groupIds)].forEach((groupId) => {
+    const done = Number(getMeta(db, topicWatermarkKey(groupId)) ?? 0);
+    const rows = db.prepare(`
+      SELECT date_key AS dateKey, count(*) AS lines
+      FROM chat_line
+      WHERE group_id = ? AND date_key > ? AND date_key < ?
+      GROUP BY date_key ORDER BY date_key
+    `).all(groupId, done, today) as { dateKey: number, lines: number }[];
+
+    rows.forEach(({ dateKey, lines }) => {
+      const partial = Number(getMeta(db, dayProgressKey(groupId, dateKey)) ?? 0);
+      const remainingLines = Math.max(0, lines - partial * TOPIC_CHUNK);
+      const remainingChunks = Math.max(0, Math.ceil(lines / TOPIC_CHUNK) - partial);
+      if (remainingChunks === 0) return;
+      result.days += 1;
+      result.lines += remainingLines;
+      result.chunks += remainingChunks;
+      if (result.oldestDate === null || dateKey < result.oldestDate) result.oldestDate = dateKey;
+    });
+  });
+  return result;
+}
+
 /** 补齐缺向量的记忆和话题。抽取时服务不可用、或上面切话题时向量化失败的，都靠这里兜住 */
 async function backfillMissingVectors(db: MemoryDatabase): Promise<number> {
   const memories = db.prepare(`
@@ -300,4 +361,85 @@ export async function consolidateMemory(
     + `向量化 ${stats.embedded} 条、淘汰 ${stats.evicted} 条`
     + `${stats.skipped > 0 ? `、跳过 ${stats.skipped} 段（内容审核拒收）` : ''}`);
   return stats;
+}
+
+/** Run one scheduled consolidation and persist its lifecycle plus before/after backlog. */
+export async function consolidateMemoryTracked(
+  groupIds: number[],
+  db: MemoryDatabase = getMemoryDb(),
+  runner: (ids: number[], database: MemoryDatabase) => Promise<ConsolidateStats> = consolidateMemory,
+): Promise<ConsolidateStats> {
+  const before = getConsolidationBacklog(groupIds, db);
+  const startedAt = Date.now();
+  const info = db.prepare(`
+    INSERT INTO consolidation_run
+      (started_at, status, pending_days_before, pending_chunks_before,
+       pending_lines_before, oldest_pending_date)
+    VALUES (?, 'running', ?, ?, ?, ?)
+  `).run(startedAt, before.days, before.chunks, before.lines, before.oldestDate);
+  const runId = Number(info.lastInsertRowid);
+
+  try {
+    const stats = await runner(groupIds, db);
+    const after = getConsolidationBacklog(groupIds, db);
+    db.prepare(`
+      UPDATE consolidation_run SET
+        finished_at = ?, status = 'success', pending_days_after = ?,
+        pending_chunks_after = ?, pending_lines_after = ?, oldest_pending_date = ?,
+        ingested_lines = ?, processed_days = ?, topics = ?, embedded = ?,
+        evicted = ?, skipped = ?
+      WHERE id = ?
+    `).run(
+      Date.now(),
+      after.days,
+      after.chunks,
+      after.lines,
+      after.oldestDate,
+      stats.ingestedLines,
+      stats.days,
+      stats.topics,
+      stats.embedded,
+      stats.evicted,
+      stats.skipped,
+      runId,
+    );
+    return stats;
+  } catch (error) {
+    const after = getConsolidationBacklog(groupIds, db);
+    db.prepare(`
+      UPDATE consolidation_run SET
+        finished_at = ?, status = 'failed', pending_days_after = ?,
+        pending_chunks_after = ?, pending_lines_after = ?, oldest_pending_date = ?, error = ?
+      WHERE id = ?
+    `).run(
+      Date.now(),
+      after.days,
+      after.chunks,
+      after.lines,
+      after.oldestDate,
+      String(error).slice(0, 2000),
+      runId,
+    );
+    throw error;
+  }
+}
+
+/** Recent scheduled runs for the admin panel. */
+export function listConsolidationRuns(
+  db: MemoryDatabase = getMemoryDb(),
+  limit = 10,
+): ConsolidationRun[] {
+  return db.prepare(`
+    SELECT id, started_at AS startedAt, finished_at AS finishedAt, status,
+      pending_days_before AS pendingDaysBefore,
+      pending_chunks_before AS pendingChunksBefore,
+      pending_lines_before AS pendingLinesBefore,
+      pending_days_after AS pendingDaysAfter,
+      pending_chunks_after AS pendingChunksAfter,
+      pending_lines_after AS pendingLinesAfter,
+      oldest_pending_date AS oldestPendingDate,
+      ingested_lines AS ingestedLines, processed_days AS processedDays,
+      topics, embedded, evicted, skipped, error
+    FROM consolidation_run ORDER BY id DESC LIMIT ?
+  `).all(Math.max(1, Math.min(50, limit))) as ConsolidationRun[];
 }

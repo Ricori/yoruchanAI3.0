@@ -146,6 +146,31 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX IF NOT EXISTS idx_memory_evidence_batch ON memory_evidence(batch_id);
   `,
+
+  // v7: one compact history table for scheduled consolidation and backlog status.
+  `
+  CREATE TABLE IF NOT EXISTS consolidation_run (
+    id                    INTEGER PRIMARY KEY,
+    started_at            INTEGER NOT NULL,
+    finished_at           INTEGER,
+    status                TEXT    NOT NULL,
+    pending_days_before   INTEGER NOT NULL,
+    pending_chunks_before INTEGER NOT NULL,
+    pending_lines_before  INTEGER NOT NULL,
+    pending_days_after    INTEGER,
+    pending_chunks_after  INTEGER,
+    pending_lines_after   INTEGER,
+    oldest_pending_date   INTEGER,
+    ingested_lines        INTEGER NOT NULL DEFAULT 0,
+    processed_days        INTEGER NOT NULL DEFAULT 0,
+    topics                INTEGER NOT NULL DEFAULT 0,
+    embedded              INTEGER NOT NULL DEFAULT 0,
+    evicted               INTEGER NOT NULL DEFAULT 0,
+    skipped               INTEGER NOT NULL DEFAULT 0,
+    error                 TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_consolidation_run_started ON consolidation_run(started_at DESC);
+  `,
 ];
 
 /** 读一条 meta，没有返回 null */

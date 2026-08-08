@@ -12,6 +12,9 @@ import {
 import {
   buildTermQueries, recallChat, recallMemory, rrfFuse,
 } from '@/modules/aiReply/memory/retrieve';
+import {
+  consolidateMemoryTracked, getConsolidationBacklog, listConsolidationRuns,
+} from '@/modules/aiReply/memory/consolidate';
 import memoryStore from '@/modules/aiReply/memory/store';
 import { CHAT_BACKUP_DIR, backupDateKey } from '@/modules/aiReply/storage/message';
 
@@ -55,12 +58,12 @@ async function withDbAsync(fn: (db: MemoryDatabase) => Promise<void>) {
 }
 
 const EXPECTED_TABLES = [
-  'chat_fts', 'chat_line', 'embedding', 'group_user_profile',
+  'chat_fts', 'chat_line', 'consolidation_run', 'embedding', 'group_user_profile',
   'memory', 'memory_evidence', 'memory_evidence_batch', 'memory_fts', 'meta', 'topic',
 ];
 
 /** 迁移脚本条数，加一条就要同步改这里 */
-const SCHEMA_VERSION = '6';
+const SCHEMA_VERSION = '7';
 
 function testSchema() {
   console.log('\n[schema]');
@@ -83,6 +86,7 @@ function testSchema() {
     setMeta(db, 'probe', 'b');
     check('meta 写入是覆盖不是插重', getMeta(db, 'probe'), 'b');
     check('meta 读不存在的键给 null', getMeta(db, 'nope'), null);
+    check('新库还没有巩固运行记录', listConsolidationRuns(db).length, 0);
   });
 }
 
@@ -228,6 +232,39 @@ function testIngest() {
     setMeta(db, 'segment_dict', '被改脏了');
     ingestChatBackups(db, [FAKE_GROUP]);
     check('词典指纹变了会重建全文索引', (db.prepare('SELECT count(*) AS n FROM chat_fts').get() as { n: number }).n, 9);
+
+    const backlog = getConsolidationBacklog([FAKE_GROUP], db);
+    check('积压统计包含待处理天数、段数、行数和最老日期', backlog, {
+      days: 3,
+      chunks: 3,
+      lines: 9,
+      oldestDate: Number(backupDateKey(new Date(Date.now() - 20 * DAY_MS))),
+    });
+  });
+}
+
+async function testConsolidationTracking() {
+  console.log('\n[巩固状态]');
+  await withDbAsync(async (db) => {
+    const fakeStats = {
+      ingestedLines: 2, days: 1, topics: 4, embedded: 4, evicted: 1, skipped: 0,
+    };
+    await consolidateMemoryTracked([FAKE_GROUP], db, async () => fakeStats);
+    const success = listConsolidationRuns(db, 1)[0];
+    check('成功运行持久化状态、积压和产出', [
+      success.status, success.pendingDaysBefore, success.pendingDaysAfter,
+      success.processedDays, success.topics, success.embedded, success.evicted,
+    ], ['success', 3, 3, 1, 4, 4, 1]);
+
+    try {
+      await consolidateMemoryTracked([FAKE_GROUP], db, async () => { throw new Error('probe failure'); });
+    } catch {
+      // Expected: the wrapper must persist failure and rethrow it to the scheduler.
+    }
+    const failedRun = listConsolidationRuns(db, 1)[0];
+    check('失败运行保留错误和结束时间', [
+      failedRun.status, failedRun.finishedAt !== null, failedRun.error,
+    ], ['failed', true, 'Error: probe failure']);
   });
 }
 
@@ -650,6 +687,7 @@ export async function testMemory() {
     testParse();
     fs.mkdirSync(CHAT_BACKUP_DIR, { recursive: true });
     testIngest();
+    await testConsolidationTracking();
     testVector();
     testRrf();
     testStore();

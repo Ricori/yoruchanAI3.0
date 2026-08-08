@@ -1,5 +1,7 @@
 import http from 'http';
+import { botConfig } from '@/core/nnkConfig';
 import aliasIndex from '@/modules/aiReply/history/aliasIndex';
+import { getConsolidationBacklog, listConsolidationRuns } from '@/modules/aiReply/memory/consolidate';
 import { enqueueEmbedding } from '@/modules/aiReply/memory/embedQueue';
 import memoryStore, { type MemoryKind, type MemoryPatch } from '@/modules/aiReply/memory/store';
 import groupProfile from '@/modules/aiReply/storage/groupProfile';
@@ -88,6 +90,14 @@ const PAGE = `<!doctype html>
   .evidence-message { display: grid; grid-template-columns: 110px 1fr; gap: 10px; padding: 4px 0; }
   .evidence-message .msg-id { color: #6e7681; font-size: 12px; white-space: nowrap; }
   .evidence-message .raw { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .backlog { font-size: 18px; color: #58a6ff; }
+  .run-list { margin-top: 8px; }
+  .run { display: grid; grid-template-columns: 150px 64px 1fr; gap: 10px; padding: 5px 0;
+         border-top: 1px solid #21262d; }
+  .run-time, .run-detail { color: #8b949e; font-size: 12px; }
+  .run-status.success { color: #3fb950; }
+  .run-status.failed { color: #f85149; }
+  .run-status.running { color: #d29922; }
 </style>
 </head>
 <body>
@@ -118,6 +128,17 @@ const PAGE = `<!doctype html>
       <span class="hint" id="groupMeta"></span>
       <button id="saveGroup" class="primary">保存群档案</button>
     </div>
+  </section>
+
+  <section>
+    <div class="row">
+      <h2 style="margin:0">Topic 巩固状态</h2>
+      <span style="flex:1"></span>
+      <button id="refreshConsolidation">刷新</button>
+    </div>
+    <div id="backlog" class="backlog">加载中…</div>
+    <div id="backlogMeta" class="hint"></div>
+    <div id="runList" class="run-list"></div>
   </section>
 
   <section>
@@ -408,6 +429,58 @@ const PAGE = `<!doctype html>
       .catch((e) => setStatus('搜索失败: ' + e.message, false));
   }
 
+  function fmtDateKey(key) {
+    if (!key) return '无';
+    const s = String(key);
+    return s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8);
+  }
+
+  function loadConsolidation() {
+    const backlog = document.getElementById('backlog');
+    const meta = document.getElementById('backlogMeta');
+    const list = document.getElementById('runList');
+    backlog.textContent = '加载中…';
+    meta.textContent = '';
+    list.textContent = '';
+
+    api('/api/memory/consolidation').then((data) => {
+      const b = data.backlog;
+      backlog.textContent = b.days + ' 天 / ' + b.chunks + ' 段 / 约 ' + b.lines + ' 行待处理';
+      meta.textContent = b.oldestDate ? '最早积压：' + fmtDateKey(b.oldestDate) : '当前没有 Topic 积压';
+
+      if (!data.runs.length) {
+        list.className = 'empty';
+        list.textContent = '还没有定时巩固运行记录';
+        return;
+      }
+      list.className = 'run-list';
+      data.runs.forEach((run) => {
+        const row = document.createElement('div');
+        row.className = 'run';
+        const time = document.createElement('span');
+        time.className = 'run-time';
+        time.textContent = fmtTime(run.startedAt);
+        const status = document.createElement('span');
+        status.className = 'run-status ' + run.status;
+        status.textContent = run.status === 'success' ? '成功' : run.status === 'failed' ? '失败' : '运行中';
+        const detail = document.createElement('span');
+        detail.className = 'run-detail';
+        const after = run.pendingChunksAfter === null ? '?' : run.pendingChunksAfter;
+        detail.textContent = '积压 ' + run.pendingChunksBefore + ' → ' + after + ' 段'
+          + ' · 处理 ' + run.processedDays + ' 天 / ' + run.topics + ' Topic'
+          + ' · 向量 ' + run.embedded + ' · 淘汰 ' + run.evicted
+          + (run.error ? ' · ' + run.error : '');
+        row.appendChild(time);
+        row.appendChild(status);
+        row.appendChild(detail);
+        list.appendChild(row);
+      });
+    }).catch((e) => {
+      backlog.textContent = '巩固状态加载失败';
+      meta.textContent = e.message;
+    });
+  }
+
   let groups = [];
 
   function fillGroup() {
@@ -441,6 +514,7 @@ const PAGE = `<!doctype html>
   }
 
   document.getElementById('groupSel').onchange = fillGroup;
+  document.getElementById('refreshConsolidation').onclick = loadConsolidation;
   document.getElementById('saveGroup').onclick = () => {
     const g = groups[document.getElementById('groupSel').selectedIndex];
     if (!g) return;
@@ -472,6 +546,7 @@ const PAGE = `<!doctype html>
     }).catch((e) => setStatus('新增失败: ' + e.message, false));
   };
 
+  loadConsolidation();
   loadGroups();
   search();
 </script>
@@ -572,6 +647,14 @@ export async function handleMemoryRoute(
     const userId = parseId(url.searchParams.get('userId'));
     if (!userId) sendJson(res, 400, { error: 'invalid userId' });
     else sendJson(res, 200, { items: memoryStore.listUserMemories(userId) });
+    return true;
+  }
+
+  if (url.pathname === '/api/memory/consolidation' && req.method === 'GET') {
+    sendJson(res, 200, {
+      backlog: getConsolidationBacklog(botConfig.aiReply.initiativeList),
+      runs: listConsolidationRuns(),
+    });
     return true;
   }
 
