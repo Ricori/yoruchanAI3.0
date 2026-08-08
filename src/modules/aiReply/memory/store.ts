@@ -13,17 +13,28 @@ import { deleteEmbeddings } from './vector';
 /** 软删的哨兵值。写真实 id 表示被某条新记忆取代，写 -1 表示直接失效 */
 const DELETED = -1;
 
-/** 每人保留多少条非 pinned 记忆，超出的按分数从低到高软删 */
-const MAX_ITEMS_PER_USER = 12;
-
 /** 档案行里最多列几条印象，避免每轮回复的 prompt 被记忆撑爆 */
 const MAX_INJECT_TRAITS = 6;
 
-/** 衰减时间常数，30 天前的记忆权重降到 1/e */
-const DECAY_TAU_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type MemoryKind = 'trait' | 'episode' | 'relation' | 'alias';
+
+interface MemoryPolicy {
+  limit: number;
+  /** null means stable identity data does not decay with time. */
+  tauDays: number | null;
+}
+
+/** 前期用短周期尽快得到反馈；稳定身份数据保留更久，别名不按时间衰减。 */
+const MEMORY_POLICIES: Record<MemoryKind, MemoryPolicy> = {
+  alias: { limit: 8, tauDays: null },
+  relation: { limit: 8, tauDays: 120 },
+  trait: { limit: 12, tauDays: 60 },
+  episode: { limit: 8, tauDays: 14 },
+};
+
+const policyFor = (kind: string): MemoryPolicy => MEMORY_POLICIES[kind as MemoryKind] ?? MEMORY_POLICIES.trait;
 
 export interface MemoryItem {
   id: number;
@@ -78,6 +89,24 @@ export interface ApplyResult {
   blocked: number;
 }
 
+export interface EvidenceMessage {
+  groupId: number;
+  messageId: number;
+  observedAt: number;
+  text: string;
+}
+
+export interface MemoryEvidenceBatch {
+  batchId: number;
+  userId: number;
+  groupIds: number[];
+  messageIds: number[];
+  messages: string[];
+  observedFrom: number;
+  observedTo: number;
+  createdAt: number;
+}
+
 interface MemoryRow {
   id: number;
   owner_id: number;
@@ -118,12 +147,14 @@ function toItem(r: MemoryRow): MemoryItem {
  */
 function memoryScore(item: MemoryItem, now = Date.now()): number {
   const days = Math.floor(Math.max(0, now - item.lastSeen) / DAY_MS);
-  return item.confidence * Math.exp(-days / DECAY_TAU_DAYS) * Math.log(1 + item.hits);
+  const { tauDays } = policyFor(item.kind);
+  const decay = tauDays === null ? 1 : Math.exp(-days / tauDays);
+  return item.confidence * decay * Math.log(1 + item.hits);
 }
 
 class MemoryStore {
-  /** 昵称基本不变，缓存住就不用每条消息都写库 */
-  private nickCache = new Map<number, string>();
+  /** 昵称基本不变，按连接缓存，避免测试库/临时库之间串缓存 */
+  private nickCache = new WeakMap<MemoryDatabase, Map<string, string>>();
 
   private db(): MemoryDatabase {
     return getMemoryDb();
@@ -131,21 +162,60 @@ class MemoryStore {
 
   // ========== 昵称 ==========
 
-  /** 记下群友当前昵称，只在变了的时候写库 */
-  noteNickName(userId: number, nick: string, db = this.db()) {
-    if (!nick || userId === 0 || this.nickCache.get(userId) === nick) return;
-    this.nickCache.set(userId, nick);
-    db.prepare(
-      'INSERT INTO user_profile (user_id, nick, updated_at) VALUES (?, ?, ?)'
-      + ' ON CONFLICT(user_id) DO UPDATE SET nick = excluded.nick, updated_at = excluded.updated_at',
-    ).run(userId, nick, Date.now());
+  private cache(db: MemoryDatabase): Map<string, string> {
+    let cache = this.nickCache.get(db);
+    if (!cache) {
+      cache = new Map<string, string>();
+      this.nickCache.set(db, cache);
+    }
+    return cache;
   }
 
-  getNickName(userId: number, db = this.db()): string | null {
-    const cached = this.nickCache.get(userId);
+  private nickKey(userId: number, groupId: number | null): string {
+    return `${groupId ?? '*'}:${userId}`;
+  }
+
+  /** 记下群友当前群名片，只在名字变化时写库 */
+  noteNickName(groupId: number, userId: number, nick: string, db = this.db()) {
+    if (!nick || userId === 0) return;
+    const cache = this.cache(db);
+    const groupKey = this.nickKey(userId, groupId);
+    const globalKey = this.nickKey(userId, null);
+    const groupChanged = cache.get(groupKey) !== nick;
+    if (!groupChanged) return;
+
+    const now = Date.now();
+    db.prepare(
+      'INSERT INTO group_user_profile (group_id, user_id, nick, updated_at) VALUES (?, ?, ?, ?)'
+      + ' ON CONFLICT(group_id, user_id) DO UPDATE SET nick = excluded.nick, updated_at = excluded.updated_at',
+    ).run(groupId, userId, nick, now);
+
+    cache.set(groupKey, nick);
+    // 管理页等没有群上下文的调用显示最近一次在运行时见到的名字。
+    cache.set(globalKey, nick);
+  }
+
+  /** 优先返回当前群名片；没有群上下文时取最近更新的一张群名片 */
+  getNickName(userId: number, groupId: number | null = null, db = this.db()): string | null {
+    const cache = this.cache(db);
+    const key = this.nickKey(userId, groupId);
+    const cached = cache.get(key);
     if (cached) return cached;
-    const row = db.prepare('SELECT nick FROM user_profile WHERE user_id = ?').get(userId) as { nick: string } | undefined;
-    if (row) this.nickCache.set(userId, row.nick);
+
+    if (groupId !== null) {
+      const row = db.prepare(
+        'SELECT nick FROM group_user_profile WHERE group_id = ? AND user_id = ?',
+      ).get(groupId, userId) as { nick: string } | undefined;
+      if (row) {
+        cache.set(key, row.nick);
+        return row.nick;
+      }
+    }
+
+    const row = db.prepare(
+      'SELECT nick FROM group_user_profile WHERE user_id = ? ORDER BY updated_at DESC, group_id DESC LIMIT 1',
+    ).get(userId) as { nick: string } | undefined;
+    if (row) cache.set(this.nickKey(userId, null), row.nick);
     return row?.nick ?? null;
   }
 
@@ -165,7 +235,10 @@ class MemoryStore {
 
   /** 这个人有没有可注入的档案内容。认人时用来筛掉「叫得出名字但没有任何记忆」的人 */
   hasMemory(userId: number, db = this.db()): boolean {
-    return this.formatMemoryLine(userId, db) !== null;
+    const row = db.prepare(
+      "SELECT 1 FROM memory WHERE scope = 'user' AND owner_id = ? AND superseded_by IS NULL LIMIT 1",
+    ).get(userId);
+    return row !== undefined;
   }
 
   /** 有过聊天记录的群，管理面板拿来列群档案的候选 */
@@ -201,7 +274,7 @@ class MemoryStore {
 
       // LIKE 的通配符要转义，否则昵称里的 _ 会变成「任意一个字」
       const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-      (db.prepare("SELECT user_id FROM user_profile WHERE nick LIKE ? ESCAPE '\\' LIMIT ?")
+      (db.prepare("SELECT DISTINCT user_id FROM group_user_profile WHERE nick LIKE ? ESCAPE '\\' LIMIT ?")
         .all(like, limit) as { user_id: number }[]).forEach((r) => push(r.user_id));
       (db.prepare(
         "SELECT DISTINCT owner_id FROM memory WHERE scope = 'user' AND kind = 'alias'"
@@ -213,7 +286,7 @@ class MemoryStore {
       const items = this.listUserMemories(userId, db);
       return {
         userId,
-        nick: this.getNickName(userId, db),
+        nick: this.getNickName(userId, null, db),
         aliases: items.filter((i) => i.kind === 'alias').map((i) => i.text),
         count: items.length,
       };
@@ -249,19 +322,24 @@ class MemoryStore {
    * briefIds 只注叫法和关系：认人必需，印象交给 recall_memory 按需查——
    * 全员注全量是每轮几百 token 的固定开销，而多数回复根本不涉及那些人
    */
-  getMemoryContext(fullIds: number[], briefIds: number[] = [], db = this.db()): string {
+  getMemoryContext(groupId: number, fullIds: number[], briefIds: number[] = [], db = this.db()): string {
     const full = new Set(fullIds);
     return [
-      ...fullIds.map((userId) => this.formatMemoryLine(userId, db)),
-      ...briefIds.filter((id) => !full.has(id)).map((userId) => this.formatMemoryLine(userId, db, true)),
+      ...fullIds.map((userId) => this.formatMemoryLine(userId, groupId, db)),
+      ...briefIds.filter((id) => !full.has(id)).map((userId) => this.formatMemoryLine(userId, groupId, db, true)),
     ]
       .filter((line): line is string => line !== null)
       .join('\n');
   }
 
   /** 单个群友的一行档案文本，没有可用内容时返回 null。brief 只保留叫法和关系 */
-  formatMemoryLine(userId: number, db = this.db(), brief = false): string | null {
-    const nickName = this.getNickName(userId, db);
+  formatMemoryLine(
+    userId: number,
+    groupId: number | null,
+    db = this.db(),
+    brief = false,
+  ): string | null {
+    const nickName = this.getNickName(userId, groupId, db);
     const items = this.listUserMemories(userId, db);
     if (!nickName && items.length === 0) return null;
 
@@ -391,6 +469,72 @@ class MemoryStore {
     return result;
   }
 
+  /** Store one immutable extraction batch and link each changed memory to it. */
+  attachEvidence(
+    memoryIds: number[],
+    userId: number,
+    messages: EvidenceMessage[],
+    db = this.db(),
+  ): number | null {
+    const ids = [...new Set(memoryIds)];
+    if (ids.length === 0 || messages.length === 0) return null;
+
+    const placeholders = ids.map(() => '?').join(',');
+    const alive = (db.prepare(
+      `SELECT id FROM memory WHERE owner_id = ? AND superseded_by IS NULL AND id IN (${placeholders})`,
+    ).all(userId, ...ids) as { id: number }[]).map((r) => r.id);
+    if (alive.length === 0) return null;
+
+    const createdAt = Date.now();
+    const observed = messages.map((m) => m.observedAt);
+    let batchId = 0;
+    db.transaction(() => {
+      const info = db.prepare(`
+        INSERT INTO memory_evidence_batch
+          (user_id, group_ids, message_ids, messages, observed_from, observed_to, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        userId,
+        JSON.stringify([...new Set(messages.map((m) => m.groupId))]),
+        JSON.stringify(messages.map((m) => m.messageId)),
+        JSON.stringify(messages.map((m) => m.text)),
+        Math.min(...observed),
+        Math.max(...observed),
+        createdAt,
+      );
+      batchId = Number(info.lastInsertRowid);
+
+      const link = db.prepare(
+        'INSERT INTO memory_evidence (memory_id, batch_id, created_at) VALUES (?, ?, ?)',
+      );
+      alive.forEach((id) => link.run(id, batchId, createdAt));
+    })();
+    return batchId;
+  }
+
+  /** Read provenance newest first for admin and debugging. */
+  listMemoryEvidence(memoryId: number, db = this.db()): MemoryEvidenceBatch[] {
+    const rows = db.prepare(`
+      SELECT b.id AS batchId, b.user_id AS userId, b.group_ids AS groupIds,
+        b.message_ids AS messageIds, b.messages, b.observed_from AS observedFrom,
+        b.observed_to AS observedTo, b.created_at AS createdAt
+      FROM memory_evidence e
+      JOIN memory_evidence_batch b ON b.id = e.batch_id
+      WHERE e.memory_id = ?
+      ORDER BY b.created_at DESC, b.id DESC
+    `).all(memoryId) as Array<{
+      batchId: number, userId: number, groupIds: string, messageIds: string,
+      messages: string, observedFrom: number, observedTo: number, createdAt: number,
+    }>;
+
+    return rows.map((r) => ({
+      ...r,
+      groupIds: JSON.parse(r.groupIds) as number[],
+      messageIds: JSON.parse(r.messageIds) as number[],
+      messages: JSON.parse(r.messages) as string[],
+    }));
+  }
+
   /**
    * 人工改一条记忆。和 applyOps 不同，这里不挡 pinned——钉住是防 LLM 的，不防人。
    * 返回文本是否变了：变了就得让调用方重新排队算向量
@@ -440,10 +584,12 @@ class MemoryStore {
    */
   evict(userId: number, db = this.db()): number[] {
     const items = this.listUserMemories(userId, db).filter((i) => !i.pinned);
-    if (items.length <= MAX_ITEMS_PER_USER) return [];
-
-    // listUserMemories 已按分数降序，尾巴就是最该淘汰的
-    const doomed = items.slice(MAX_ITEMS_PER_USER).map((i) => i.id);
+    const byKind = new Map<string, MemoryItem[]>();
+    items.forEach((item) => byKind.set(item.kind, [...(byKind.get(item.kind) ?? []), item]));
+    const doomed = [...byKind.entries()].flatMap(([kind, candidates]) => (
+      candidates.slice(policyFor(kind).limit).map((candidate) => candidate.id)
+    ));
+    if (doomed.length === 0) return [];
     const now = Date.now();
 
     db.transaction(() => {

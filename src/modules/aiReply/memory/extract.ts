@@ -3,6 +3,7 @@ import { printError, printLog } from '@/utils/print';
 import { getMemoryDb } from './db';
 import { enqueueEmbedding } from './embedQueue';
 import memoryStore from './store';
+import type { EvidenceMessage } from './store';
 
 /**
  * 记忆写入流水线：攒够一批消息就让 LLM 抽取，再与已有条目调和成增删改操作。
@@ -18,9 +19,8 @@ const EXTRACT_THRESHOLD = 30;
 const MAX_BUFFER = EXTRACT_THRESHOLD * 3;
 
 interface PendingBuffer {
-  messages: string[];
+  messages: EvidenceMessage[];
   nickName: string;
-  groupId: number;
   isExtracting: boolean;
 }
 
@@ -52,32 +52,45 @@ class MemoryExtractor {
    * - 若该消息 @了bot，将该用户加入追踪
    * - 若已追踪，累积消息；达到阈值后异步触发抽取
    */
-  onMessage(groupId: number, userId: number, nickName: string, message: string, isMentionMe: boolean) {
+  onMessage(
+    groupId: number,
+    userId: number,
+    nickName: string,
+    message: string,
+    isMentionMe: boolean,
+    messageId: number,
+    observedAt: number,
+  ) {
     this.ensureTracked();
-    memoryStore.noteNickName(userId, nickName);
+    memoryStore.noteNickName(groupId, userId, nickName);
 
     if (isMentionMe) this.trackedUsers.add(userId);
     if (!this.trackedUsers.has(userId)) return;
 
     if (!this.pendingBuffers.has(userId)) {
       this.pendingBuffers.set(userId, {
-        messages: [], nickName, groupId, isExtracting: false,
+        messages: [], nickName, isExtracting: false,
       });
     }
 
     const buffer = this.pendingBuffers.get(userId)!;
     buffer.nickName = nickName; // 保持最新昵称
-    buffer.groupId = groupId;
-    buffer.messages.push(message);
+    buffer.messages.push({
+      groupId, messageId, observedAt, text: message,
+    });
 
     if (buffer.messages.length >= EXTRACT_THRESHOLD && !buffer.isExtracting) {
       const batch = buffer.messages.splice(0, EXTRACT_THRESHOLD);
-      this.triggerExtract(userId, buffer.groupId, buffer.nickName, batch).catch(() => { });
+      this.triggerExtract(userId, buffer.nickName, batch).catch(() => { });
     }
   }
 
   /** 后台异步抽取，不阻塞主流程 */
-  private async triggerExtract(userId: number, groupId: number, nickName: string, messages: string[]) {
+  private async triggerExtract(
+    userId: number,
+    nickName: string,
+    messages: EvidenceMessage[],
+  ) {
     const buffer = this.pendingBuffers.get(userId);
     if (buffer) buffer.isExtracting = true;
 
@@ -87,7 +100,7 @@ class MemoryExtractor {
       }));
 
       printLog(`[MemoryExtract] 开始抽取用户 ${nickName}(${userId}) 的记忆...`);
-      const ops = await extractMemory(nickName, messages, existing);
+      const ops = await extractMemory(nickName, messages.map((m) => m.text), existing);
 
       if (ops === null) {
         // 请求失败：把这批消息放回缓冲区头部，等下次一起重试，而不是无声丢弃
@@ -103,17 +116,23 @@ class MemoryExtractor {
 
       if (ops.length === 0) return;
 
-      const result = memoryStore.applyOps(userId, groupId, ops);
+      // 单群批次记录来源群；跨群混合批次不随意归到最后一个群，记为跨群来源。
+      const sourceGroups = new Set(messages.map((m) => m.groupId));
+      const sourceGroupId = sourceGroups.size === 1 ? messages[0].groupId : null;
+      const result = memoryStore.applyOps(userId, sourceGroupId, ops);
       const evicted = memoryStore.evict(userId);
 
       // 淘汰掉的不用再算向量
       const doomed = new Set(evicted);
-      enqueueEmbedding([...result.added, ...result.updated].filter((id) => !doomed.has(id)));
+      const changed = [...new Set([...result.added, ...result.updated])].filter((id) => !doomed.has(id));
+      const evidenceBatch = memoryStore.attachEvidence(changed, userId, messages);
+      enqueueEmbedding(changed);
 
       printLog(`[MemoryExtract] ${nickName}(${userId}) 记忆更新：`
         + `新增 ${result.added.length}、更新 ${result.updated.length}、删除 ${result.deleted.length}`
         + `${result.blocked > 0 ? `、挡下 ${result.blocked} 次对钉住条目的改动` : ''}`
-        + `${evicted.length > 0 ? `、淘汰 ${evicted.length}` : ''}`);
+        + `${evicted.length > 0 ? `、淘汰 ${evicted.length}` : ''}`
+        + `${evidenceBatch === null ? '' : `、证据批次 ${evidenceBatch}`}`);
     } catch (e) {
       printError(`[MemoryExtract] 抽取用户 ${userId} 失败: ${e}`);
     } finally {

@@ -36,7 +36,7 @@ const MIGRATIONS: string[] = [
     id            INTEGER PRIMARY KEY,
     scope         TEXT    NOT NULL,   -- 'user' | 'group'
     owner_id      INTEGER NOT NULL,   -- userId / groupId
-    group_id      INTEGER,            -- 来源群，NULL 表示跨群/人工
+    group_id      INTEGER,            -- 来源群，NULL 表示多群混合/人工；不作为用户档案可见性边界
     kind          TEXT    NOT NULL,   -- 'trait' | 'episode' | 'relation' | 'alias'
     text          TEXT    NOT NULL,
     first_seen    INTEGER NOT NULL,
@@ -81,6 +81,95 @@ const MIGRATIONS: string[] = [
     nick       TEXT    NOT NULL,
     updated_at INTEGER NOT NULL
   );
+  `,
+
+  // v3 群内当前昵称。同一个 QQ 用户在不同群可能使用不同群名片，user_profile
+  // 继续保存最近一次见到的昵称，供管理页和没有群上下文的旧调用兜底。
+  `
+  CREATE TABLE group_user_profile (
+    group_id   INTEGER NOT NULL,
+    user_id    INTEGER NOT NULL,
+    nick       TEXT    NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (group_id, user_id)
+  );
+  CREATE INDEX idx_group_user_profile_nick ON group_user_profile(group_id, nick);
+  `,
+
+  // v4 用历史聊天回填群名片。按日期和行 id 取每个群里最后一次见到的昵称；
+  // 已经由 v3 运行时写入的记录更新，INSERT OR IGNORE 会保留它，不拿旧日志覆盖。
+  `
+  INSERT OR IGNORE INTO group_user_profile (group_id, user_id, nick, updated_at)
+  SELECT group_id, user_id, nick, CAST(strftime('%s', 'now') AS INTEGER) * 1000
+  FROM (
+    SELECT
+      group_id,
+      user_id,
+      nick,
+      row_number() OVER (
+        PARTITION BY group_id, user_id
+        ORDER BY date_key DESC, id DESC
+      ) AS position
+    FROM chat_line
+    WHERE user_id != 0 AND nick IS NOT NULL AND nick != ''
+  )
+  WHERE position = 1;
+  `,
+
+  // v5 v4 已从聊天记录完整回填群名片，运行时也只需要按群维护昵称；
+  // 删除旧的单用户昵称兜底表，避免每条消息重复写两份当前昵称。
+  `
+  DROP TABLE IF EXISTS user_profile;
+  `,
+
+  // v6: immutable extraction batches and their memory links.
+  `
+  CREATE TABLE IF NOT EXISTS memory_evidence_batch (
+    id            INTEGER PRIMARY KEY,
+    user_id       INTEGER NOT NULL,
+    group_ids     TEXT    NOT NULL,
+    message_ids   TEXT    NOT NULL,
+    messages      TEXT    NOT NULL,
+    observed_from INTEGER NOT NULL,
+    observed_to   INTEGER NOT NULL,
+    created_at    INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_evidence_batch_user ON memory_evidence_batch(user_id, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS memory_evidence (
+    memory_id  INTEGER NOT NULL,
+    batch_id   INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (memory_id, batch_id),
+    FOREIGN KEY (memory_id) REFERENCES memory(id),
+    FOREIGN KEY (batch_id) REFERENCES memory_evidence_batch(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_memory_evidence_batch ON memory_evidence(batch_id);
+  `,
+
+  // v7: one compact history table for scheduled consolidation and backlog status.
+  `
+  CREATE TABLE IF NOT EXISTS consolidation_run (
+    id                    INTEGER PRIMARY KEY,
+    started_at            INTEGER NOT NULL,
+    finished_at           INTEGER,
+    status                TEXT    NOT NULL,
+    pending_days_before   INTEGER NOT NULL,
+    pending_chunks_before INTEGER NOT NULL,
+    pending_lines_before  INTEGER NOT NULL,
+    pending_days_after    INTEGER,
+    pending_chunks_after  INTEGER,
+    pending_lines_after   INTEGER,
+    oldest_pending_date   INTEGER,
+    ingested_lines        INTEGER NOT NULL DEFAULT 0,
+    processed_days        INTEGER NOT NULL DEFAULT 0,
+    topics                INTEGER NOT NULL DEFAULT 0,
+    embedded              INTEGER NOT NULL DEFAULT 0,
+    evicted               INTEGER NOT NULL DEFAULT 0,
+    skipped               INTEGER NOT NULL DEFAULT 0,
+    error                 TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_consolidation_run_started ON consolidation_run(started_at DESC);
   `,
 ];
 

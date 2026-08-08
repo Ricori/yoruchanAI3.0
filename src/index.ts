@@ -42,6 +42,9 @@ nnkbot.loadModules([
   GroupAIReplyModule,
 ]);
 
+// 聊天备份导入记忆检索索引，跑完再接消息，也避免定时巩固读到旧索引
+ingestOnStartup();
+
 // 加载定时任务
 nnkSchedule.loadJob([
   SystemCleanupJob,
@@ -50,9 +53,6 @@ nnkSchedule.loadJob([
   TwitterPushJob,
   YtLivePushJob,
 ]);
-
-// 聊天备份导入记忆检索索引，跑完再接消息，避免刚启动时检索空转
-ingestOnStartup();
 
 // 启动管理面板
 new NonokaAdmin(nnkbot).start();

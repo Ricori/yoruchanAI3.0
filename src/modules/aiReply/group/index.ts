@@ -44,7 +44,7 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
 
   async run(ctx: ModuleContext<GroupMessageData>) {
     const {
-      message, user_id: userId, self_id: selfId, group_id: groupId, sender,
+      message, message_id: messageId, time, user_id: userId, self_id: selfId, group_id: groupId, sender,
     } = ctx.data;
     const nickName = sender.nickname || `${userId}`;
 
@@ -104,7 +104,15 @@ class GroupAIReplyModule extends NonokaModule<GroupMessageData> {
       }
 
       // 群友记忆系统
-      memoryExtractor.onMessage(groupId, userId, nickName, formattedMessage.message, formattedMessage.isMentionMe);
+      memoryExtractor.onMessage(
+        groupId,
+        userId,
+        nickName,
+        formattedMessage.message,
+        formattedMessage.isMentionMe,
+        messageId,
+        time > 1e12 ? time : time * 1000,
+      );
     }
 
     // 没有命中触发条件直接返回

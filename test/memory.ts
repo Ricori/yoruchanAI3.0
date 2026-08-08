@@ -12,6 +12,9 @@ import {
 import {
   buildTermQueries, recallChat, recallMemory, rrfFuse,
 } from '@/modules/aiReply/memory/retrieve';
+import {
+  consolidateMemoryTracked, getConsolidationBacklog, listConsolidationRuns,
+} from '@/modules/aiReply/memory/consolidate';
 import memoryStore from '@/modules/aiReply/memory/store';
 import { CHAT_BACKUP_DIR, backupDateKey } from '@/modules/aiReply/storage/message';
 
@@ -54,10 +57,13 @@ async function withDbAsync(fn: (db: MemoryDatabase) => Promise<void>) {
   }
 }
 
-const EXPECTED_TABLES = ['chat_fts', 'chat_line', 'embedding', 'memory', 'memory_fts', 'meta', 'topic', 'user_profile'];
+const EXPECTED_TABLES = [
+  'chat_fts', 'chat_line', 'consolidation_run', 'embedding', 'group_user_profile',
+  'memory', 'memory_evidence', 'memory_evidence_batch', 'memory_fts', 'meta', 'topic',
+];
 
 /** 迁移脚本条数，加一条就要同步改这里 */
-const SCHEMA_VERSION = '2';
+const SCHEMA_VERSION = '7';
 
 function testSchema() {
   console.log('\n[schema]');
@@ -80,6 +86,7 @@ function testSchema() {
     setMeta(db, 'probe', 'b');
     check('meta 写入是覆盖不是插重', getMeta(db, 'probe'), 'b');
     check('meta 读不存在的键给 null', getMeta(db, 'nope'), null);
+    check('新库还没有巩固运行记录', listConsolidationRuns(db).length, 0);
   });
 }
 
@@ -225,6 +232,39 @@ function testIngest() {
     setMeta(db, 'segment_dict', '被改脏了');
     ingestChatBackups(db, [FAKE_GROUP]);
     check('词典指纹变了会重建全文索引', (db.prepare('SELECT count(*) AS n FROM chat_fts').get() as { n: number }).n, 9);
+
+    const backlog = getConsolidationBacklog([FAKE_GROUP], db);
+    check('积压统计包含待处理天数、段数、行数和最老日期', backlog, {
+      days: 3,
+      chunks: 3,
+      lines: 9,
+      oldestDate: Number(backupDateKey(new Date(Date.now() - 20 * DAY_MS))),
+    });
+  });
+}
+
+async function testConsolidationTracking() {
+  console.log('\n[巩固状态]');
+  await withDbAsync(async (db) => {
+    const fakeStats = {
+      ingestedLines: 2, days: 1, topics: 4, embedded: 4, evicted: 1, skipped: 0,
+    };
+    await consolidateMemoryTracked([FAKE_GROUP], db, async () => fakeStats);
+    const success = listConsolidationRuns(db, 1)[0];
+    check('成功运行持久化状态、积压和产出', [
+      success.status, success.pendingDaysBefore, success.pendingDaysAfter,
+      success.processedDays, success.topics, success.embedded, success.evicted,
+    ], ['success', 3, 3, 1, 4, 4, 1]);
+
+    try {
+      await consolidateMemoryTracked([FAKE_GROUP], db, async () => { throw new Error('probe failure'); });
+    } catch {
+      // Expected: the wrapper must persist failure and rethrow it to the scheduler.
+    }
+    const failedRun = listConsolidationRuns(db, 1)[0];
+    check('失败运行保留错误和结束时间', [
+      failedRun.status, failedRun.finishedAt !== null, failedRun.error,
+    ], ['failed', true, 'Error: probe failure']);
   });
 }
 
@@ -359,7 +399,12 @@ async function testRecall() {
 
     const all = await recallMemory(FAKE_GROUP, { query: '研究生', semantic: false }, db);
     check('软删的条目不可见', all.map((h) => h.id).includes(alive + 1), false);
-    check('别的群的记忆不串台', all.map((h) => h.ownerId).sort(), [111, 222]);
+    check('用户档案跨群共享', all.map((h) => h.ownerId).sort(), [111, 222, 333]);
+
+    const crossGroup = await recallMemory(FAKE_GROUP, {
+      query: '研究生', aboutUserIds: [333], semantic: false,
+    }, db);
+    check('指定用户时也能召回其来源于别群的档案', texts(crossGroup), ['别的群的研究生']);
 
     const about = await recallMemory(FAKE_GROUP, { query: '研究生', aboutUserIds: [111], semantic: false }, db);
     check('问某个人就只翻他的档案（硬过滤）', about.map((h) => h.ownerId), [111]);
@@ -472,7 +517,9 @@ function testStore() {
   console.log('\n[记忆存取]');
   withDb((db) => {
     const U = 555;
-    memoryStore.noteNickName(U, '雨漫', db);
+    const OTHER_GROUP = FAKE_GROUP + 1;
+    memoryStore.noteNickName(FAKE_GROUP, U, '雨漫', db);
+    memoryStore.noteNickName(OTHER_GROUP, U, '浅秋', db);
 
     const trait = memoryStore.addMemory({ ownerId: U, kind: 'trait', text: '在读研究生' }, db);
     const ep = memoryStore.addMemory({ ownerId: U, kind: 'episode', text: '最近在打黑神话' }, db);
@@ -483,19 +530,22 @@ function testStore() {
       ownerId: U, kind: 'alias', text: '桃子姐', pinned: true,
     }, db);
 
-    check('档案行：关系在前、印象在后、叫法进名字', memoryStore.formatMemoryLine(U, db),
+    check('档案行：关系在前、印象在后、叫法进名字', memoryStore.formatMemoryLine(U, FAKE_GROUP, db),
       '[雨漫]（也叫：桃子姐） 关系：是乃乃香的同桌｜印象：在读研究生、最近在打黑神话');
+    check('同一档案在不同群使用各自群名片', memoryStore.formatMemoryLine(U, OTHER_GROUP, db),
+      '[浅秋]（也叫：桃子姐） 关系：是乃乃香的同桌｜印象：在读研究生、最近在打黑神话');
+    check('无群上下文时退回最近昵称', memoryStore.getNickName(U, null, db), '浅秋');
 
     // 这轮回复不涉及的人只注认人必需的部分，印象留给 recall_memory 按需查
     const W = 556;
-    memoryStore.noteNickName(W, '阿岩', db);
+    memoryStore.noteNickName(FAKE_GROUP, W, '阿岩', db);
     memoryStore.addMemory({ ownerId: W, kind: 'trait', text: '爱吃辣' }, db);
 
-    check('brief 档案行只留叫法和关系', memoryStore.formatMemoryLine(U, db, true),
+    check('brief 档案行只留叫法和关系', memoryStore.formatMemoryLine(U, FAKE_GROUP, db, true),
       '[雨漫]（也叫：桃子姐） 关系：是乃乃香的同桌');
-    check('brief 下只有印象的人整行省掉', memoryStore.formatMemoryLine(W, db, true), null);
+    check('brief 下只有印象的人整行省掉', memoryStore.formatMemoryLine(W, FAKE_GROUP, db, true), null);
     check('两档注入：full 全量、brief 精简、重复的人只出现一次',
-      memoryStore.getMemoryContext([U], [U, W], db),
+      memoryStore.getMemoryContext(FAKE_GROUP, [U], [U, W], db),
       '[雨漫]（也叫：桃子姐） 关系：是乃乃香的同桌｜印象：在读研究生、最近在打黑神话');
 
     console.log('\n[ops 应用]');
@@ -505,6 +555,25 @@ function testStore() {
       { op: 'DELETE', id: trait },
     ], db);
     check('增删改都落地', [r1.added.length, r1.updated.length, r1.deleted.length], [1, 1, 1]);
+
+    const evidenceAt = Date.now() - 1000;
+    const evidenceBatch = memoryStore.attachEvidence([...r1.added, ...r1.updated], U, [
+      {
+        groupId: FAKE_GROUP, messageId: 7001, observedAt: evidenceAt, text: '我住在广州',
+      },
+      {
+        groupId: OTHER_GROUP, messageId: 7002, observedAt: evidenceAt + 500, text: '黑神话已经通关了',
+      },
+    ], db);
+    const evidence = memoryStore.listMemoryEvidence(ep, db);
+    check('同一抽取批次只保存一份并关联到变更记忆', [evidenceBatch, evidence.length], [evidenceBatch, 1]);
+    check('证据保留跨群、消息 ID、原文和时间范围', [
+      evidence[0].groupIds, evidence[0].messageIds, evidence[0].messages,
+      evidence[0].observedFrom, evidence[0].observedTo,
+    ], [
+      [FAKE_GROUP, OTHER_GROUP], [7001, 7002], ['我住在广州', '黑神话已经通关了'],
+      evidenceAt, evidenceAt + 500,
+    ]);
 
     const texts = () => memoryStore.listUserMemories(U, db).map((m) => m.text);
     check('软删的条目读不到了', texts().includes('在读研究生'), false);
@@ -541,14 +610,63 @@ function testStore() {
       }, db);
     }
     const evicted = memoryStore.evict(U, db);
-    check('淘汰后非钉住的条数落回上限', memoryStore.listUserMemories(U, db).filter((m) => !m.pinned).length, 12);
+    check('episode 按自己的配额淘汰', memoryStore.listUserMemories(U, db).filter((m) => !m.pinned && m.kind === 'episode').length, 8);
     check('淘汰的是低分那批', evicted.length > 0 && texts().includes('住在广州'), true);
     check('钉住的永不淘汰', texts().includes('是乃乃香的同桌') && texts().includes('桃子姐'), true);
 
     console.log('\n[对外兼容形态]');
     check('getManualAliases 形态不变', [...memoryStore.getManualAliases(db).entries()], [[U, ['桃子姐']]]);
     check('hasMemory', [memoryStore.hasMemory(U, db), memoryStore.hasMemory(666, db)], [true, false]);
-    check('没有昵称就没有档案行', memoryStore.formatMemoryLine(666, db), null);
+    check('没有昵称就没有档案行', memoryStore.formatMemoryLine(666, FAKE_GROUP, db), null);
+
+    const POLICY_USER = 557;
+    (['alias', 'relation', 'trait', 'episode'] as const).forEach((kind) => {
+      for (let i = 0; i < 15; i++) {
+        memoryStore.addMemory({ ownerId: POLICY_USER, kind, text: `${kind}-${i}` }, db);
+      }
+    });
+    memoryStore.evict(POLICY_USER, db);
+    const policyCounts = (['alias', 'relation', 'trait', 'episode'] as const).map(
+      (kind) => memoryStore.listUserMemories(POLICY_USER, db).filter((m) => m.kind === kind).length,
+    );
+    check('四类记忆使用独立配额', policyCounts, [8, 8, 12, 8]);
+  });
+}
+
+function testNickMigration() {
+  console.log('\n[群名片迁移]');
+  const GROUP_A = FAKE_GROUP + 10;
+  const GROUP_B = FAKE_GROUP + 11;
+
+  // 模拟一个已经运行过 v3、但群名片尚未回填的库。
+  withDb((db) => {
+    const insert = db.prepare(
+      'INSERT INTO chat_line (group_id, user_id, date_key, seq, nick, text) VALUES (?, ?, ?, ?, ?, ?)',
+    );
+    insert.run(GROUP_A, 901, 20260101, 1, '旧名', '[旧名]说：第一天');
+    insert.run(GROUP_A, 901, 20260102, 1, '新名', '[新名]说：第二天');
+    insert.run(GROUP_B, 901, 20260103, 1, '别群名', '[别群名]说：第三天');
+    insert.run(GROUP_A, 902, 20260101, 2, '历史名', '[历史名]说：旧消息');
+
+    // v3 运行时已经写入的名字比 chat_line 新，v4 不能拿历史记录覆盖它。
+    db.prepare(
+      'INSERT INTO group_user_profile (group_id, user_id, nick, updated_at) VALUES (?, ?, ?, ?)',
+    ).run(GROUP_A, 902, '运行时新名', Date.now());
+    setMeta(db, 'schema_version', '3');
+  });
+
+  withDb((db) => {
+    const nick = (groupId: number, userId: number) => (db.prepare(
+      'SELECT nick FROM group_user_profile WHERE group_id = ? AND user_id = ?',
+    ).get(groupId, userId) as { nick: string } | undefined)?.nick ?? null;
+
+    check('同群取日期和行号最新的昵称', nick(GROUP_A, 901), '新名');
+    check('同一用户在别群保留独立昵称', nick(GROUP_B, 901), '别群名');
+    check('已有运行时昵称不被历史回填覆盖', nick(GROUP_A, 902), '运行时新名');
+    check('回填后 schema_version 升到最新版', getMeta(db, 'schema_version'), SCHEMA_VERSION);
+
+    db.prepare('DELETE FROM group_user_profile WHERE group_id IN (?, ?)').run(GROUP_A, GROUP_B);
+    db.prepare('DELETE FROM chat_line WHERE group_id IN (?, ?)').run(GROUP_A, GROUP_B);
   });
 }
 
@@ -563,11 +681,13 @@ export async function testMemory() {
   try {
     testSchema();
     testIdempotent();
+    testNickMigration();
     testFts();
     testSegment();
     testParse();
     fs.mkdirSync(CHAT_BACKUP_DIR, { recursive: true });
     testIngest();
+    await testConsolidationTracking();
     testVector();
     testRrf();
     testStore();

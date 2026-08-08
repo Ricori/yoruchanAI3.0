@@ -3,7 +3,8 @@ import path from 'path';
 import type { FormattedMessage } from '@/types/message';
 import { printError } from '@/utils/print';
 
-const MAX_CHAT_HISTORY_COUNT = 30;
+const MAX_MESSAGE_CONTEXT_COUNT = 20;
+const CHAT_HISTORY_TRIM_BATCH_SIZE = 20;
 
 export const CHAT_BACKUP_DIR = path.resolve('data/memory/chat');
 
@@ -39,24 +40,18 @@ class MessageStorage {
   /** 群消息对话记录  (key: groupId) */
   private groupChatConversations = new Map<number, FormattedMessage[]>();
 
-  /** 每个群尚未备份到文件的消息条数 (key: groupId) */
-  private groupUnbackedCount = new Map<number, number>();
+  /** 获取传给模型的最近上下文，最多 20 条 */
+  private getRecentContext(history: FormattedMessage[]): FormattedMessage[] {
+    return history.slice(-MAX_MESSAGE_CONTEXT_COUNT);
+  }
 
-  /** 将群聊新增消息追加备份到当日文件，不覆盖已有内容 */
-  private async backupGroupHistory(groupId: number, history: FormattedMessage[]) {
-    const count = Math.min(this.groupUnbackedCount.get(groupId) ?? 0, history.length);
-    if (count === 0) return;
-    // 在 await 前先取快照并清零计数，避免写盘期间新增的消息被漏记或重复
-    const newMessages = history.slice(-count);
-    this.groupUnbackedCount.set(groupId, 0);
-
+  /** 将群聊裁掉的消息追加备份到当日文件，不覆盖已有内容 */
+  private async backupGroupHistory(groupId: number, messages: FormattedMessage[]) {
     try {
       const file = path.join(CHAT_BACKUP_DIR, `${groupId}_${backupDateKey()}.txt`);
-      const lines = `${newMessages.map((m) => `[${m.userId}]${backupTriggerMark(m)}${m.message}`).join('\n')}\n`;
+      const lines = `${messages.map((m) => `[${m.userId}]${backupTriggerMark(m)}${m.message}`).join('\n')}\n`;
       await fs.promises.appendFile(file, lines, 'utf-8');
     } catch (e) {
-      // 写入失败则把这批消息计回待备份数量，下次备份时重试
-      this.groupUnbackedCount.set(groupId, (this.groupUnbackedCount.get(groupId) ?? 0) + newMessages.length);
       printError('[MessageStorage] 备份群聊记录失败', e);
     }
   }
@@ -74,30 +69,11 @@ class MessageStorage {
 
     history.push(msg);
 
-    // 触到裁剪阈值就备份一次群聊记录：首轮攒满 40 条，之后每裁剪回 30 条再攒 10 条触发一次
-    if (store === this.groupChatConversations) {
-      this.groupUnbackedCount.set(key, (this.groupUnbackedCount.get(key) ?? 0) + 1);
-      if (history.length === MAX_CHAT_HISTORY_COUNT + 10) {
-        this.backupGroupHistory(key, history);
-      }
-    }
-
-    if (history.length > MAX_CHAT_HISTORY_COUNT + 10) {
-      // 触发消息裁剪
-      history.splice(0, history.length - MAX_CHAT_HISTORY_COUNT);
-      while (history.length > 0 && history[0].role === 'assistant') {
-        history.shift();
-      }
-      // 倒序遍历消息，修剪早期图片
-      let imageCount = 0;
-      for (let i = history.length - 1; i >= 0; i--) {
-        const m = history[i];
-        if (m.imgUrl) {
-          imageCount++;
-          if (imageCount > 1) {
-            history[i] = { ...m, imgUrl: undefined };
-          }
-        }
+    if (history.length >= MAX_MESSAGE_CONTEXT_COUNT + CHAT_HISTORY_TRIM_BATCH_SIZE) {
+      // 裁掉哪一批就备份哪一批，备份与裁剪共用同一阈值和消息快照
+      const trimmedMessages = history.splice(0, CHAT_HISTORY_TRIM_BATCH_SIZE);
+      if (store === this.groupChatConversations) {
+        this.backupGroupHistory(key, trimmedMessages);
       }
     }
   }
@@ -109,7 +85,7 @@ class MessageStorage {
 
   /** 获取某qq私聊会话记录 */
   getPrivateChatMessage(userId: number): FormattedMessage[] {
-    return this.privateChatConversations.get(userId) || [];
+    return this.getRecentContext(this.privateChatConversations.get(userId) || []);
   }
 
   /** 添加某群会话记录 */
@@ -119,7 +95,7 @@ class MessageStorage {
 
   /** 获取某群会话记录 */
   getGroupChatConversations(groupId: number): FormattedMessage[] {
-    return this.groupChatConversations.get(groupId) || [];
+    return this.getRecentContext(this.groupChatConversations.get(groupId) || []);
   }
 
 
@@ -127,8 +103,6 @@ class MessageStorage {
   cleanChatConversations() {
     this.privateChatConversations.clear();
     this.groupChatConversations.clear();
-    // 会话已清空，未备份计数一并重置，避免下次备份时把新消息误当增量
-    this.groupUnbackedCount.clear();
   }
 }
 

@@ -350,10 +350,10 @@ export async function recallChat(
 
 // ========== 记忆条目 ==========
 
-function memoryFilter(groupId: number, aboutUserIds?: number[]) {
-  // 别的群的记忆不串台，group_id 为空的是跨群/人工条目，处处可见
-  const where = ['m.superseded_by IS NULL', '(m.group_id IS NULL OR m.group_id = ?)'];
-  const params: number[] = [groupId];
+function memoryFilter(aboutUserIds?: number[]) {
+  // 用户档案按 QQ 号跨群共享；memory.group_id 只记录最初来源群，不控制可见性。
+  const where = ['m.superseded_by IS NULL'];
+  const params: number[] = [];
 
   if (aboutUserIds?.length) {
     where.push("m.scope = 'user'", `m.owner_id IN (${placeholders(aboutUserIds.length)})`);
@@ -362,8 +362,8 @@ function memoryFilter(groupId: number, aboutUserIds?: number[]) {
   return { where: where.join(' AND '), params };
 }
 
-function literalMemoryLists(db: MemoryDatabase, query: string, groupId: number, aboutUserIds?: number[]): RankedList[] {
-  const { where, params } = memoryFilter(groupId, aboutUserIds);
+function literalMemoryLists(db: MemoryDatabase, query: string, aboutUserIds?: number[]): RankedList[] {
+  const { where, params } = memoryFilter(aboutUserIds);
   const stmt = db.prepare(`
     SELECT m.id FROM memory_fts f CROSS JOIN memory m ON m.id = f.rowid
     WHERE f.memory_fts MATCH ? AND ${where}
@@ -388,8 +388,8 @@ function literalMemoryLists(db: MemoryDatabase, query: string, groupId: number, 
  * 而存的是「爱发表情包」「脸盲严重」这种具体事实，字面对不上、
  * 向量也未必够近——但这类问句本来就该直接把档案端出来，不该空手而归
  */
-function fallbackMemories(db: MemoryDatabase, groupId: number, aboutUserIds: number[], limit: number): MemoryHit[] {
-  const { where, params } = memoryFilter(groupId, aboutUserIds);
+function fallbackMemories(db: MemoryDatabase, aboutUserIds: number[], limit: number): MemoryHit[] {
+  const { where, params } = memoryFilter(aboutUserIds);
   const rows = db.prepare(`
     SELECT m.id, m.scope, m.owner_id, m.kind, m.text, m.confidence, m.source
     FROM memory m WHERE ${where}
@@ -408,14 +408,14 @@ function fallbackMemories(db: MemoryDatabase, groupId: number, aboutUserIds: num
 }
 
 /** 指定这几个人可见的全部记忆 id，用来把向量检索的范围先收窄 */
-function ownedMemoryIds(db: MemoryDatabase, groupId: number, aboutUserIds: number[]): Set<number> {
-  const { where, params } = memoryFilter(groupId, aboutUserIds);
+function ownedMemoryIds(db: MemoryDatabase, aboutUserIds: number[]): Set<number> {
+  const { where, params } = memoryFilter(aboutUserIds);
   const rows = db.prepare(`SELECT m.id FROM memory m WHERE ${where}`).all(...params) as { id: number }[];
   return new Set(rows.map((r) => r.id));
 }
 
-function fetchMemories(db: MemoryDatabase, ids: number[], groupId: number, aboutUserIds?: number[]) {
-  const { where, params } = memoryFilter(groupId, aboutUserIds);
+function fetchMemories(db: MemoryDatabase, ids: number[], aboutUserIds?: number[]) {
+  const { where, params } = memoryFilter(aboutUserIds);
   const rows = db.prepare(`
     SELECT m.id, m.scope, m.owner_id, m.kind, m.text, m.confidence, m.source
     FROM memory m WHERE m.id IN (${placeholders(ids.length)}) AND ${where}
@@ -434,25 +434,25 @@ function fetchMemories(db: MemoryDatabase, ids: number[], groupId: number, about
 
 /** 在记忆库里混合检索。aboutUserIds 是硬过滤，问谁就只翻谁的档案 */
 export async function recallMemory(
-  groupId: number,
+  _groupId: number,
   opts: RecallMemoryOptions,
   db: MemoryDatabase = getMemoryDb(),
 ): Promise<MemoryHit[]> {
   const { query, aboutUserIds, limit = DEFAULT_LIMIT } = opts;
 
-  const literal = literalMemoryLists(db, query, groupId, aboutUserIds);
+  const literal = literalMemoryLists(db, query, aboutUserIds);
   const vec = await resolveQueryVec(opts);
   // 指定了人就把向量检索的范围先收到这些人的条目上，
   // 否则 top-30 会被别人的记忆占满，过滤完一条不剩
-  const allow = aboutUserIds?.length ? ownedMemoryIds(db, groupId, aboutUserIds) : undefined;
+  const allow = aboutUserIds?.length ? ownedMemoryIds(db, aboutUserIds) : undefined;
   const semantic = vec
     ? searchSimilar(db, 'memory', vec, CANDIDATE_LIMIT, allow)
       .filter((h) => h.score >= MIN_SIMILARITY).map((h) => h.refId)
     : [];
 
   const scores = rrfFuse([...literal, { ids: semantic }]);
-  // 语义那一路只收窄了范围没做可见性判断，取详情时统一再筛一次
-  const found = fetchMemories(db, [...scores.keys()], groupId, aboutUserIds);
+  // 语义那一路只按 owner 收窄，取详情时统一排除已失效条目
+  const found = fetchMemories(db, [...scores.keys()], aboutUserIds);
 
   const ranked = [...scores.entries()]
     .flatMap(([id, score]) => {
@@ -463,9 +463,9 @@ export async function recallMemory(
     .slice(0, limit)
     .map(({ hit }) => hit);
 
-  // 兜底要看最终结果而不是候选：候选非空但全被可见性筛掉的情况同样算空手
+  // 兜底要看最终结果而不是候选：候选非空但详情已失效的情况同样算空手
   if (ranked.length === 0 && aboutUserIds?.length) {
-    return fallbackMemories(db, groupId, aboutUserIds, limit);
+    return fallbackMemories(db, aboutUserIds, limit);
   }
   return ranked;
 }

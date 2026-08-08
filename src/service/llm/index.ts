@@ -8,16 +8,12 @@ import type { FormattedMessage } from '@/types/message';
  * LLM 这里只负责把请求转发给 nonoka API 服务
  */
 
-// 服务端 claude 单次 35s，超时会重试一次，最坏 70s，留足余量
-const REPLY_TIMEOUT = 90000;
+// 服务端可能先识图再调用回复模型，单次请求最多等待 100s
+const REPLY_TIMEOUT = 100000;
 const COMMON_TIMEOUT = 50000;
 
-/**
- * 工具决策轮的超时。这一轮模型只吐一个工具调用、输出极短，不该等满 90s；
- * 但也不能短过服务端「一次 35s + 超时重试一次」，否则 bot 会在服务端还在重试时先放弃。
- * 带工具时最坏耗时 = 这一轮 + 最终出文本那一轮
- */
-const TOOL_ROUND_TIMEOUT = 75000;
+/** 工具轮也可能先识图并触发模型重试，单请求超时与普通回复保持一致。 */
+const TOOL_ROUND_TIMEOUT = 100000;
 
 function getServiceUrl(path: string) {
   const { baseUrl, apiKey } = botConfig.nonokaService;
