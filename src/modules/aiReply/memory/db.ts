@@ -121,6 +121,31 @@ const MIGRATIONS: string[] = [
   `
   DROP TABLE IF EXISTS user_profile;
   `,
+
+  // v6: immutable extraction batches and their memory links.
+  `
+  CREATE TABLE IF NOT EXISTS memory_evidence_batch (
+    id            INTEGER PRIMARY KEY,
+    user_id       INTEGER NOT NULL,
+    group_ids     TEXT    NOT NULL,
+    message_ids   TEXT    NOT NULL,
+    messages      TEXT    NOT NULL,
+    observed_from INTEGER NOT NULL,
+    observed_to   INTEGER NOT NULL,
+    created_at    INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_evidence_batch_user ON memory_evidence_batch(user_id, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS memory_evidence (
+    memory_id  INTEGER NOT NULL,
+    batch_id   INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (memory_id, batch_id),
+    FOREIGN KEY (memory_id) REFERENCES memory(id),
+    FOREIGN KEY (batch_id) REFERENCES memory_evidence_batch(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_memory_evidence_batch ON memory_evidence(batch_id);
+  `,
 ];
 
 /** 读一条 meta，没有返回 null */

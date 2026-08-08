@@ -56,11 +56,11 @@ async function withDbAsync(fn: (db: MemoryDatabase) => Promise<void>) {
 
 const EXPECTED_TABLES = [
   'chat_fts', 'chat_line', 'embedding', 'group_user_profile',
-  'memory', 'memory_fts', 'meta', 'topic',
+  'memory', 'memory_evidence', 'memory_evidence_batch', 'memory_fts', 'meta', 'topic',
 ];
 
 /** 迁移脚本条数，加一条就要同步改这里 */
-const SCHEMA_VERSION = '5';
+const SCHEMA_VERSION = '6';
 
 function testSchema() {
   console.log('\n[schema]');
@@ -519,6 +519,25 @@ function testStore() {
     ], db);
     check('增删改都落地', [r1.added.length, r1.updated.length, r1.deleted.length], [1, 1, 1]);
 
+    const evidenceAt = Date.now() - 1000;
+    const evidenceBatch = memoryStore.attachEvidence([...r1.added, ...r1.updated], U, [
+      {
+        groupId: FAKE_GROUP, messageId: 7001, observedAt: evidenceAt, text: '我住在广州',
+      },
+      {
+        groupId: OTHER_GROUP, messageId: 7002, observedAt: evidenceAt + 500, text: '黑神话已经通关了',
+      },
+    ], db);
+    const evidence = memoryStore.listMemoryEvidence(ep, db);
+    check('同一抽取批次只保存一份并关联到变更记忆', [evidenceBatch, evidence.length], [evidenceBatch, 1]);
+    check('证据保留跨群、消息 ID、原文和时间范围', [
+      evidence[0].groupIds, evidence[0].messageIds, evidence[0].messages,
+      evidence[0].observedFrom, evidence[0].observedTo,
+    ], [
+      [FAKE_GROUP, OTHER_GROUP], [7001, 7002], ['我住在广州', '黑神话已经通关了'],
+      evidenceAt, evidenceAt + 500,
+    ]);
+
     const texts = () => memoryStore.listUserMemories(U, db).map((m) => m.text);
     check('软删的条目读不到了', texts().includes('在读研究生'), false);
     check('UPDATE 改的是同一行不是新增', texts().includes('已通关黑神话') && !texts().includes('最近在打黑神话'), true);
@@ -554,7 +573,7 @@ function testStore() {
       }, db);
     }
     const evicted = memoryStore.evict(U, db);
-    check('淘汰后非钉住的条数落回上限', memoryStore.listUserMemories(U, db).filter((m) => !m.pinned).length, 12);
+    check('episode 按自己的配额淘汰', memoryStore.listUserMemories(U, db).filter((m) => !m.pinned && m.kind === 'episode').length, 8);
     check('淘汰的是低分那批', evicted.length > 0 && texts().includes('住在广州'), true);
     check('钉住的永不淘汰', texts().includes('是乃乃香的同桌') && texts().includes('桃子姐'), true);
 
@@ -562,6 +581,18 @@ function testStore() {
     check('getManualAliases 形态不变', [...memoryStore.getManualAliases(db).entries()], [[U, ['桃子姐']]]);
     check('hasMemory', [memoryStore.hasMemory(U, db), memoryStore.hasMemory(666, db)], [true, false]);
     check('没有昵称就没有档案行', memoryStore.formatMemoryLine(666, FAKE_GROUP, db), null);
+
+    const POLICY_USER = 557;
+    (['alias', 'relation', 'trait', 'episode'] as const).forEach((kind) => {
+      for (let i = 0; i < 15; i++) {
+        memoryStore.addMemory({ ownerId: POLICY_USER, kind, text: `${kind}-${i}` }, db);
+      }
+    });
+    memoryStore.evict(POLICY_USER, db);
+    const policyCounts = (['alias', 'relation', 'trait', 'episode'] as const).map(
+      (kind) => memoryStore.listUserMemories(POLICY_USER, db).filter((m) => m.kind === kind).length,
+    );
+    check('四类记忆使用独立配额', policyCounts, [8, 8, 12, 8]);
   });
 }
 

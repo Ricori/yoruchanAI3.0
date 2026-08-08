@@ -13,17 +13,28 @@ import { deleteEmbeddings } from './vector';
 /** 软删的哨兵值。写真实 id 表示被某条新记忆取代，写 -1 表示直接失效 */
 const DELETED = -1;
 
-/** 每人保留多少条非 pinned 记忆，超出的按分数从低到高软删 */
-const MAX_ITEMS_PER_USER = 12;
-
 /** 档案行里最多列几条印象，避免每轮回复的 prompt 被记忆撑爆 */
 const MAX_INJECT_TRAITS = 6;
 
-/** 衰减时间常数，30 天前的记忆权重降到 1/e */
-const DECAY_TAU_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type MemoryKind = 'trait' | 'episode' | 'relation' | 'alias';
+
+interface MemoryPolicy {
+  limit: number;
+  /** null means stable identity data does not decay with time. */
+  tauDays: number | null;
+}
+
+/** 前期用短周期尽快得到反馈；稳定身份数据保留更久，别名不按时间衰减。 */
+const MEMORY_POLICIES: Record<MemoryKind, MemoryPolicy> = {
+  alias: { limit: 8, tauDays: null },
+  relation: { limit: 8, tauDays: 120 },
+  trait: { limit: 12, tauDays: 60 },
+  episode: { limit: 8, tauDays: 14 },
+};
+
+const policyFor = (kind: string): MemoryPolicy => MEMORY_POLICIES[kind as MemoryKind] ?? MEMORY_POLICIES.trait;
 
 export interface MemoryItem {
   id: number;
@@ -78,6 +89,24 @@ export interface ApplyResult {
   blocked: number;
 }
 
+export interface EvidenceMessage {
+  groupId: number;
+  messageId: number;
+  observedAt: number;
+  text: string;
+}
+
+export interface MemoryEvidenceBatch {
+  batchId: number;
+  userId: number;
+  groupIds: number[];
+  messageIds: number[];
+  messages: string[];
+  observedFrom: number;
+  observedTo: number;
+  createdAt: number;
+}
+
 interface MemoryRow {
   id: number;
   owner_id: number;
@@ -118,7 +147,9 @@ function toItem(r: MemoryRow): MemoryItem {
  */
 function memoryScore(item: MemoryItem, now = Date.now()): number {
   const days = Math.floor(Math.max(0, now - item.lastSeen) / DAY_MS);
-  return item.confidence * Math.exp(-days / DECAY_TAU_DAYS) * Math.log(1 + item.hits);
+  const { tauDays } = policyFor(item.kind);
+  const decay = tauDays === null ? 1 : Math.exp(-days / tauDays);
+  return item.confidence * decay * Math.log(1 + item.hits);
 }
 
 class MemoryStore {
@@ -438,6 +469,72 @@ class MemoryStore {
     return result;
   }
 
+  /** Store one immutable extraction batch and link each changed memory to it. */
+  attachEvidence(
+    memoryIds: number[],
+    userId: number,
+    messages: EvidenceMessage[],
+    db = this.db(),
+  ): number | null {
+    const ids = [...new Set(memoryIds)];
+    if (ids.length === 0 || messages.length === 0) return null;
+
+    const placeholders = ids.map(() => '?').join(',');
+    const alive = (db.prepare(
+      `SELECT id FROM memory WHERE owner_id = ? AND superseded_by IS NULL AND id IN (${placeholders})`,
+    ).all(userId, ...ids) as { id: number }[]).map((r) => r.id);
+    if (alive.length === 0) return null;
+
+    const createdAt = Date.now();
+    const observed = messages.map((m) => m.observedAt);
+    let batchId = 0;
+    db.transaction(() => {
+      const info = db.prepare(`
+        INSERT INTO memory_evidence_batch
+          (user_id, group_ids, message_ids, messages, observed_from, observed_to, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        userId,
+        JSON.stringify([...new Set(messages.map((m) => m.groupId))]),
+        JSON.stringify(messages.map((m) => m.messageId)),
+        JSON.stringify(messages.map((m) => m.text)),
+        Math.min(...observed),
+        Math.max(...observed),
+        createdAt,
+      );
+      batchId = Number(info.lastInsertRowid);
+
+      const link = db.prepare(
+        'INSERT INTO memory_evidence (memory_id, batch_id, created_at) VALUES (?, ?, ?)',
+      );
+      alive.forEach((id) => link.run(id, batchId, createdAt));
+    })();
+    return batchId;
+  }
+
+  /** Read provenance newest first for admin and debugging. */
+  listMemoryEvidence(memoryId: number, db = this.db()): MemoryEvidenceBatch[] {
+    const rows = db.prepare(`
+      SELECT b.id AS batchId, b.user_id AS userId, b.group_ids AS groupIds,
+        b.message_ids AS messageIds, b.messages, b.observed_from AS observedFrom,
+        b.observed_to AS observedTo, b.created_at AS createdAt
+      FROM memory_evidence e
+      JOIN memory_evidence_batch b ON b.id = e.batch_id
+      WHERE e.memory_id = ?
+      ORDER BY b.created_at DESC, b.id DESC
+    `).all(memoryId) as Array<{
+      batchId: number, userId: number, groupIds: string, messageIds: string,
+      messages: string, observedFrom: number, observedTo: number, createdAt: number,
+    }>;
+
+    return rows.map((r) => ({
+      ...r,
+      groupIds: JSON.parse(r.groupIds) as number[],
+      messageIds: JSON.parse(r.messageIds) as number[],
+      messages: JSON.parse(r.messages) as string[],
+    }));
+  }
+
   /**
    * 人工改一条记忆。和 applyOps 不同，这里不挡 pinned——钉住是防 LLM 的，不防人。
    * 返回文本是否变了：变了就得让调用方重新排队算向量
@@ -487,10 +584,12 @@ class MemoryStore {
    */
   evict(userId: number, db = this.db()): number[] {
     const items = this.listUserMemories(userId, db).filter((i) => !i.pinned);
-    if (items.length <= MAX_ITEMS_PER_USER) return [];
-
-    // listUserMemories 已按分数降序，尾巴就是最该淘汰的
-    const doomed = items.slice(MAX_ITEMS_PER_USER).map((i) => i.id);
+    const byKind = new Map<string, MemoryItem[]>();
+    items.forEach((item) => byKind.set(item.kind, [...(byKind.get(item.kind) ?? []), item]));
+    const doomed = [...byKind.entries()].flatMap(([kind, candidates]) => (
+      candidates.slice(policyFor(kind).limit).map((candidate) => candidate.id)
+    ));
+    if (doomed.length === 0) return [];
     const now = Date.now();
 
     db.transaction(() => {
