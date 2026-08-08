@@ -80,6 +80,14 @@ const PAGE = `<!doctype html>
   td.ops button { padding: 6px 10px; }
   tr.dirty td.id { color: #d29922; }
   .empty { color: #6e7681; padding: 8px 0; }
+  tr.evidence-row td { padding: 0 6px 10px; }
+  .evidence { max-height: 420px; overflow: auto; padding: 10px 12px; background: #0d1117;
+              border: 1px solid #30363d; border-radius: 6px; }
+  .evidence-batch + .evidence-batch { margin-top: 12px; padding-top: 12px; border-top: 1px solid #30363d; }
+  .evidence-head { color: #8b949e; font-size: 12px; margin-bottom: 6px; }
+  .evidence-message { display: grid; grid-template-columns: 110px 1fr; gap: 10px; padding: 4px 0; }
+  .evidence-message .msg-id { color: #6e7681; font-size: 12px; white-space: nowrap; }
+  .evidence-message .raw { white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -128,7 +136,7 @@ const PAGE = `<!doctype html>
         <thead><tr>
           <th style="width:52px">id</th><th style="width:110px">类型</th><th>内容</th>
           <th style="width:80px">置信度</th><th style="width:52px">钉住</th>
-          <th style="width:150px">印证 / 最近</th><th style="width:130px"></th>
+          <th style="width:150px">印证 / 最近</th><th style="width:190px"></th>
         </tr></thead>
         <tbody id="items"></tbody>
       </table>
@@ -178,6 +186,77 @@ const PAGE = `<!doctype html>
     const d = new Date(ms);
     const p = (n) => String(n).padStart(2, '0');
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+
+  function fmtTime(ms) {
+    return new Date(ms).toLocaleString('zh-CN', { hour12: false });
+  }
+
+  function renderEvidence(box, batches) {
+    box.textContent = '';
+    if (!batches.length) {
+      box.className = 'empty';
+      box.textContent = '暂无原话证据（旧记忆或管理员手动添加的记忆不会自动补证据）';
+      return;
+    }
+
+    batches.forEach((batch) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'evidence-batch';
+
+      const head = document.createElement('div');
+      head.className = 'evidence-head';
+      const range = batch.observedFrom === batch.observedTo
+        ? fmtTime(batch.observedFrom)
+        : fmtTime(batch.observedFrom) + ' ～ ' + fmtTime(batch.observedTo);
+      head.textContent = '证据批次 #' + batch.batchId + ' · ' + range
+        + ' · 来源群 ' + (batch.groupIds.length ? batch.groupIds.join('、') : '未知');
+      wrap.appendChild(head);
+
+      batch.messages.forEach((message, i) => {
+        const line = document.createElement('div');
+        line.className = 'evidence-message';
+        const id = document.createElement('span');
+        id.className = 'msg-id';
+        id.textContent = batch.messageIds[i] ? '消息 #' + batch.messageIds[i] : '消息 ID 未记录';
+        const raw = document.createElement('span');
+        raw.className = 'raw';
+        raw.textContent = message;
+        line.appendChild(id);
+        line.appendChild(raw);
+        wrap.appendChild(line);
+      });
+      box.appendChild(wrap);
+    });
+  }
+
+  function toggleEvidence(it, tr, button) {
+    const next = tr.nextElementSibling;
+    if (next && next.classList.contains('evidence-row') && next.dataset.memoryId === String(it.id)) {
+      next.hidden = !next.hidden;
+      button.textContent = next.hidden ? '原话' : '收起';
+      return;
+    }
+
+    const evidenceRow = document.createElement('tr');
+    evidenceRow.className = 'evidence-row';
+    evidenceRow.dataset.memoryId = String(it.id);
+    const td = document.createElement('td');
+    td.colSpan = 7;
+    const box = document.createElement('div');
+    box.className = 'evidence';
+    box.textContent = '加载原话中…';
+    td.appendChild(box);
+    evidenceRow.appendChild(td);
+    tr.after(evidenceRow);
+    button.textContent = '收起';
+
+    api('/api/memory/evidence?id=' + it.id)
+      .then((d) => renderEvidence(box, d.evidence))
+      .catch((e) => {
+        box.className = 'empty';
+        box.textContent = '原话加载失败：' + e.message;
+      });
   }
 
   function kindSelect(value) {
@@ -269,6 +348,9 @@ const PAGE = `<!doctype html>
       cell('meta').textContent = it.hits + ' 次 · ' + fmtDate(it.lastSeen);
 
       const ops = cell('ops');
+      const evidence = document.createElement('button');
+      evidence.textContent = '原话';
+      evidence.onclick = () => toggleEvidence(it, tr, evidence);
       const save = document.createElement('button');
       save.textContent = '保存';
       save.onclick = () => {
@@ -291,6 +373,8 @@ const PAGE = `<!doctype html>
           .then(() => { setStatus('#' + it.id + ' 已删除', true); reloadItems(); })
           .catch((e) => setStatus('删除失败: ' + e.message, false));
       };
+      ops.appendChild(evidence);
+      ops.appendChild(document.createTextNode(' '));
       ops.appendChild(save);
       ops.appendChild(document.createTextNode(' '));
       ops.appendChild(del);
@@ -488,6 +572,14 @@ export async function handleMemoryRoute(
     const userId = parseId(url.searchParams.get('userId'));
     if (!userId) sendJson(res, 400, { error: 'invalid userId' });
     else sendJson(res, 200, { items: memoryStore.listUserMemories(userId) });
+    return true;
+  }
+
+  if (url.pathname === '/api/memory/evidence' && req.method === 'GET') {
+    const id = parseId(url.searchParams.get('id'));
+    if (!id) sendJson(res, 400, { error: 'invalid memory id' });
+    else if (!memoryStore.getMemory(id)) sendJson(res, 404, { error: '记忆不存在或已删除' });
+    else sendJson(res, 200, { evidence: memoryStore.listMemoryEvidence(id) });
     return true;
   }
 
