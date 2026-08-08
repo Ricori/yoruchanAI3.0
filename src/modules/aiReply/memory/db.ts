@@ -115,6 +115,12 @@ const MIGRATIONS: string[] = [
   )
   WHERE position = 1;
   `,
+
+  // v5 v4 已从聊天记录完整回填群名片，运行时也只需要按群维护昵称；
+  // 删除旧的单用户昵称兜底表，避免每条消息重复写两份当前昵称。
+  `
+  DROP TABLE IF EXISTS user_profile;
+  `,
 ];
 
 /** 读一条 meta，没有返回 null */

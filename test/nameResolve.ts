@@ -207,7 +207,6 @@ function clearProfiles() {
   const ph = ALL_PROFILES.map(() => '?').join(', ');
   db.prepare(`DELETE FROM memory_fts WHERE rowid IN (SELECT id FROM memory WHERE owner_id IN (${ph}))`).run(...ALL_PROFILES);
   db.prepare(`DELETE FROM memory WHERE owner_id IN (${ph})`).run(...ALL_PROFILES);
-  db.prepare(`DELETE FROM user_profile WHERE user_id IN (${ph})`).run(...ALL_PROFILES);
   db.prepare(`DELETE FROM group_user_profile WHERE user_id IN (${ph})`).run(...ALL_PROFILES);
 }
 

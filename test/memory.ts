@@ -56,11 +56,11 @@ async function withDbAsync(fn: (db: MemoryDatabase) => Promise<void>) {
 
 const EXPECTED_TABLES = [
   'chat_fts', 'chat_line', 'embedding', 'group_user_profile',
-  'memory', 'memory_fts', 'meta', 'topic', 'user_profile',
+  'memory', 'memory_fts', 'meta', 'topic',
 ];
 
 /** 迁移脚本条数，加一条就要同步改这里 */
-const SCHEMA_VERSION = '4';
+const SCHEMA_VERSION = '5';
 
 function testSchema() {
   console.log('\n[schema]');

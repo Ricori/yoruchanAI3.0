@@ -159,7 +159,6 @@ data/                     运行期数据：SQLite 记忆库、聊天备份、�
 | `topic` | LLM 生成的一句话摘要，覆盖一段 `chat_line` 范围（`line_from`–`line_to`），是语义检索的最小单元 |
 | `embedding` | `memory` / `topic` 行对应的向量（Float32Array BLOB） |
 | `group_user_profile` | `(group_id, user_id)` 对应的当前群名片，回复时优先使用当前群的称呼 |
-| `user_profile` | 最近一次见到的用户昵称；供管理页、旧数据和没有群上下文的调用兜底 |
 | `meta` | schema 版本、增量导入水位线、词典签名等 |
 
 </details>

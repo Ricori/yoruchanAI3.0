@@ -47,7 +47,7 @@ const line = (s = '') => console.log(s);
 
 /** 昵称好认，userId 不好认，打印时一律带上昵称 */
 function who(userId: number) {
-  return `${memoryStore.getNickName(userId) ?? '?'}(${userId})`;
+  return `${memoryStore.getNickName(userId, groupId) ?? '?'}(${userId})`;
 }
 
 line(`群 ${groupId}｜问题「${query}」｜days=${days}`);

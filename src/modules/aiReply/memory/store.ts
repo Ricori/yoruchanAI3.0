@@ -144,37 +144,27 @@ class MemoryStore {
     return `${groupId ?? '*'}:${userId}`;
   }
 
-  /** 记下群友当前群名片，同时更新无群上下文时使用的最近昵称兜底 */
+  /** 记下群友当前群名片，只在名字变化时写库 */
   noteNickName(groupId: number, userId: number, nick: string, db = this.db()) {
     if (!nick || userId === 0) return;
     const cache = this.cache(db);
     const groupKey = this.nickKey(userId, groupId);
     const globalKey = this.nickKey(userId, null);
     const groupChanged = cache.get(groupKey) !== nick;
-    const globalChanged = cache.get(globalKey) !== nick;
-    if (!groupChanged && !globalChanged) return;
+    if (!groupChanged) return;
 
     const now = Date.now();
-    db.transaction(() => {
-      if (groupChanged) {
-        db.prepare(
-          'INSERT INTO group_user_profile (group_id, user_id, nick, updated_at) VALUES (?, ?, ?, ?)'
-          + ' ON CONFLICT(group_id, user_id) DO UPDATE SET nick = excluded.nick, updated_at = excluded.updated_at',
-        ).run(groupId, userId, nick, now);
-      }
-      if (globalChanged) {
-        db.prepare(
-          'INSERT INTO user_profile (user_id, nick, updated_at) VALUES (?, ?, ?)'
-          + ' ON CONFLICT(user_id) DO UPDATE SET nick = excluded.nick, updated_at = excluded.updated_at',
-        ).run(userId, nick, now);
-      }
-    })();
+    db.prepare(
+      'INSERT INTO group_user_profile (group_id, user_id, nick, updated_at) VALUES (?, ?, ?, ?)'
+      + ' ON CONFLICT(group_id, user_id) DO UPDATE SET nick = excluded.nick, updated_at = excluded.updated_at',
+    ).run(groupId, userId, nick, now);
 
     cache.set(groupKey, nick);
+    // 管理页等没有群上下文的调用显示最近一次在运行时见到的名字。
     cache.set(globalKey, nick);
   }
 
-  /** 优先返回当前群名片；旧数据没有群名片时退回最近一次见到的全局昵称 */
+  /** 优先返回当前群名片；没有群上下文时取最近更新的一张群名片 */
   getNickName(userId: number, groupId: number | null = null, db = this.db()): string | null {
     const cache = this.cache(db);
     const key = this.nickKey(userId, groupId);
@@ -191,7 +181,9 @@ class MemoryStore {
       }
     }
 
-    const row = db.prepare('SELECT nick FROM user_profile WHERE user_id = ?').get(userId) as { nick: string } | undefined;
+    const row = db.prepare(
+      'SELECT nick FROM group_user_profile WHERE user_id = ? ORDER BY updated_at DESC, group_id DESC LIMIT 1',
+    ).get(userId) as { nick: string } | undefined;
     if (row) cache.set(this.nickKey(userId, null), row.nick);
     return row?.nick ?? null;
   }
@@ -212,7 +204,10 @@ class MemoryStore {
 
   /** 这个人有没有可注入的档案内容。认人时用来筛掉「叫得出名字但没有任何记忆」的人 */
   hasMemory(userId: number, db = this.db()): boolean {
-    return this.formatMemoryLine(userId, null, db) !== null;
+    const row = db.prepare(
+      "SELECT 1 FROM memory WHERE scope = 'user' AND owner_id = ? AND superseded_by IS NULL LIMIT 1",
+    ).get(userId);
+    return row !== undefined;
   }
 
   /** 有过聊天记录的群，管理面板拿来列群档案的候选 */
@@ -248,7 +243,7 @@ class MemoryStore {
 
       // LIKE 的通配符要转义，否则昵称里的 _ 会变成「任意一个字」
       const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-      (db.prepare("SELECT user_id FROM user_profile WHERE nick LIKE ? ESCAPE '\\' LIMIT ?")
+      (db.prepare("SELECT DISTINCT user_id FROM group_user_profile WHERE nick LIKE ? ESCAPE '\\' LIMIT ?")
         .all(like, limit) as { user_id: number }[]).forEach((r) => push(r.user_id));
       (db.prepare(
         "SELECT DISTINCT owner_id FROM memory WHERE scope = 'user' AND kind = 'alias'"
