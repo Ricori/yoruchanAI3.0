@@ -18,9 +18,8 @@ const EXTRACT_THRESHOLD = 30;
 const MAX_BUFFER = EXTRACT_THRESHOLD * 3;
 
 interface PendingBuffer {
-  messages: string[];
+  messages: { groupId: number, text: string }[];
   nickName: string;
-  groupId: number;
   isExtracting: boolean;
 }
 
@@ -54,30 +53,33 @@ class MemoryExtractor {
    */
   onMessage(groupId: number, userId: number, nickName: string, message: string, isMentionMe: boolean) {
     this.ensureTracked();
-    memoryStore.noteNickName(userId, nickName);
+    memoryStore.noteNickName(groupId, userId, nickName);
 
     if (isMentionMe) this.trackedUsers.add(userId);
     if (!this.trackedUsers.has(userId)) return;
 
     if (!this.pendingBuffers.has(userId)) {
       this.pendingBuffers.set(userId, {
-        messages: [], nickName, groupId, isExtracting: false,
+        messages: [], nickName, isExtracting: false,
       });
     }
 
     const buffer = this.pendingBuffers.get(userId)!;
     buffer.nickName = nickName; // 保持最新昵称
-    buffer.groupId = groupId;
-    buffer.messages.push(message);
+    buffer.messages.push({ groupId, text: message });
 
     if (buffer.messages.length >= EXTRACT_THRESHOLD && !buffer.isExtracting) {
       const batch = buffer.messages.splice(0, EXTRACT_THRESHOLD);
-      this.triggerExtract(userId, buffer.groupId, buffer.nickName, batch).catch(() => { });
+      this.triggerExtract(userId, buffer.nickName, batch).catch(() => { });
     }
   }
 
   /** 后台异步抽取，不阻塞主流程 */
-  private async triggerExtract(userId: number, groupId: number, nickName: string, messages: string[]) {
+  private async triggerExtract(
+    userId: number,
+    nickName: string,
+    messages: { groupId: number, text: string }[],
+  ) {
     const buffer = this.pendingBuffers.get(userId);
     if (buffer) buffer.isExtracting = true;
 
@@ -87,7 +89,7 @@ class MemoryExtractor {
       }));
 
       printLog(`[MemoryExtract] 开始抽取用户 ${nickName}(${userId}) 的记忆...`);
-      const ops = await extractMemory(nickName, messages, existing);
+      const ops = await extractMemory(nickName, messages.map((m) => m.text), existing);
 
       if (ops === null) {
         // 请求失败：把这批消息放回缓冲区头部，等下次一起重试，而不是无声丢弃
@@ -103,7 +105,10 @@ class MemoryExtractor {
 
       if (ops.length === 0) return;
 
-      const result = memoryStore.applyOps(userId, groupId, ops);
+      // 单群批次记录来源群；跨群混合批次不随意归到最后一个群，记为跨群来源。
+      const sourceGroups = new Set(messages.map((m) => m.groupId));
+      const sourceGroupId = sourceGroups.size === 1 ? messages[0].groupId : null;
+      const result = memoryStore.applyOps(userId, sourceGroupId, ops);
       const evicted = memoryStore.evict(userId);
 
       // 淘汰掉的不用再算向量

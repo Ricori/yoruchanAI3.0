@@ -119,6 +119,7 @@ export async function generateGroupReply(
   }
 
   const userMemoryContext = memoryStore.getMemoryContext(
+    groupId,
     [...fullUserIds, ...mentionedUserIds],
     recentUserIds,
   );

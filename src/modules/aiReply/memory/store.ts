@@ -122,8 +122,8 @@ function memoryScore(item: MemoryItem, now = Date.now()): number {
 }
 
 class MemoryStore {
-  /** 昵称基本不变，缓存住就不用每条消息都写库 */
-  private nickCache = new Map<number, string>();
+  /** 昵称基本不变，按连接缓存，避免测试库/临时库之间串缓存 */
+  private nickCache = new WeakMap<MemoryDatabase, Map<string, string>>();
 
   private db(): MemoryDatabase {
     return getMemoryDb();
@@ -131,21 +131,68 @@ class MemoryStore {
 
   // ========== 昵称 ==========
 
-  /** 记下群友当前昵称，只在变了的时候写库 */
-  noteNickName(userId: number, nick: string, db = this.db()) {
-    if (!nick || userId === 0 || this.nickCache.get(userId) === nick) return;
-    this.nickCache.set(userId, nick);
-    db.prepare(
-      'INSERT INTO user_profile (user_id, nick, updated_at) VALUES (?, ?, ?)'
-      + ' ON CONFLICT(user_id) DO UPDATE SET nick = excluded.nick, updated_at = excluded.updated_at',
-    ).run(userId, nick, Date.now());
+  private cache(db: MemoryDatabase): Map<string, string> {
+    let cache = this.nickCache.get(db);
+    if (!cache) {
+      cache = new Map<string, string>();
+      this.nickCache.set(db, cache);
+    }
+    return cache;
   }
 
-  getNickName(userId: number, db = this.db()): string | null {
-    const cached = this.nickCache.get(userId);
+  private nickKey(userId: number, groupId: number | null): string {
+    return `${groupId ?? '*'}:${userId}`;
+  }
+
+  /** 记下群友当前群名片，同时更新无群上下文时使用的最近昵称兜底 */
+  noteNickName(groupId: number, userId: number, nick: string, db = this.db()) {
+    if (!nick || userId === 0) return;
+    const cache = this.cache(db);
+    const groupKey = this.nickKey(userId, groupId);
+    const globalKey = this.nickKey(userId, null);
+    const groupChanged = cache.get(groupKey) !== nick;
+    const globalChanged = cache.get(globalKey) !== nick;
+    if (!groupChanged && !globalChanged) return;
+
+    const now = Date.now();
+    db.transaction(() => {
+      if (groupChanged) {
+        db.prepare(
+          'INSERT INTO group_user_profile (group_id, user_id, nick, updated_at) VALUES (?, ?, ?, ?)'
+          + ' ON CONFLICT(group_id, user_id) DO UPDATE SET nick = excluded.nick, updated_at = excluded.updated_at',
+        ).run(groupId, userId, nick, now);
+      }
+      if (globalChanged) {
+        db.prepare(
+          'INSERT INTO user_profile (user_id, nick, updated_at) VALUES (?, ?, ?)'
+          + ' ON CONFLICT(user_id) DO UPDATE SET nick = excluded.nick, updated_at = excluded.updated_at',
+        ).run(userId, nick, now);
+      }
+    })();
+
+    cache.set(groupKey, nick);
+    cache.set(globalKey, nick);
+  }
+
+  /** 优先返回当前群名片；旧数据没有群名片时退回最近一次见到的全局昵称 */
+  getNickName(userId: number, groupId: number | null = null, db = this.db()): string | null {
+    const cache = this.cache(db);
+    const key = this.nickKey(userId, groupId);
+    const cached = cache.get(key);
     if (cached) return cached;
+
+    if (groupId !== null) {
+      const row = db.prepare(
+        'SELECT nick FROM group_user_profile WHERE group_id = ? AND user_id = ?',
+      ).get(groupId, userId) as { nick: string } | undefined;
+      if (row) {
+        cache.set(key, row.nick);
+        return row.nick;
+      }
+    }
+
     const row = db.prepare('SELECT nick FROM user_profile WHERE user_id = ?').get(userId) as { nick: string } | undefined;
-    if (row) this.nickCache.set(userId, row.nick);
+    if (row) cache.set(this.nickKey(userId, null), row.nick);
     return row?.nick ?? null;
   }
 
@@ -165,7 +212,7 @@ class MemoryStore {
 
   /** 这个人有没有可注入的档案内容。认人时用来筛掉「叫得出名字但没有任何记忆」的人 */
   hasMemory(userId: number, db = this.db()): boolean {
-    return this.formatMemoryLine(userId, db) !== null;
+    return this.formatMemoryLine(userId, null, db) !== null;
   }
 
   /** 有过聊天记录的群，管理面板拿来列群档案的候选 */
@@ -213,7 +260,7 @@ class MemoryStore {
       const items = this.listUserMemories(userId, db);
       return {
         userId,
-        nick: this.getNickName(userId, db),
+        nick: this.getNickName(userId, null, db),
         aliases: items.filter((i) => i.kind === 'alias').map((i) => i.text),
         count: items.length,
       };
@@ -249,19 +296,24 @@ class MemoryStore {
    * briefIds 只注叫法和关系：认人必需，印象交给 recall_memory 按需查——
    * 全员注全量是每轮几百 token 的固定开销，而多数回复根本不涉及那些人
    */
-  getMemoryContext(fullIds: number[], briefIds: number[] = [], db = this.db()): string {
+  getMemoryContext(groupId: number, fullIds: number[], briefIds: number[] = [], db = this.db()): string {
     const full = new Set(fullIds);
     return [
-      ...fullIds.map((userId) => this.formatMemoryLine(userId, db)),
-      ...briefIds.filter((id) => !full.has(id)).map((userId) => this.formatMemoryLine(userId, db, true)),
+      ...fullIds.map((userId) => this.formatMemoryLine(userId, groupId, db)),
+      ...briefIds.filter((id) => !full.has(id)).map((userId) => this.formatMemoryLine(userId, groupId, db, true)),
     ]
       .filter((line): line is string => line !== null)
       .join('\n');
   }
 
   /** 单个群友的一行档案文本，没有可用内容时返回 null。brief 只保留叫法和关系 */
-  formatMemoryLine(userId: number, db = this.db(), brief = false): string | null {
-    const nickName = this.getNickName(userId, db);
+  formatMemoryLine(
+    userId: number,
+    groupId: number | null,
+    db = this.db(),
+    brief = false,
+  ): string | null {
+    const nickName = this.getNickName(userId, groupId, db);
     const items = this.listUserMemories(userId, db);
     if (!nickName && items.length === 0) return null;
 

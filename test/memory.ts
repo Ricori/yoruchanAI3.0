@@ -54,10 +54,13 @@ async function withDbAsync(fn: (db: MemoryDatabase) => Promise<void>) {
   }
 }
 
-const EXPECTED_TABLES = ['chat_fts', 'chat_line', 'embedding', 'memory', 'memory_fts', 'meta', 'topic', 'user_profile'];
+const EXPECTED_TABLES = [
+  'chat_fts', 'chat_line', 'embedding', 'group_user_profile',
+  'memory', 'memory_fts', 'meta', 'topic', 'user_profile',
+];
 
 /** 迁移脚本条数，加一条就要同步改这里 */
-const SCHEMA_VERSION = '2';
+const SCHEMA_VERSION = '3';
 
 function testSchema() {
   console.log('\n[schema]');
@@ -359,7 +362,12 @@ async function testRecall() {
 
     const all = await recallMemory(FAKE_GROUP, { query: '研究生', semantic: false }, db);
     check('软删的条目不可见', all.map((h) => h.id).includes(alive + 1), false);
-    check('别的群的记忆不串台', all.map((h) => h.ownerId).sort(), [111, 222]);
+    check('用户档案跨群共享', all.map((h) => h.ownerId).sort(), [111, 222, 333]);
+
+    const crossGroup = await recallMemory(FAKE_GROUP, {
+      query: '研究生', aboutUserIds: [333], semantic: false,
+    }, db);
+    check('指定用户时也能召回其来源于别群的档案', texts(crossGroup), ['别的群的研究生']);
 
     const about = await recallMemory(FAKE_GROUP, { query: '研究生', aboutUserIds: [111], semantic: false }, db);
     check('问某个人就只翻他的档案（硬过滤）', about.map((h) => h.ownerId), [111]);
@@ -472,7 +480,9 @@ function testStore() {
   console.log('\n[记忆存取]');
   withDb((db) => {
     const U = 555;
-    memoryStore.noteNickName(U, '雨漫', db);
+    const OTHER_GROUP = FAKE_GROUP + 1;
+    memoryStore.noteNickName(FAKE_GROUP, U, '雨漫', db);
+    memoryStore.noteNickName(OTHER_GROUP, U, '浅秋', db);
 
     const trait = memoryStore.addMemory({ ownerId: U, kind: 'trait', text: '在读研究生' }, db);
     const ep = memoryStore.addMemory({ ownerId: U, kind: 'episode', text: '最近在打黑神话' }, db);
@@ -483,19 +493,22 @@ function testStore() {
       ownerId: U, kind: 'alias', text: '桃子姐', pinned: true,
     }, db);
 
-    check('档案行：关系在前、印象在后、叫法进名字', memoryStore.formatMemoryLine(U, db),
+    check('档案行：关系在前、印象在后、叫法进名字', memoryStore.formatMemoryLine(U, FAKE_GROUP, db),
       '[雨漫]（也叫：桃子姐） 关系：是乃乃香的同桌｜印象：在读研究生、最近在打黑神话');
+    check('同一档案在不同群使用各自群名片', memoryStore.formatMemoryLine(U, OTHER_GROUP, db),
+      '[浅秋]（也叫：桃子姐） 关系：是乃乃香的同桌｜印象：在读研究生、最近在打黑神话');
+    check('无群上下文时退回最近昵称', memoryStore.getNickName(U, null, db), '浅秋');
 
     // 这轮回复不涉及的人只注认人必需的部分，印象留给 recall_memory 按需查
     const W = 556;
-    memoryStore.noteNickName(W, '阿岩', db);
+    memoryStore.noteNickName(FAKE_GROUP, W, '阿岩', db);
     memoryStore.addMemory({ ownerId: W, kind: 'trait', text: '爱吃辣' }, db);
 
-    check('brief 档案行只留叫法和关系', memoryStore.formatMemoryLine(U, db, true),
+    check('brief 档案行只留叫法和关系', memoryStore.formatMemoryLine(U, FAKE_GROUP, db, true),
       '[雨漫]（也叫：桃子姐） 关系：是乃乃香的同桌');
-    check('brief 下只有印象的人整行省掉', memoryStore.formatMemoryLine(W, db, true), null);
+    check('brief 下只有印象的人整行省掉', memoryStore.formatMemoryLine(W, FAKE_GROUP, db, true), null);
     check('两档注入：full 全量、brief 精简、重复的人只出现一次',
-      memoryStore.getMemoryContext([U], [U, W], db),
+      memoryStore.getMemoryContext(FAKE_GROUP, [U], [U, W], db),
       '[雨漫]（也叫：桃子姐） 关系：是乃乃香的同桌｜印象：在读研究生、最近在打黑神话');
 
     console.log('\n[ops 应用]');
@@ -548,7 +561,7 @@ function testStore() {
     console.log('\n[对外兼容形态]');
     check('getManualAliases 形态不变', [...memoryStore.getManualAliases(db).entries()], [[U, ['桃子姐']]]);
     check('hasMemory', [memoryStore.hasMemory(U, db), memoryStore.hasMemory(666, db)], [true, false]);
-    check('没有昵称就没有档案行', memoryStore.formatMemoryLine(666, db), null);
+    check('没有昵称就没有档案行', memoryStore.formatMemoryLine(666, FAKE_GROUP, db), null);
   });
 }
 

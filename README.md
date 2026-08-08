@@ -142,7 +142,7 @@ data/                     运行期数据：SQLite 记忆库、聊天备份、�
 1. **落盘** —— 群消息实时追加写进 `data/memory/chat/{groupId}_{yyyymmdd}.txt` 纯文本，这是记忆系统唯一的事实来源。
 2. **增量导入**（[ingest.ts](src/modules/aiReply/memory/ingest.ts)）—— 启动时先把待处理的备份解析进 `chat_line`/`chat_fts` 再开始接消息，按 group/day 记水位线，幂等。
 3. **分词**（[segment.ts](src/modules/aiReply/memory/segment.ts)）—— jieba + 群内人名/黑话自定义词典（不然专有名词会被拆成单字），TF-IDF 提关键词。
-4. **抽取**（[extract.ts](src/modules/aiReply/memory/extract.ts)）—— 每人攒够 30 条消息调一次 LLM，产出 ADD/UPDATE/DELETE 操作。只跟踪 @ 过 bot 的用户。
+4. **抽取**（[extract.ts](src/modules/aiReply/memory/extract.ts)）—— 每人跨群攒够 30 条消息调一次 LLM，产出 ADD/UPDATE/DELETE 操作。用户档案按 QQ 号全局共享；单群批次记录来源群，跨群混合批次不强行归到某个群。只跟踪 @ 过 bot 的用户。
 5. **存储**（[store.ts](src/modules/aiReply/memory/store.ts)）—— `pinned` 记忆不允许被 LLM 改写或删除；非 pinned 超 12 条按衰减分淘汰。
 6. **向量化**（[vector.ts](src/modules/aiReply/memory/vector.ts)）—— 单位化 Float32 向量，暴力余弦 Top-K（量级在千级，不值得上索引）；`embedQueue` 攒 20 条或 15 秒触发一次，不阻塞回复主链路。
 7. **检索**（[retrieve.ts](src/modules/aiReply/memory/retrieve.ts)）—— BM25 与向量余弦（相似度硬阈值 0.40）双路召回，RRF（k=60）融合。`topic` 命中会展开回它覆盖的原始聊天行。
@@ -155,10 +155,11 @@ data/                     运行期数据：SQLite 记忆库、聊天备份、�
 | 表 | 用途 |
 | --- | --- |
 | `chat_line` + `chat_fts`（FTS5） | 原始逐行聊天记录，按 `group_id+date_key+seq` 去重；`chat_fts` 是分词后的全文检索镜像 |
-| `memory` + `memory_fts` | 结构化记忆：`scope`/`owner_id`/`kind`（trait / episode / relation / alias）/ `confidence` / `hits` / `pinned`，软删除走 `superseded_by` |
+| `memory` + `memory_fts` | 跨群共享的结构化用户档案：`scope`/`owner_id`/`kind`（trait / episode / relation / alias）/ `confidence` / `hits` / `pinned`；`group_id` 只记录来源群，不控制可见性，软删除走 `superseded_by` |
 | `topic` | LLM 生成的一句话摘要，覆盖一段 `chat_line` 范围（`line_from`–`line_to`），是语义检索的最小单元 |
 | `embedding` | `memory` / `topic` 行对应的向量（Float32Array BLOB） |
-| `user_profile` | 用户当前昵称缓存 |
+| `group_user_profile` | `(group_id, user_id)` 对应的当前群名片，回复时优先使用当前群的称呼 |
+| `user_profile` | 最近一次见到的用户昵称；供管理页、旧数据和没有群上下文的调用兜底 |
 | `meta` | schema 版本、增量导入水位线、词典签名等 |
 
 </details>

@@ -186,7 +186,7 @@ function testIndex() {
 const ALL_PROFILES = [111, 222, 333, 777];
 
 function seedProfile(userId: number, nickName: string, trait: string, aliases: string[] = []) {
-  memoryStore.noteNickName(userId, nickName);
+  memoryStore.noteNickName(FAKE_GROUP, userId, nickName);
   memoryStore.addMemory({ ownerId: userId, kind: 'trait', text: trait });
   // 人工别名在新结构里就是 pinned 的 alias 条目
   aliases.forEach((text) => memoryStore.addMemory({
@@ -208,6 +208,7 @@ function clearProfiles() {
   db.prepare(`DELETE FROM memory_fts WHERE rowid IN (SELECT id FROM memory WHERE owner_id IN (${ph}))`).run(...ALL_PROFILES);
   db.prepare(`DELETE FROM memory WHERE owner_id IN (${ph})`).run(...ALL_PROFILES);
   db.prepare(`DELETE FROM user_profile WHERE user_id IN (${ph})`).run(...ALL_PROFILES);
+  db.prepare(`DELETE FROM group_user_profile WHERE user_id IN (${ph})`).run(...ALL_PROFILES);
 }
 
 /** 昵称索引现在读 chat_line 而不是备份文件，样本得先导进库 */
@@ -262,13 +263,13 @@ function testManualAlias() {
   // 认出人只是一半：叫法不跟着注入，LLM 就不知道这份档案对应问句里的哪个外号
   check(
     '人工别名会写进注入的档案行',
-    memoryStore.getMemoryContext([111]),
+    memoryStore.getMemoryContext(FAKE_GROUP, [111]),
     `[测试111]（也叫：${MANUAL_ALIAS}） 测试用档案`,
   );
 
   check(
     '没填别名的人档案行不变',
-    memoryStore.getMemoryContext([222]),
+    memoryStore.getMemoryContext(FAKE_GROUP, [222]),
     '[测试222] 测试用档案',
   );
 }

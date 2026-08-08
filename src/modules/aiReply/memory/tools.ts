@@ -68,10 +68,10 @@ function formatChat(hits: Awaited<ReturnType<typeof recallChat>>): string {
   return hits.map((h) => `${h.date} ${truncate(h.text)}`).join('\n');
 }
 
-function formatMemory(hits: Awaited<ReturnType<typeof recallMemory>>): string {
+function formatMemory(groupId: number, hits: Awaited<ReturnType<typeof recallMemory>>): string {
   if (hits.length === 0) return '没有找到相关的档案。';
   return hits.map((h) => {
-    const nick = memoryStore.getNickName(h.ownerId);
+    const nick = memoryStore.getNickName(h.ownerId, groupId);
     return `${nick ? `[${nick}] ` : ''}${h.text}`;
   }).join('\n');
 }
@@ -97,7 +97,7 @@ export async function runMemoryTool(groupId: number, name: string, rawInput: unk
 
       const hits = await recallMemory(groupId, { query, aboutUserIds, limit: TOOL_LIMIT });
       printLog(`[MemoryTool] recall_memory(${query}${about ? `, about=${about}` : ''}) -> ${hits.length} 条`);
-      return formatMemory(hits);
+      return formatMemory(groupId, hits);
     }
 
     if (name === 'recall_chat') {

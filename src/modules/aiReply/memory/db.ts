@@ -36,7 +36,7 @@ const MIGRATIONS: string[] = [
     id            INTEGER PRIMARY KEY,
     scope         TEXT    NOT NULL,   -- 'user' | 'group'
     owner_id      INTEGER NOT NULL,   -- userId / groupId
-    group_id      INTEGER,            -- 来源群，NULL 表示跨群/人工
+    group_id      INTEGER,            -- 来源群，NULL 表示多群混合/人工；不作为用户档案可见性边界
     kind          TEXT    NOT NULL,   -- 'trait' | 'episode' | 'relation' | 'alias'
     text          TEXT    NOT NULL,
     first_seen    INTEGER NOT NULL,
@@ -81,6 +81,19 @@ const MIGRATIONS: string[] = [
     nick       TEXT    NOT NULL,
     updated_at INTEGER NOT NULL
   );
+  `,
+
+  // v3 群内当前昵称。同一个 QQ 用户在不同群可能使用不同群名片，user_profile
+  // 继续保存最近一次见到的昵称，供管理页和没有群上下文的旧调用兜底。
+  `
+  CREATE TABLE group_user_profile (
+    group_id   INTEGER NOT NULL,
+    user_id    INTEGER NOT NULL,
+    nick       TEXT    NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (group_id, user_id)
+  );
+  CREATE INDEX idx_group_user_profile_nick ON group_user_profile(group_id, nick);
   `,
 ];
 
