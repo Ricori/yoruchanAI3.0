@@ -60,7 +60,7 @@ const EXPECTED_TABLES = [
 ];
 
 /** 迁移脚本条数，加一条就要同步改这里 */
-const SCHEMA_VERSION = '3';
+const SCHEMA_VERSION = '4';
 
 function testSchema() {
   console.log('\n[schema]');
@@ -565,6 +565,43 @@ function testStore() {
   });
 }
 
+function testNickMigration() {
+  console.log('\n[群名片迁移]');
+  const GROUP_A = FAKE_GROUP + 10;
+  const GROUP_B = FAKE_GROUP + 11;
+
+  // 模拟一个已经运行过 v3、但群名片尚未回填的库。
+  withDb((db) => {
+    const insert = db.prepare(
+      'INSERT INTO chat_line (group_id, user_id, date_key, seq, nick, text) VALUES (?, ?, ?, ?, ?, ?)',
+    );
+    insert.run(GROUP_A, 901, 20260101, 1, '旧名', '[旧名]说：第一天');
+    insert.run(GROUP_A, 901, 20260102, 1, '新名', '[新名]说：第二天');
+    insert.run(GROUP_B, 901, 20260103, 1, '别群名', '[别群名]说：第三天');
+    insert.run(GROUP_A, 902, 20260101, 2, '历史名', '[历史名]说：旧消息');
+
+    // v3 运行时已经写入的名字比 chat_line 新，v4 不能拿历史记录覆盖它。
+    db.prepare(
+      'INSERT INTO group_user_profile (group_id, user_id, nick, updated_at) VALUES (?, ?, ?, ?)',
+    ).run(GROUP_A, 902, '运行时新名', Date.now());
+    setMeta(db, 'schema_version', '3');
+  });
+
+  withDb((db) => {
+    const nick = (groupId: number, userId: number) => (db.prepare(
+      'SELECT nick FROM group_user_profile WHERE group_id = ? AND user_id = ?',
+    ).get(groupId, userId) as { nick: string } | undefined)?.nick ?? null;
+
+    check('同群取日期和行号最新的昵称', nick(GROUP_A, 901), '新名');
+    check('同一用户在别群保留独立昵称', nick(GROUP_B, 901), '别群名');
+    check('已有运行时昵称不被历史回填覆盖', nick(GROUP_A, 902), '运行时新名');
+    check('回填后 schema_version 升到最新版', getMeta(db, 'schema_version'), SCHEMA_VERSION);
+
+    db.prepare('DELETE FROM group_user_profile WHERE group_id IN (?, ?)').run(GROUP_A, GROUP_B);
+    db.prepare('DELETE FROM chat_line WHERE group_id IN (?, ?)').run(GROUP_A, GROUP_B);
+  });
+}
+
 export async function testMemory() {
   const fixtures = [fixtureFile(20), fixtureFile(3), fixtureFile(1)];
   const existing = fixtures.filter((f) => fs.existsSync(f));
@@ -576,6 +613,7 @@ export async function testMemory() {
   try {
     testSchema();
     testIdempotent();
+    testNickMigration();
     testFts();
     testSegment();
     testParse();

@@ -95,6 +95,26 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX idx_group_user_profile_nick ON group_user_profile(group_id, nick);
   `,
+
+  // v4 用历史聊天回填群名片。按日期和行 id 取每个群里最后一次见到的昵称；
+  // 已经由 v3 运行时写入的记录更新，INSERT OR IGNORE 会保留它，不拿旧日志覆盖。
+  `
+  INSERT OR IGNORE INTO group_user_profile (group_id, user_id, nick, updated_at)
+  SELECT group_id, user_id, nick, CAST(strftime('%s', 'now') AS INTEGER) * 1000
+  FROM (
+    SELECT
+      group_id,
+      user_id,
+      nick,
+      row_number() OVER (
+        PARTITION BY group_id, user_id
+        ORDER BY date_key DESC, id DESC
+      ) AS position
+    FROM chat_line
+    WHERE user_id != 0 AND nick IS NOT NULL AND nick != ''
+  )
+  WHERE position = 1;
+  `,
 ];
 
 /** 读一条 meta，没有返回 null */
