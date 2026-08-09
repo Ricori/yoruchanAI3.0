@@ -75,14 +75,13 @@ export interface BotConfig {
     initiativeList: number[];
     /** 记忆系统。整块可省略，省略时按代码里的默认值走 */
     memory?: {
-      /**
-       * 每次回复允许模型调几轮召回工具。
-       * 主动插话默认 0：本来就是随口一句，不值得多花一次网络往返
-       */
+      /** 每次回复允许模型调几轮召回工具 */
       toolRounds?: {
         mention?: number;
         initiative?: number;
       };
+      /** 黑名单 QQ，名单内的人不再抽取、更新记忆 */
+      blackUserIds?: number[];
     };
     /** 画图工具。整块可省略，省略时按代码里的默认值走（默认开启） */
     imageGen?: {

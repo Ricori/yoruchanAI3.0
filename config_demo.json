@@ -55,7 +55,8 @@
         "toolRounds": {
           "mention": 1,
           "initiative": 0
-        }
+        },
+        "blackUserIds": []
       },
       "imageGen": {
         "enable": false,

@@ -1,4 +1,5 @@
 import { extractMemory } from '@/service/llm';
+import nnkbot from '@/core/nnkBot';
 import { printError, printLog } from '@/utils/print';
 import { getMemoryDb } from './db';
 import { enqueueEmbedding } from './embedQueue';
@@ -32,6 +33,11 @@ class MemoryExtractor {
 
   private loaded = false;
 
+  /** 黑名单里的人不再抽取记忆 */
+  private isBlocked(userId: number): boolean {
+    return nnkbot.config.aiReply.memory?.blackUserIds?.includes(userId) ?? false;
+  }
+
   /** 已经有记忆的人继续追踪。懒加载，避免 import 时就去建库 */
   private ensureTracked() {
     if (this.loaded) return;
@@ -63,6 +69,11 @@ class MemoryExtractor {
   ) {
     this.ensureTracked();
     memoryStore.noteNickName(groupId, userId, nickName);
+
+    // 被拉黑的
+    if (this.isBlocked(userId)) {
+      return;
+    }
 
     if (isMentionMe) this.trackedUsers.add(userId);
     if (!this.trackedUsers.has(userId)) return;
@@ -101,6 +112,12 @@ class MemoryExtractor {
 
       printLog(`[MemoryExtract] 开始抽取用户 ${nickName}(${userId}) 的记忆...`);
       const ops = await extractMemory(nickName, messages.map((m) => m.text), existing);
+
+      // 这批在路上时可能刚被拉黑，结果直接丢掉，不写库也不放回缓冲区
+      if (this.isBlocked(userId)) {
+        printLog(`[MemoryExtract] 用户 ${nickName}(${userId}) 已在黑名单，丢弃本批抽取结果`);
+        return;
+      }
 
       if (ops === null) {
         // 请求失败：把这批消息放回缓冲区头部，等下次一起重试，而不是无声丢弃

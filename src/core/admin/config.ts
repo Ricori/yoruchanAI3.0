@@ -2,7 +2,7 @@ import fs from 'fs';
 import http from 'http';
 import path from 'path';
 import { printLog } from '@/utils/print';
-import { NonokaConfig } from '@/types/config';
+import { BotConfig, NonokaConfig } from '@/types/config';
 import { NonokaCore } from '../nnkCore';
 import { readBody } from './http';
 
@@ -370,12 +370,16 @@ export async function handleConfigRoute(
     // wsConfig、nonokaService 与 apiKeys 不允许通过管理面板读取或修改，无论提交了什么，都强制沿用磁盘上的现有值；
     // 先展开 existing.botConfig，保留面板未管理的配置节（ykhrOneDrive 等），避免保存时被丢弃
     const existing = readConfigFile();
+    const submittedBotConfig = submitted.botConfig as Partial<BotConfig>;
     const parsed = {
       ...submitted,
       wsConfig: existing.wsConfig,
       botConfig: {
         ...existing.botConfig,
-        ...submitted.botConfig,
+        ...submittedBotConfig,
+        // aiReply 还得再合一层：面板只管 enable/黑名单/主动列表，
+        // 直接覆盖会把只在 config.json 里配的 memory、imageGen、search 整块抹掉
+        aiReply: { ...existing.botConfig.aiReply, ...submittedBotConfig.aiReply },
         nonokaService: existing.botConfig.nonokaService,
         apiKeys: existing.botConfig.apiKeys,
       },
