@@ -1,5 +1,5 @@
 import http from 'http';
-import { botConfig } from '@/core/nnkConfig';
+import { botConfig, saveConfigToDisk } from '@/core/nnkConfig';
 import aliasIndex from '@/modules/aiReply/history/aliasIndex';
 import { getConsolidationBacklog, listConsolidationRuns } from '@/modules/aiReply/memory/consolidate';
 import { enqueueEmbedding } from '@/modules/aiReply/memory/embedQueue';
@@ -151,7 +151,11 @@ const PAGE = `<!doctype html>
   </section>
 
   <section id="itemsSection" style="display:none">
-    <h2 id="who"></h2>
+    <div class="row">
+      <h2 id="who" style="margin:0"></h2>
+      <span style="flex:1"></span>
+      <button id="toggleBlock" class="danger">加入记忆黑名单</button>
+    </div>
     <div class="scroll">
       <table>
         <thead><tr>
@@ -173,12 +177,27 @@ const PAGE = `<!doctype html>
       relation 排在印象之前注入，alias 决定别人叫这个外号时能不能认出他。
     </div>
   </section>
+
+  <section>
+    <div class="row">
+      <h2 style="margin:0">记忆黑名单</h2>
+      <span style="flex:1"></span>
+      <input type="text" id="blockInput" placeholder="QQ 号" style="flex:0 0 160px;min-width:0">
+      <button id="blockAdd" class="primary">加入</button>
+    </div>
+    <div class="hint" style="margin-bottom:10px">
+      名单内的人不再抽取、更新记忆。已经存下的条目原样保留，照常注入和召回，
+      要清干净得在上面逐条删。改完立刻生效，不用重启。
+    </div>
+    <div class="users" id="blocked"></div>
+  </section>
 </main>
 <script>
   const token = new URLSearchParams(location.search).get('token') || '';
   const KINDS = ['trait', 'episode', 'relation', 'alias'];
   const KIND_LABEL = { trait: 'trait 印象', episode: 'episode 事件', relation: 'relation 关系', alias: 'alias 别名' };
   let currentUser = null;
+  let blocked = new Set();
 
   document.getElementById('backLink').href = '/?token=' + encodeURIComponent(token);
 
@@ -412,7 +431,69 @@ const PAGE = `<!doctype html>
     currentUser = user;
     document.getElementById('itemsSection').style.display = '';
     document.getElementById('who').textContent = (user.nick || '(无昵称)') + ' · ' + user.userId;
+    syncBlockButton();
     reloadItems();
+  }
+
+  // 当前选中的人在不在黑名单里，决定按钮是「加入」还是「解除」
+  function syncBlockButton() {
+    if (!currentUser) return;
+    const btn = document.getElementById('toggleBlock');
+    const on = blocked.has(currentUser.userId);
+    btn.textContent = on ? '解除记忆黑名单' : '加入记忆黑名单';
+    btn.className = on ? '' : 'danger';
+  }
+
+  function renderBlocked(list) {
+    blocked = new Set(list.map((u) => u.userId));
+    const box = document.getElementById('blocked');
+    box.textContent = '';
+
+    if (!list.length) {
+      const p = document.createElement('div');
+      p.className = 'empty';
+      p.textContent = '黑名单是空的，所有人的记忆都照常更新';
+      box.appendChild(p);
+    }
+
+    list.forEach((u) => {
+      const btn = document.createElement('button');
+      btn.className = 'user';
+      btn.title = '点一下移出黑名单';
+      btn.textContent = (u.nick || '(无昵称)') + ' · 解除';
+      const small = document.createElement('small');
+      small.textContent = u.userId + ' · 保留 ' + u.count + ' 条记忆';
+      btn.appendChild(small);
+      btn.onclick = () => setBlocked(u.userId, false);
+      box.appendChild(btn);
+    });
+
+    syncBlockButton();
+  }
+
+  function setBlocked(userId, on) {
+    setStatus('保存中…', true);
+    post('/api/memory/blacklist', { userId: userId, blocked: on }).then((d) => {
+      renderBlocked(d.users);
+      setStatus(userId + (on ? ' 已加入黑名单，之后不再更新他的记忆' : ' 已移出黑名单'), true);
+    }).catch((e) => setStatus('保存失败: ' + e.message, false));
+  }
+
+  function loadBlacklist() {
+    api('/api/memory/blacklist')
+      .then((d) => renderBlocked(d.users))
+      .catch((e) => setStatus('黑名单加载失败: ' + e.message, false));
+  }
+
+  function addBlocked() {
+    const input = document.getElementById('blockInput');
+    const userId = Number(input.value.trim());
+    if (!Number.isInteger(userId) || userId <= 0) {
+      setStatus('QQ 号得是正整数', false);
+      return;
+    }
+    input.value = '';
+    setBlocked(userId, true);
   }
 
   function reloadItems() {
@@ -546,8 +627,15 @@ const PAGE = `<!doctype html>
     }).catch((e) => setStatus('新增失败: ' + e.message, false));
   };
 
+  document.getElementById('toggleBlock').onclick = () => {
+    if (currentUser) setBlocked(currentUser.userId, !blocked.has(currentUser.userId));
+  };
+  document.getElementById('blockAdd').onclick = addBlocked;
+  document.getElementById('blockInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addBlocked(); });
+
   loadConsolidation();
   loadGroups();
+  loadBlacklist();
   search();
 </script>
 </body>
@@ -592,6 +680,25 @@ function listGroupProfiles() {
   });
 
   return rows;
+}
+
+/**
+ * 记忆黑名单的读写。抽取侧每条消息现读 botConfig，所以改完这里立刻生效；
+ * 同时落盘，重启后还在
+ */
+function saveBlackUserIds(ids: number[]) {
+  // memory 整块在 config.json 里可以省略，第一次拉黑时按需补出来，别把 toolRounds 冲掉
+  botConfig.aiReply.memory = { ...botConfig.aiReply.memory, blackUserIds: ids };
+  saveConfigToDisk();
+}
+
+/** 黑名单成员，带昵称和还留着多少条记忆，给面板显示 */
+function listBlacklist() {
+  return (botConfig.aiReply.memory?.blackUserIds ?? []).map((userId) => ({
+    userId,
+    nick: memoryStore.getNickName(userId, null),
+    count: memoryStore.listUserMemories(userId).length,
+  }));
 }
 
 /** alias 立刻并进昵称索引，返回 false 表示这人还没在日志里露过面，只能等重启 */
@@ -655,6 +762,35 @@ export async function handleMemoryRoute(
       backlog: getConsolidationBacklog(botConfig.aiReply.initiativeList),
       runs: listConsolidationRuns(),
     });
+    return true;
+  }
+
+  if (url.pathname === '/api/memory/blacklist' && req.method === 'GET') {
+    sendJson(res, 200, { users: listBlacklist() });
+    return true;
+  }
+
+  if (url.pathname === '/api/memory/blacklist' && req.method === 'POST') {
+    const body = await readJsonBody(req, res);
+    if (!body) return true;
+
+    const userId = parseId(body.userId);
+    if (!userId) {
+      sendJson(res, 400, { error: 'QQ 号非法' });
+      return true;
+    }
+
+    // 用 Set 去重，排序后再写，免得 config.json 每存一次顺序都变、diff 没法看
+    const ids = new Set(botConfig.aiReply.memory?.blackUserIds ?? []);
+    const blocked = body.blocked !== false;
+    if (blocked) ids.add(userId);
+    else ids.delete(userId);
+    saveBlackUserIds([...ids].sort((a, b) => a - b));
+
+    // 抽取侧攒着的消息不用在这里清：下一条消息进 onMessage 就会连缓冲区一起丢掉，
+    // 已经在路上的那批也会在写库前再查一次黑名单
+    printLog(`[AdminPanel] ${blocked ? '拉黑' : '解除'}记忆黑名单：${userId}`);
+    sendJson(res, 200, { users: listBlacklist() });
     return true;
   }
 
