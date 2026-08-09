@@ -1,7 +1,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { createMemoryDb, getMeta, setMeta, MemoryDatabase } from '@/modules/aiReply/memory/db';
+import { createMemoryDb, delMeta, getMeta, setMeta, MemoryDatabase } from '@/modules/aiReply/memory/db';
 import {
   dictSignature, queryTerms, segment, stripSpeakerPrefix,
 } from '@/modules/aiReply/memory/segment';
@@ -62,7 +62,7 @@ const EXPECTED_TABLES = [
   'memory', 'memory_evidence', 'memory_evidence_batch', 'memory_fts', 'meta', 'topic',
 ];
 
-/** 迁移脚本条数，加一条就要同步改这里 */
+/** 基线版本 + 增量迁移条数，加一条迁移就要同步改这里 */
 const SCHEMA_VERSION = '7';
 
 function testSchema() {
@@ -633,41 +633,38 @@ function testStore() {
   });
 }
 
-function testNickMigration() {
-  console.log('\n[群名片迁移]');
-  const GROUP_A = FAKE_GROUP + 10;
-  const GROUP_B = FAKE_GROUP + 11;
+/** v1~v7 已压平成基线，认不出来的库要当场报错，不能在上面继续建表 */
+function testLegacySchemaRejected() {
+  console.log('\n[老库拒绝]');
+  const LEGACY_DB = path.join(os.tmpdir(), `nonoka_legacy_${process.pid}.db`);
+  const clean = () => ['', '-wal', '-shm'].forEach((s) => fs.rmSync(`${LEGACY_DB}${s}`, { force: true }));
 
-  // 模拟一个已经运行过 v3、但群名片尚未回填的库。
-  withDb((db) => {
-    const insert = db.prepare(
-      'INSERT INTO chat_line (group_id, user_id, date_key, seq, nick, text) VALUES (?, ?, ?, ?, ?, ?)',
-    );
-    insert.run(GROUP_A, 901, 20260101, 1, '旧名', '[旧名]说：第一天');
-    insert.run(GROUP_A, 901, 20260102, 1, '新名', '[新名]说：第二天');
-    insert.run(GROUP_B, 901, 20260103, 1, '别群名', '[别群名]说：第三天');
-    insert.run(GROUP_A, 902, 20260101, 2, '历史名', '[历史名]说：旧消息');
+  /** 打开一次，返回抛出的错误信息；正常打开则返回空串 */
+  const openError = (): string => {
+    try {
+      createMemoryDb(LEGACY_DB).close();
+      return '';
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
 
-    // v3 运行时已经写入的名字比 chat_line 新，v4 不能拿历史记录覆盖它。
-    db.prepare(
-      'INSERT INTO group_user_profile (group_id, user_id, nick, updated_at) VALUES (?, ?, ?, ?)',
-    ).run(GROUP_A, 902, '运行时新名', Date.now());
-    setMeta(db, 'schema_version', '3');
-  });
+  try {
+    clean();
+    const noVersion = createMemoryDb(LEGACY_DB);
+    delMeta(noVersion, 'schema_version');
+    noVersion.close();
+    check('有表却没版本号的库不建基线', /拒绝在上面建基线/.test(openError()), true);
 
-  withDb((db) => {
-    const nick = (groupId: number, userId: number) => (db.prepare(
-      'SELECT nick FROM group_user_profile WHERE group_id = ? AND user_id = ?',
-    ).get(groupId, userId) as { nick: string } | undefined)?.nick ?? null;
-
-    check('同群取日期和行号最新的昵称', nick(GROUP_A, 901), '新名');
-    check('同一用户在别群保留独立昵称', nick(GROUP_B, 901), '别群名');
-    check('已有运行时昵称不被历史回填覆盖', nick(GROUP_A, 902), '运行时新名');
-    check('回填后 schema_version 升到最新版', getMeta(db, 'schema_version'), SCHEMA_VERSION);
-
-    db.prepare('DELETE FROM group_user_profile WHERE group_id IN (?, ?)').run(GROUP_A, GROUP_B);
-    db.prepare('DELETE FROM chat_line WHERE group_id IN (?, ?)').run(GROUP_A, GROUP_B);
-  });
+    clean();
+    const oldVersion = createMemoryDb(LEGACY_DB);
+    check('新库直接落到基线版本', getMeta(oldVersion, 'schema_version'), SCHEMA_VERSION);
+    setMeta(oldVersion, 'schema_version', '3');
+    oldVersion.close();
+    check('低于基线的库拒绝打开', /低于基线/.test(openError()), true);
+  } finally {
+    clean();
+  }
 }
 
 export async function testMemory() {
@@ -681,7 +678,7 @@ export async function testMemory() {
   try {
     testSchema();
     testIdempotent();
-    testNickMigration();
+    testLegacySchemaRejected();
     testFts();
     testSegment();
     testParse();
