@@ -85,6 +85,8 @@ export interface ApplyResult {
   added: number[];
   updated: number[];
   deleted: number[];
+  /** 一字未改、只是又被印证一次的条数 */
+  reaffirmed: number;
   /** 被 pinned 保护挡下来的操作条数 */
   blocked: number;
 }
@@ -409,7 +411,7 @@ class MemoryStore {
    */
   applyOps(userId: number, groupId: number | null, ops: MemoryOp[], db = this.db()): ApplyResult {
     const result: ApplyResult = {
-      added: [], updated: [], deleted: [], blocked: 0,
+      added: [], updated: [], deleted: [], reaffirmed: 0, blocked: 0,
     };
     if (ops.length === 0) return result;
 
@@ -448,11 +450,12 @@ class MemoryStore {
           return;
         }
 
-        // 同一句话又说了一遍不该多出一条，算作又被印证一次
+        // 同一句话又说了一遍不该多出一条，算作又被印证一次。
+        // 不进 updated：文本一个字没变，向量还是原来那条，重算纯属白花钱
         const same = [...existing.values()].find((i) => i.text === op.text && i.kind === (op.kind ?? 'trait'));
         if (same) {
           db.prepare('UPDATE memory SET hits = hits + 1, last_seen = ?, updated_at = ? WHERE id = ?').run(now, now, same.id);
-          result.updated.push(same.id);
+          result.reaffirmed += 1;
           return;
         }
 

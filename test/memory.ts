@@ -3,9 +3,10 @@ import os from 'os';
 import path from 'path';
 import { createMemoryDb, delMeta, getMeta, setMeta, MemoryDatabase } from '@/modules/aiReply/memory/db';
 import {
-  dictSignature, queryTerms, segment, stripSpeakerPrefix,
+  dictSignature, queryTerms, segment, splitSpeakerPrefix, stripSpeakerPrefix,
 } from '@/modules/aiReply/memory/segment';
 import { ingestChatBackups, parseBackupLine } from '@/modules/aiReply/memory/ingest';
+import { informativeLength } from '@/modules/aiReply/memory/extract';
 import {
   blobToVec, deleteEmbeddings, getVectorDim, normalize, saveEmbedding, saveEmbeddings, searchSimilar, vecToBlob,
 } from '@/modules/aiReply/memory/vector';
@@ -599,8 +600,12 @@ function testStore() {
     check('认不出 id 的操作直接丢掉，不误伤', r3.deleted.length, 0);
 
     const before = texts().length;
+    const hitsBefore = memoryStore.listUserMemories(U, db).find((m) => m.text === '住在广州')!.hits;
     const r4 = memoryStore.applyOps(U, FAKE_GROUP, [{ op: 'ADD', kind: 'trait', text: '住在广州' }], db);
-    check('同一句话又说一遍不新增，算又被印证一次', [texts().length, r4.added.length, r4.updated.length], [before, 0, 1]);
+    const hitsAfter = memoryStore.listUserMemories(U, db).find((m) => m.text === '住在广州')!.hits;
+    check('同一句话又说一遍不新增，算又被印证一次',
+      [texts().length, r4.added.length, r4.updated.length, r4.reaffirmed, hitsAfter - hitsBefore],
+      [before, 0, 0, 1, 1]);
 
     console.log('\n[淘汰]');
     // 塞满上限之外的低分条目：置信度低、只被印证过一次
@@ -631,6 +636,49 @@ function testStore() {
     );
     check('四类记忆使用独立配额', policyCounts, [8, 8, 12, 8]);
   });
+}
+
+/** 抽取的第一道闸：什么样的消息才配占一个触发名额 */
+function testInformative() {
+  console.log('\n[信息量过滤]');
+  const MIN = 4;
+  // 信息量只看本人说的那句，引文不参与计数
+  const keeps = (text: string) => informativeLength(splitSpeakerPrefix(text).body.trim()) >= MIN;
+
+  check('纯占位符不算信息量', [
+    keeps('[雨漫]说：[表情]'),
+    keeps('[雨漫]说：[图片]'),
+    keeps('[雨漫]说：[图片][图片][表情]'),
+  ], [false, false, false]);
+
+  check('标点、emoji、颜文字不算字数', [
+    keeps('[雨漫]说：？？？'),
+    keeps('[雨漫]说：😂😂😂😂😂😂'),
+    keeps('[雨漫]说：。。。'),
+    keeps('[雨漫]说：/(ㄒoㄒ)/~~'),
+  ], [false, false, false, false]);
+
+  check('太短的附和收不进来', [
+    keeps('[雨漫]说：草'),
+    keeps('[雨漫]说：哈哈哈'),
+    keeps('[雨漫]说：好的'),
+  ], [false, false, false]);
+
+  check('正经发言照收', [
+    keeps('[雨漫]说：我下周要去广州出差'),
+    keeps('[雨漫]提到我说：乃乃香帮我看看这个'),
+    keeps('[雨漫]回复了桃子姐的消息(在打黑神话吗)，说：我上周就通关了'),
+  ], [true, true, true]);
+
+  check('只有链接的消息不算信息量', keeps('[雨漫]说：https://example.com/a/b/c'), false);
+  check('图片配一句话照收', keeps('[雨漫]说：[图片] 这是我家新买的猫'), true);
+
+  check('引文不参与计数，短回复照样挡在外面',
+    keeps('[雨漫]回复了桃子姐的消息(你今天怎么一直没说话呀在忙什么)，说：？？'), false);
+
+  const reply = splitSpeakerPrefix('[雨漫]回复了桃子姐的消息(在打黑神话吗)，说：我上周就通关了');
+  check('回复型前缀拆成三段', [reply.replyTo, reply.quote, reply.body], ['桃子姐', '在打黑神话吗', '我上周就通关了']);
+  check('普通消息只有正文', splitSpeakerPrefix('[雨漫]提到我说：乃乃香在吗').body, '乃乃香在吗');
 }
 
 /** v1~v7 已压平成基线，认不出来的库要当场报错，不能在上面继续建表 */
@@ -681,6 +729,7 @@ export async function testMemory() {
     testLegacySchemaRejected();
     testFts();
     testSegment();
+    testInformative();
     testParse();
     fs.mkdirSync(CHAT_BACKUP_DIR, { recursive: true });
     testIngest();

@@ -82,6 +82,10 @@ export interface BotConfig {
       };
       /** 黑名单 QQ，名单内的人不再抽取、更新记忆 */
       blackUserIds?: number[];
+      /** 攒够多少条「有信息量」的消息触发一次抽取，默认 30 */
+      extractThreshold?: number;
+      /** 同一个人两次抽取之间的最小间隔分钟数，默认 240 */
+      extractCooldownMin?: number;
     };
     /** 画图工具。整块可省略，省略时按代码里的默认值走（默认开启） */
     imageGen?: {

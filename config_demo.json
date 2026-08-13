@@ -56,7 +56,9 @@
           "mention": 1,
           "initiative": 0
         },
-        "blackUserIds": []
+        "blackUserIds": [],
+        "extractThreshold": 30,
+        "extractCooldownMin": 240
       },
       "imageGen": {
         "enable": false,
