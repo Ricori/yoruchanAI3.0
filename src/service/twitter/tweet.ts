@@ -38,12 +38,12 @@ export interface LatestTweetsResult {
   failed: boolean;
   /** 服务端抓取失败、退回了旧数据兜底。数据仍可用，只是不新鲜 */
   stale: boolean;
-  /** 服务端建议隔多久再来取（秒）。常态 60，深夜与故障时会放慢 */
+  /** 服务端建议隔多久再来取（秒）。常态 240，深夜 480，故障时退避 */
   nextReadyInS: number;
 }
 
 // 服务端没给出建议间隔时的兜底
-const DEFAULT_NEXT_READY_S = 60;
+const DEFAULT_NEXT_READY_S = 240;
 
 /**
  * 取这批用户的最新推文。

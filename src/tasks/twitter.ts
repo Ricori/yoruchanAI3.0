@@ -88,7 +88,7 @@ async function checkLatestTweet() {
 // 请求本身就抛了（网络不通、服务端 5xx）时的重试间隔（毫秒）
 const RETRY_INTERVAL = 60 * 1000;
 // 轮询节拍（秒）：只做时间判断，真正取数由 nextRunAt 控制
-const TICK_SECONDS = 5;
+const TICK_SECONDS = 10;
 // 下次允许取数的时间戳；0 表示启动后首个节拍立即取一次
 let nextRunAt = 0;
 
